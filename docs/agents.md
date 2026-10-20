@@ -12,7 +12,7 @@ codex mcp add orbit -- /absolute/path/Orbit/bin/orbit mcp
 
 The repository also includes `plugins/orbit`, a portable Agent Plugin with `plugin.json`, `mcp.json`, and setup/deploy skills, plus a `.codex-plugin/plugin.json` compatibility manifest. The portable package uses `${PLUGIN_ROOT}`; the compatibility MCP uses the supported `${CLAUDE_PLUGIN_ROOT}` alias. The plugin launcher reads the checkout location recorded by bootstrap, so a plugin-cache update cannot erase schedules or app configuration.
 
-For a Codex desktop version supporting local plugin sources, add `plugins/orbit` through its local plugin/marketplace import flow and run **orbit-setup**. If that surface does not offer local imports, use the MCP command above and install the skills as normal local skills under `~/.codex/skills`. No OpenAI API key is required for Orbit's MCP. [Official packaging and local testing guidance](https://developers.openai.com/plugins/build/plugins)
+For a Codex desktop version supporting local plugin sources, optionally run `python3 scripts/package_plugin.py codex /tmp/orbit-codex` and add that directory through its local plugin/marketplace import flow and run **orbit-setup**. If that surface does not offer local imports, use the MCP command above and install the skills as normal local skills under `~/.codex/skills`. No OpenAI API key is required for Orbit's MCP. [Official packaging and local testing guidance](https://developers.openai.com/plugins/build/plugins)
 
 Public plugin-directory distribution is a separate publisher submission/review step. The GitHub package is prepared for that workflow; it is **not** represented as already accepted or listed. A local stdio server belongs in a Mac-based agent environment; a remote-only ChatGPT connector cannot directly spawn it on the user's computer.
 
@@ -20,7 +20,13 @@ Public plugin-directory distribution is a separate publisher submission/review s
 
 Cursor supports portable Agent Plugins and its own `.cursor-plugin/plugin.json` package. Orbit includes the latter with `cursor.mcp.json`, using `${CURSOR_PLUGIN_ROOT}` as required by Cursor.
 
-For local testing, copy the **contents** of `plugins/orbit` to a directory under `~/.cursor/plugins/local/orbit`, then reload Cursor and inspect Customize. Do not symlink to an external checkout: current Cursor docs say those symlinks are skipped. Run Orbit bootstrap in the durable source checkout first. If your organization disables local imports, configure the MCP through the supported settings flow instead. [Cursor plugins](https://cursor.com/docs/plugins), [manifest reference](https://cursor.com/docs/reference/plugins)
+For local testing, create a Cursor-specific package:
+
+```sh
+python3 scripts/package_plugin.py cursor ~/.cursor/plugins/local/orbit
+```
+
+Then reload Cursor and inspect Customize. The packager selects the native Cursor manifest and removes the portable manifest so the unsupported `${PLUGIN_ROOT}` variable cannot take precedence. Do not symlink to an external checkout: current Cursor docs say those symlinks are skipped. Run Orbit bootstrap in the durable source checkout first. If your organization disables local imports, configure the MCP through the supported settings flow instead. [Cursor plugins](https://cursor.com/docs/plugins), [manifest reference](https://cursor.com/docs/reference/plugins)
 
 For public distribution, submit the GitHub repository/plugin package to [Cursor Marketplace publishing](https://cursor.com/marketplace/publish). It requires review. The root `.cursor-plugin/marketplace.json` describes this repository's plugin for supported repository/team import flows. No marketplace submission is performed by bootstrap.
 
@@ -29,7 +35,8 @@ For public distribution, submit the GitHub repository/plugin package to [Cursor 
 The package includes a `.claude-plugin` manifest and root marketplace entry. For local development:
 
 ```sh
-claude --plugin-dir /absolute/path/Orbit/plugins/orbit
+python3 scripts/package_plugin.py claude /tmp/orbit-claude
+claude --plugin-dir /tmp/orbit-claude
 ```
 
 Or register only the MCP with the host's stdio MCP command. The shared setup/deploy skills use portable SKILL.md files; no model-provider API is called by Orbit. Review the host's current [plugin documentation](https://code.claude.com/docs/en/plugins) for marketplace installation and policy restrictions.
