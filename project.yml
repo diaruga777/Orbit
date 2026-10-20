@@ -1,0 +1,71 @@
+name: Orbit
+options:
+  minimumXcodeGenVersion: 2.44.0
+  deploymentTarget:
+    iOS: '26.0'
+    macOS: '15.0'
+packages:
+  Orbit:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: '1'
+    CODE_SIGN_STYLE: Automatic
+configFiles:
+  Debug: Config/Orbit.xcconfig
+  Release: Config/Orbit.xcconfig
+targets:
+  Orbit:
+    type: application
+    platform: iOS
+    sources: [Apps/Orbit]
+    info:
+      path: Apps/Orbit/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).ios
+        TARGETED_DEVICE_FAMILY: '1,2'
+    dependencies:
+      - package: Orbit
+        product: OrbitUI
+      - package: Orbit
+        product: OrbitTransport
+  OrbitUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Apps/OrbitUITests]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Orbit
+    dependencies:
+      - target: Orbit
+  OrbitMac:
+    type: application
+    platform: macOS
+    sources: [Sources/OrbitMacApp]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).mac
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Orbit Mac
+        INFOPLIST_KEY_OrbitPhoneBundleIdentifier: $(ORBIT_BUNDLE_PREFIX).ios
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: Orbit connects to your phone to build and install your apps.
+        ENABLE_APP_SANDBOX: NO
+    dependencies:
+      - package: Orbit
+        product: OrbitHost
+schemes:
+  Orbit:
+    build:
+      targets:
+        Orbit: all
+    test:
+      targets: [OrbitUITests]
+  OrbitMac:
+    build:
+      targets:
+        OrbitMac: all
