@@ -36,12 +36,13 @@ final class OrbitHostTests: XCTestCase {
     }
     func testUntrustedPeerCannotBrowseOrRunCommands() async throws {
         let root = temporary(); defer { try? FileManager.default.removeItem(at: root) }
-        let host = try OrbitHost(root: root)
-        let data = await host.handle(Data(#"{"method":"browse","params":{"path":"/"}}"#.utf8), peer: "stranger")
+        var host: OrbitHost? = try OrbitHost(root: root)
+        let data = await host!.handle(Data(#"{"method":"browse","params":{"path":"/"}}"#.utf8), peer: "stranger")
         let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         XCTAssertNotNil(value?["error"])
-        do { try await host.trust("stranger"); XCTFail("No pairing window was open") } catch { }
-        await host.openPairing(); try await host.trust("phone")
+        do { try await host!.trust("stranger"); XCTFail("No pairing window was open") } catch { }
+        await host!.openPairing(); try await host!.trust("phone")
+        host = nil
         let restarted = try OrbitHost(root: root)
         let trusted = await restarted.isTrusted("phone"); XCTAssertTrue(trusted)
         let other = await restarted.isTrusted("stranger"); XCTAssertFalse(other)

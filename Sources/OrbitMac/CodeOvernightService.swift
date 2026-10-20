@@ -42,6 +42,11 @@ public actor CodeOvernightService {
             guard previous.target == submission.target else { throw CodeFailure("A request ID was reused with a different target.") }
             return previous
         }
+        // Definitively invalid/expired artifacts can be rebuilt. Uncertain
+        // installation evidence must still reconcile the existing revision.
+        for var old in store.jobs() where Self.sameDestination(old.target, submission.target) && Self.canReplaceFailedArtifact(old) {
+            old.state = .cancelled; old.revision += 1; try store.save(old)
+        }
         // A missed installation cannot create a fresh artifact each day, even
         // when a schedule generation or source ref has since changed.
         if let existing = store.jobs().first(where: { Self.sameDestination($0.target, submission.target) && ([.accepted, .building].contains($0.state) || $0.hasActionableArtifact) }) {
@@ -179,6 +184,9 @@ public actor CodeOvernightService {
         job.installs[i].providerGeneration = route.generation; job.installs[i].connectionDescription = route.description
         job.revision += 1; try store.save(job)
         try store.event(CodeOvernightDiagnosticEvent(stage: "installer.proxy", correlationID: attemptID, outcome: route.provider.rawValue + ".prepared"))
+    }
+    static func canReplaceFailedArtifact(_ job: CodeOvernightJob) -> Bool {
+        job.state == .failed && job.error?.kind == .integrity && !job.needsInstallReconciliation
     }
     private static func sameDestination(_ a: CodeOvernightTarget, _ b: CodeOvernightTarget) -> Bool {
         a.peerID == b.peerID && a.deviceID == b.deviceID && a.project.path == b.project.path && a.project.scheme == b.project.scheme

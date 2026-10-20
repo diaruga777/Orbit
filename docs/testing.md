@@ -17,6 +17,10 @@ scripts/build_and_run.sh --build-only
 
 Swift tests cover document version/conflict handling, SourceKit jobs, detached checkouts, target cadence/restart persistence, trust, framing, exact device readback and retained installation evidence. Python tests exercise the stdio tool contract and real fragmented Unix-socket replies. Go tests exercise TLS identity, framing, relay protocol and synthetic Apple installation exchanges. Optional integration tests skip unless their fixture tools are explicitly supplied.
 
+## SourceKit with a real disposable Xcode app
+
+`scripts/test_code_intelligence.sh` generates a UIKit fixture with a local package, builds it for Simulator and checks real SourceKit completion/diagnostics with unsaved edits. It leaves the fixture source unchanged and never launches an app or contacts a phone.
+
 ## Private relay and synthetic Apple endpoint
 
 ```sh
@@ -38,3 +42,17 @@ Before treating a release as verified for unattended personal use, test using th
 - Updating Orbit through an independent native Apple connection; preserving drafts and app identity.
 
 No WebDriverAgent is allowed on a physical phone. Simulator compilation, synthetic Apple protocols and GitHub CI do not substitute for this acceptance. Marketplace acceptance and Apple account setup are separate manual workflows.
+
+## Extraction verification (2026-10-21)
+
+Local verification used Xcode 26.2, Go 1.26.4 and an iOS 26.2 Simulator:
+
+- 108 Swift tests passed. The real SourceKit fixture enabled both otherwise-skipped intelligence checks; only the separate private-relay fixture was skipped in that run.
+- The private-relay/Apple-protocol fixture passed separately using the production transport, scoped stream broker and helper.
+- Five Python MCP tests and both Go race-test suites passed.
+- The iOS client and UI-test runner built; project selection/restoration and save-conflict recovery both passed on Simulator.
+- The complete Mac app bundle built and passed signature verification. Its running local service answered CLI status, target listing, GitHub search and Xcode-project inspection.
+- Plugin manifest/MCP JSON validated against the published Agent Plugins schemas; both bundled skills passed validation and the plugin launcher completed MCP initialization.
+- Luna Mac's remaining 13 tests and Luna Vault's Simulator build passed after removal of Code services.
+
+Mac window visual inspection was unavailable while the screen was locked. No physical phone, Personal Team renewal cycle, unattended background installation or public marketplace acceptance is claimed by these checks.

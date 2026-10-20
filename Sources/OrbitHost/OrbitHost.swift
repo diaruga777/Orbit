@@ -5,6 +5,7 @@ import OrbitWire
 import OrbitTransport
 
 public actor OrbitHost {
+    private let stateLock: OrbitStateLock
     public let root: URL
     public let service: CodeService
     private var targets: [OrbitTarget]
@@ -13,6 +14,7 @@ public actor OrbitHost {
     public init(root: URL = OrbitPaths.root) throws {
         self.root = root
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        stateLock = try OrbitStateLock(root: root)
         let configURL = root.appendingPathComponent("config.json"), targetsURL = root.appendingPathComponent("targets.json")
         configuration = FileManager.default.fileExists(atPath: configURL.path) ? try JSONDecoder().decode(OrbitConfiguration.self, from: Data(contentsOf: configURL)) : OrbitConfiguration()
         targets = FileManager.default.fileExists(atPath: targetsURL.path) ? try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: targetsURL)) : []
