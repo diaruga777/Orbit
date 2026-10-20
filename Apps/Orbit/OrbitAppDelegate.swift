@@ -59,7 +59,11 @@ import OrbitWire
             apps.tabBarItem = UITabBarItem(title: "Apps", image: UIImage(systemName: "apps.iphone"), tag: 2)
             let settings = UINavigationController(rootViewController: OrbitConnectionController(connection: connection))
             settings.tabBarItem = UITabBarItem(title: "Mac", image: UIImage(systemName: "desktopcomputer"), tag: 3)
-            tabs.viewControllers = (tabs.viewControllers ?? []) + [apps, settings]
+            // App registration and schedules have one owner: the Mac catalog.
+            // The extracted library's older phone-only nightly catalog remains
+            // available to its preview tests, but is not a second product flow.
+            let project = tabs.viewControllers?.first
+            tabs.viewControllers = [project, apps, settings].compactMap { $0 }
             if connection.pairingCode.isEmpty { tabs.selectedViewController = settings }
             window.rootViewController = tabs
         } catch {

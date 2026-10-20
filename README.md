@@ -90,6 +90,8 @@ bin/orbit configure --provider dumbpipe
 
 Restart Orbit Mac after changing its provider. In its window, click **Connect a Phone**, copy the pairing code, and paste it into the iPhone app's **Mac → Connect a Mac**. Compare the phone ID displayed on both devices before approving on the Mac. The pairing window lasts five minutes. Syncthing relay enrollment starts with direct pairing; after approval copy the relay route as described in the pipe guide.
 
+For native USB/Wi-Fi deployment, you can use only the Mac client and CLI/MCP and skip installing the Orbit iOS client, leaving all three free-account app slots available for your own apps. The iOS client adds source editing, remote control and phone-side forwarding.
+
 You can build/install through Xcode's native USB or Wi-Fi connection without an iPhone control app being awake. Remote-control reachability and Apple installation reachability are different: putting both devices on a tailnet alone does not make CoreDevice discover the phone. Orbit includes a separate bounded forwarding path for remote installations; see [remote installation limits](docs/architecture.md#remote-installation).
 
 ## 4. Add an app
