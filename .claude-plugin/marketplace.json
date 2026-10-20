@@ -1,0 +1,1 @@
+{"name":"orbit","owner":{"name":"Orbit contributors"},"plugins":[{"name":"orbit","source":"./plugins/orbit","description":"Build and refresh iOS apps with your own Mac."}]}

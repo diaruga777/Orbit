@@ -1,0 +1,1 @@
+{"mcpServers":{"orbit":{"command":"python3","args":["${CLAUDE_PLUGIN_ROOT}/scripts/run_mcp.py"]}}}

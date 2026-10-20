@@ -1,0 +1,7 @@
+{
+  "name": "orbit",
+  "version": "0.1.0",
+  "description": "Build and refresh iOS apps on your phone using your Mac.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

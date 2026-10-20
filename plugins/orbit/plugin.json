@@ -1,0 +1,16 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "orbit",
+  "version": "0.1.0",
+  "description": "Set up your Mac and build, install and refresh iOS apps on your own phone.",
+  "author": { "name": "Orbit contributors" },
+  "repository": "https://github.com/diaruga777/Orbit",
+  "license": "MIT",
+  "keywords": ["ios", "xcode", "personal-team", "build", "mcp"],
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/orbit-setup/SKILL.md",
+      "interface": { "displayName": "Orbit", "shortDescription": "Build iOS apps for your own phone", "category": "Developer tools" }
+    }
+  }
+}

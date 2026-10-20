@@ -1,0 +1,35 @@
+name: Verify Orbit
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/apple-adapter/go.mod
+          cache-dependency-path: tools/apple-adapter/go.sum
+      - name: Select Xcode
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate transport and project
+        run: ./scripts/bootstrap.sh
+      - name: Swift tests
+        run: swift test
+      - name: MCP tests
+        run: python3 -m unittest discover -s Tests/Python -v
+      - name: Go tests
+        run: |
+          go -C Transport/Go test -race ./...
+          go -C tools/apple-adapter test -race ./...
+          go -C tools/apple-adapter vet ./...
+      - name: Build iOS Simulator client
+        run: xcodebuild -project Orbit.xcodeproj -scheme Orbit -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/OrbitDerivedData build
+      - name: Package Mac client
+        run: ./scripts/build_and_run.sh --build-only

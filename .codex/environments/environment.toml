@@ -1,0 +1,6 @@
+version = 1
+name = "Orbit"
+[[actions]]
+name = "Run"
+icon = "run"
+command = "./scripts/build_and_run.sh"

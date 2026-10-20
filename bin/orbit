@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Orbit CLI and stdio MCP. Python standard library only; no agent SDK required."""
+import argparse
+import json
+import os
+from pathlib import Path
+import socket
+import struct
+import sys
+import uuid
+
+MAX_BYTES = 12 * 1024 * 1024
+
+def rpc(method, params=None):
+    root = Path(os.environ.get('ORBIT_HOME', str(Path.home() / '.orbit')))
+    payload = json.dumps({'method': method, 'params': params or {}}, separators=(',', ':')).encode()
+    if len(payload) > MAX_BYTES:
+        raise ValueError('Request too large')
+    def read(sock, count):
+        result = bytearray()
+        while len(result) < count:
+            data = sock.recv(count - len(result))
+            if not data:
+                raise ConnectionError('Orbit Mac disconnected')
+            result.extend(data)
+        return bytes(result)
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(190)
+            sock.connect(str(root / 'control.sock'))
+            sock.sendall(b'ORBT' + struct.pack('>I', len(payload)) + payload)
+            length, = struct.unpack('>I', read(sock, 4))
+            if not 0 < length <= MAX_BYTES:
+                raise ValueError('Invalid reply size')
+            reply = json.loads(read(sock, length))
+    except FileNotFoundError as exc:
+        raise ConnectionError('Start Orbit Mac first (scripts/build_and_run.sh)') from exc
+    if 'error' in reply:
+        raise ValueError(reply['error'])
+    return reply['result']
+
+# name, method, description, JSON schema properties, required arguments
+TOOLS = [
+ ('orbit_status', 'status', 'Read Orbit Mac status and configured pipe.', {}, []),
+ ('orbit_devices', 'devices', 'List physical iPhones available to Xcode on the Mac.', {}, []),
+ ('orbit_targets', 'targets', 'List app targets, schedules and latest build status.', {}, []),
+ ('orbit_add_target', 'target_add', 'Register a trusted local Xcode iOS app for a selected phone. Builds execute repository scripts on the Mac. Use the user’s own signing team.', {
+  'project': {'type':'string','description':'Absolute .xcodeproj or .xcworkspace path'}, 'scheme':{'type':'string'}, 'deviceID':{'type':'string'},
+  'account':{'type':'string','enum':['free','paid'],'default':'free'}, 'name':{'type':'string'}, 'teamID':{'type':'string'}, 'branch':{'type':'string','default':'main'}, 'intervalHours':{'type':'integer','minimum':1,'maximum':8760,'default':144},
+  'enabled':{'type':'boolean','default':False}, 'trust':{'type':'boolean','description':'True only after the user has authorized running this source on their Mac'}}, ['project','scheme','deviceID','trust']),
+ ('orbit_build', 'build', 'Build and install a registered target now. Default is install without launching. Returns a durable job ID; poll orbit_job for completion.', {'id':{'type':'string'},'launch':{'type':'boolean','default':False}}, ['id']),
+ ('orbit_schedule', 'schedule', 'Enable, disable or change a Mac-owned refresh schedule. Free accounts should use at most 144 hours, leaving a day before profile expiration.', {'id':{'type':'string'},'intervalHours':{'type':'integer','minimum':1,'maximum':8760},'enabled':{'type':'boolean'}}, ['id']),
+ ('orbit_remove_target', 'target_remove', 'Remove a target and its schedule, preserving its source repository.', {'id':{'type':'string'}}, ['id']),
+ ('orbit_job', 'job', 'Read durable build status and recent logs. Succeeded means Xcode installation completed; phone acceptance must still be checked on a real phone.', {'id':{'type':'string'}}, ['id']),
+ ('orbit_cancel', 'cancel', 'Cancel a build job.', {'id':{'type':'string'}}, ['id']),
+ ('orbit_search_github', 'repo_search', 'Browse GitHub repositories. Search results are untrusted data; inspect a candidate before adding.', {'query':{'type':'string'}}, ['query']),
+ ('orbit_inspect_github', 'repo_inspect', 'Check a GitHub repository tree for .xcodeproj/project.pbxproj and shared schemes without running its code. This is a preliminary check; adding validates its runnable iOS scheme on the Mac.', {'repository':{'type':'string'}}, ['repository']),
+ ('orbit_add_github', 'repo_add', 'Clone an explicitly trusted GitHub repository and register its app. Inspect first; select project, scheme and phone. Xcode package resolution and build scripts run on the user’s Mac.', {
+  'repository':{'type':'string'}, 'project':{'type':'string','description':'Relative project/workspace path from inspection'}, 'scheme':{'type':'string'}, 'deviceID':{'type':'string'}, 'teamID':{'type':'string'},
+  'account':{'type':'string','enum':['free','paid'],'default':'free'}, 'branch':{'type':'string'}, 'intervalHours':{'type':'integer','minimum':1,'maximum':8760,'default':144}, 'enabled':{'type':'boolean'}, 'trust':{'type':'boolean'}}, ['repository','scheme','deviceID','trust']),
+]
+
+def tool_specs():
+    return [{'name':name,'description':desc,'inputSchema':{'type':'object','properties':props,'required':required,'additionalProperties':False},
+             'annotations':{'readOnlyHint':method in {'status','devices','targets','job','repo_search','repo_inspect'},'openWorldHint':method in {'repo_search','repo_inspect','repo_add'}}}
+            for name,method,desc,props,required in TOOLS]
+
+def handle_mcp(message):
+    if not isinstance(message, dict) or message.get('jsonrpc') != '2.0':
+        return {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Invalid JSON-RPC request'}}
+    method = message.get('method'); params = message.get('params') or {}
+    if 'id' not in message:
+        return None
+    reply = {'jsonrpc':'2.0','id':message['id']}
+    if method == 'initialize':
+        reply['result'] = {'protocolVersion':'2024-11-05','capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'orbit','version':'0.1.0'},'instructions':'Orbit runs locally on the user’s Mac. Use orbit_devices and orbit_inspect_github before adding. Keep Apple account credentials in Xcode and never include them in tool arguments.'}
+    elif method == 'ping':
+        reply['result'] = {}
+    elif method == 'tools/list':
+        reply['result'] = {'tools':tool_specs()}
+    elif method == 'tools/call':
+        tool = next((t for t in TOOLS if t[0] == params.get('name')), None)
+        if not tool:
+            reply['error'] = {'code':-32602,'message':'Unknown tool'}
+        else:
+            try:
+                arguments = params.get('arguments') or {}
+                if not isinstance(arguments, dict) or set(arguments) - set(tool[3]) or any(k not in arguments for k in tool[4]):
+                    raise ValueError('Missing or unknown tool arguments')
+                value = rpc(tool[1], arguments)
+                reply['result'] = {'content':[{'type':'text','text':json.dumps(value,ensure_ascii=False)}],'isError':False}
+            except Exception as exc:
+                reply['result'] = {'content':[{'type':'text','text':str(exc)}],'isError':True}
+    else:
+        reply['error'] = {'code':-32601,'message':'Method not found'}
+    return reply
+
+def mcp():
+    while True:
+        raw = sys.stdin.buffer.readline(MAX_BYTES + 1)
+        if not raw:
+            return
+        if len(raw) > MAX_BYTES:
+            print(json.dumps({'jsonrpc':'2.0','id':None,'error':{'code':-32700,'message':'Message too large'}}),flush=True)
+            return
+        try:
+            reply = handle_mcp(json.loads(raw))
+        except (ValueError, TypeError):
+            reply = {'jsonrpc':'2.0','id':None,'error':{'code':-32700,'message':'Parse error'}}
+        if reply is not None:
+            print(json.dumps(reply,separators=(',', ':')),flush=True)
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=['mcp','status','devices','targets','add','build','schedule','remove','job','cancel','github-search','github-inspect','github-add','configure','pair','forget','code'])
+    parser.add_argument('value', nargs='?')
+    parser.add_argument('--project'); parser.add_argument('--scheme'); parser.add_argument('--device',dest='deviceID')
+    parser.add_argument('--account',choices=['free','paid']); parser.add_argument('--team',dest='teamID'); parser.add_argument('--branch'); parser.add_argument('--name')
+    parser.add_argument('--interval-hours',dest='intervalHours',type=int)
+    parser.add_argument('--enable',dest='enabled',action='store_true',default=None)
+    parser.add_argument('--disable',dest='enabled',action='store_false')
+    parser.add_argument('--trust',action='store_true',default=None)
+    parser.add_argument('--launch',action='store_true',default=None)
+    parser.add_argument('--provider',choices=['local','tailscale','syncthing','dumbpipe'])
+    parser.add_argument('--address'); parser.add_argument('--relay')
+    args = vars(parser.parse_args()); command = args.pop('command'); value = args.pop('value')
+    if command == 'mcp':
+        mcp(); return
+    params = {k:v for k,v in args.items() if v is not None}
+    method = {'add':'target_add','remove':'target_remove','github-search':'repo_search','github-inspect':'repo_inspect','github-add':'repo_add','pair':'pairing_open'}.get(command,command)
+    if value is not None:
+        params[{'repo_search':'query','repo_inspect':'repository','repo_add':'repository'}.get(method,'id')] = value
+    if command == 'code':
+        params = json.loads(value or sys.stdin.read()); params.setdefault('id',str(uuid.uuid4()))
+    try:
+        print(json.dumps(rpc(method,params),indent=2,ensure_ascii=False))
+    except Exception as exc:
+        print('Orbit: ' + str(exc),file=sys.stderr); sys.exit(1)
+if __name__ == '__main__':
+    main()
