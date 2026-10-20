@@ -28,13 +28,14 @@ import OrbitWire
         configuration.delegateClass = OrbitSceneDelegate.self; return configuration
     }
 }
-@MainActor final class OrbitSceneDelegate: UIResponder, UIWindowSceneDelegate {
+@MainActor final class OrbitSceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControllerDelegate {
     var window: UIWindow?
     let connection = OrbitPhoneConnection.shared
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: scene); self.window = window
         #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--reset-connection") { connection.pairingCode = "" }
         if ProcessInfo.processInfo.arguments.contains("--editor-preview") {
             window.rootViewController = try? CodeEditorPreview.make(reset: ProcessInfo.processInfo.arguments.contains("--reset-preview"), workspace: ProcessInfo.processInfo.arguments.contains("--workspace-preview"))
             window.makeKeyAndVisible(); return
@@ -53,18 +54,16 @@ import OrbitWire
                 }
                 return CodeBrowserPage(items: items, next: (result["next"] as? NSNumber)?.int64Value)
             }, pairing: { OrbitConnectionController(connection: connection) }, peerID: { connection.peerID })
-            let tabs = CodeTabsController(environment: environment)
-            tabs.loadViewIfNeeded()
+            let tabs = UITabBarController()
+            tabs.delegate = self
+            let project = CodeWorkspaceController(environment: environment)
+            project.tabBarItem = UITabBarItem(title: "Project", image: UIImage(systemName: "curlybraces"), tag: 0)
             let apps = UINavigationController(rootViewController: OrbitTargetsController(connection: connection))
             apps.tabBarItem = UITabBarItem(title: "Apps", image: UIImage(systemName: "apps.iphone"), tag: 2)
             let settings = UINavigationController(rootViewController: OrbitConnectionController(connection: connection))
             settings.tabBarItem = UITabBarItem(title: "Mac", image: UIImage(systemName: "desktopcomputer"), tag: 3)
-            // App registration and schedules have one owner: the Mac catalog.
-            // The extracted library's older phone-only nightly catalog remains
-            // available to its preview tests, but is not a second product flow.
-            let project = tabs.viewControllers?.first
-            tabs.viewControllers = [project, apps, settings].compactMap { $0 }
-            if connection.pairingCode.isEmpty { tabs.selectedViewController = settings }
+            tabs.viewControllers = [project, apps, settings]
+            tabs.selectedIndex = connection.pairingCode.isEmpty ? 2 : min(2, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
             window.rootViewController = tabs
         } catch {
             let controller = UIViewController(); controller.view.backgroundColor = .systemBackground
@@ -73,6 +72,9 @@ import OrbitWire
             window.rootViewController = controller
         }
         window.makeKeyAndVisible()
+    }
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        UserDefaults.standard.set(tabBarController.selectedIndex, forKey: "Orbit.selectedTab")
     }
     private var readiness: Task<Void, Never>?
     func sceneDidBecomeActive(_ scene: UIScene) {

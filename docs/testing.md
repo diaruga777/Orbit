@@ -50,7 +50,7 @@ Local verification used Xcode 26.2, Go 1.26.4 and an iOS 26.2 Simulator:
 - 108 Swift tests passed. The real SourceKit fixture enabled both otherwise-skipped intelligence checks; only the separate private-relay fixture was skipped in that run.
 - The private-relay/Apple-protocol fixture passed separately using the production transport, scoped stream broker and helper.
 - Seven Python MCP/plugin-packaging tests and both Go race-test suites passed.
-- The iOS client and UI-test runner built; project selection/restoration and save-conflict recovery both passed on Simulator.
+- The iOS client and UI-test runner built; standalone Mac setup/app navigation, project selection/restoration and save-conflict recovery all passed on Simulator.
 - The complete Mac app bundle built and passed signature verification. Its running local service answered CLI status, target listing, GitHub search and Xcode-project inspection.
 - Plugin manifest/MCP JSON validated against the published Agent Plugins schemas; both bundled skills passed validation and the plugin launcher completed MCP initialization.
 - Luna Mac's remaining 13 tests and Luna Vault's Simulator build passed after removal of Code services.

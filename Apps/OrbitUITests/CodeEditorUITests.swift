@@ -1,6 +1,19 @@
 import XCTest
 
 final class CodeEditorUITests: XCTestCase {
+    func testStandaloneLaunchShowsMacSetupAndApps() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-connection"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Connect a Mac"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.tabBars.buttons.count, 3)
+        app.tabBars.buttons["Apps"].tap()
+        if app.alerts["Orbit"].waitForExistence(timeout: 3) { app.alerts["Orbit"].buttons["OK"].tap() }
+        XCTAssertTrue(app.navigationBars["Apps"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Mac"].tap()
+        XCTAssertTrue(app.staticTexts["Connect a Mac"].waitForExistence(timeout: 5))
+    }
+
     func testRotationEditingExplicitSaveAndDraftRecovery() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
