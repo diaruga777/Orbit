@@ -4,6 +4,8 @@ import OrbitCore
 public struct OrbitTarget: Codable, Identifiable, Sendable {
     public var id: String
     public var name: String
+    /// Discovery thumbnail, optional so catalogs saved by older clients still load.
+    public var iconPNG: Data?
     public var project: CodeProject
     public var deviceID: String
     public var branch: String

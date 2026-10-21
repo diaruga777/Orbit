@@ -39,6 +39,20 @@ import OrbitWire
         guard let scene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: scene); self.window = window
         #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--target-icons-preview") {
+            let icon = UIGraphicsImageRenderer(size: CGSize(width: 132, height: 132)).image { context in
+                UIColor.systemIndigo.setFill(); context.fill(CGRect(x: 0, y: 0, width: 132, height: 132))
+                UIImage(systemName: "moon.fill")?.withTintColor(.white, renderingMode: .alwaysOriginal)
+                    .draw(in: CGRect(x: 32, y: 32, width: 68, height: 68))
+            }.pngData()!.base64EncodedString()
+            let controller = OrbitTargetsController(rpc: { _, _ in
+                [["id": "preview", "name": "Luna", "iconPNG": icon],
+                 ["id": "missing", "name": "No Icon"],
+                 ["id": "invalid", "name": "Invalid Icon", "iconPNG": "invalid"]]
+            })
+            window.rootViewController = UINavigationController(rootViewController: controller)
+            window.makeKeyAndVisible(); return
+        }
         if ProcessInfo.processInfo.arguments.contains("--reset-connection") { connection.pairingCode = "" }
         if ProcessInfo.processInfo.arguments.contains("--editor-preview") {
             window.rootViewController = try? CodeEditorPreview.make(reset: ProcessInfo.processInfo.arguments.contains("--reset-preview"), workspace: ProcessInfo.processInfo.arguments.contains("--workspace-preview"))

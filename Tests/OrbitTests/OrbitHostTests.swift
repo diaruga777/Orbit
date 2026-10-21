@@ -6,6 +6,40 @@ import OrbitTransport
 @testable import OrbitMac
 
 final class OrbitHostTests: XCTestCase {
+    func testTargetIconsBackfillOlderCatalogAndSurviveRestart() async throws {
+        let root = temporary(); defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let project = CodeProject(path: "/repo/App.xcodeproj", scheme: "App")
+        let legacy = OrbitTarget(name: "App", project: project, deviceID: "phone")
+        let secondPhone = OrbitTarget(name: "App", project: project, deviceID: "other-phone")
+        let missing = OrbitTarget(name: "Missing", project: CodeProject(path: project.path, scheme: "Missing"), deviceID: "phone")
+        let catalog = root.appendingPathComponent("targets.json")
+        try JSONEncoder().encode([legacy, secondPhone, missing]).write(to: catalog)
+        // Optional thumbnails keep the old catalog schema decodable.
+        XCTAssertNil(try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: catalog))[0].iconPNG)
+        let icon = Data([1, 2, 3])
+        var host: OrbitHost? = try OrbitHost(root: root)
+        await host!.populateMissingTargetIcons { queried in
+            if queried.scheme == "Missing" { throw CodeFailure("Project unavailable") }
+            var app = CodeBuildApp(project: queried, name: "App", bundleID: "example.app")
+            app.iconPNG = icon
+            return [app]
+        }
+        await host!.populateMissingTargetIcons { _ in
+            XCTFail("Polling repeated icon discovery immediately")
+            return []
+        }
+        host = nil
+        let restarted = try OrbitHost(root: root)
+        // Verify the real RPC sends base64 thumbnails and retains unavailable apps.
+        await restarted.populateMissingTargetIcons { _ in [] }
+        let response = await restarted.handle(Data(#"{"method":"targets"}"#.utf8))
+        let result = try XCTUnwrap((JSONSerialization.jsonObject(with: response) as? [String: Any])?["result"] as? [[String: Any]])
+        XCTAssertEqual(result.count, 3)
+        XCTAssertEqual(result[0]["iconPNG"] as? String, icon.base64EncodedString())
+        XCTAssertEqual(result[1]["iconPNG"] as? String, icon.base64EncodedString())
+        XCTAssertNil(result[2]["iconPNG"])
+    }
     func testSixDayCadenceDependsOnConfirmedInstallation() {
         let now = Date(timeIntervalSince1970: 2000000)
         var target = OrbitTarget(name: "App", project: CodeProject(path: "/repo/App.xcodeproj", scheme: "App"), deviceID: "phone", enabled: true)

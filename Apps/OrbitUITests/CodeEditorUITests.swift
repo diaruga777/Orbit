@@ -1,6 +1,15 @@
 import XCTest
 
 final class CodeEditorUITests: XCTestCase {
+    func testTargetListDisplaysIconsAndMissingImageFallbacks() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-icons-preview"]
+        app.launch()
+        XCTAssertTrue(app.cells["OrbitTarget:preview"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.cells["OrbitTarget:missing"].exists)
+        XCTAssertTrue(app.cells["OrbitTarget:invalid"].exists)
+        attach("Target icons and fallbacks", app)
+    }
     func testStandaloneLaunchShowsMacSetupAndApps() {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-connection"]

@@ -10,6 +10,7 @@ public actor OrbitHost {
     public let root: URL
     public private(set) var service: CodeService
     private var targets: [OrbitTarget]
+    private var iconLookups: [String: Date] = [:]
     public private(set) var configuration: OrbitConfiguration
     public private(set) var pairingUntil = Date.distantPast
     public init(root: URL = OrbitPaths.root) throws {
@@ -55,7 +56,12 @@ public actor OrbitHost {
             let response = await service.handle(data, authenticatedPeerID: peer ?? "local-mac")
             return try JSONSerialization.jsonObject(with: response)
         case "browse": return try browse(p)
-        case "targets": return try object(targets)
+        case "targets":
+            await populateMissingTargetIcons { project in
+                var request = CodeRequest(.apps, path: project.path); request.project = project
+                return try await self.decoded(request).apps ?? []
+            }
+            return try object(targets)
         case "widgets": return try widgetDeployments()
         case "widget_add":
             guard peer == nil else { throw CodeFailure("Deploy widget files from the Mac.") }
@@ -174,7 +180,10 @@ public actor OrbitHost {
         let response = try JSONDecoder().decode(CodeResponse.self, from: await service.handle(JSONEncoder().encode(request)))
         if let error = response.error { throw CodeFailure(error) }
         guard let app = response.apps?.first(where: { $0.project.scheme == scheme }) else { throw CodeFailure("This scheme has no runnable iOS application. Choose a shared app scheme.") }
-        if let old = targets.first(where: { $0.project.path == url.path && $0.project.scheme == scheme && $0.deviceID == device }) { return try object(old) }
+        if let index = targets.firstIndex(where: { $0.project.path == url.path && $0.project.scheme == scheme && $0.deviceID == device }) {
+            if let icon = app.iconPNG { targets[index].iconPNG = icon; try saveTargets() }
+            return try object(targets[index])
+        }
         let hours = p["intervalHours"] as? Int ?? 144
         guard (1...8760).contains(hours) else { throw CodeFailure("Choose an interval from 1 to 8760 hours.") }
         let account = p["account"] as? String ?? "free"
@@ -185,8 +194,27 @@ public actor OrbitHost {
         }
         var target = OrbitTarget(name: p["name"] as? String ?? app.name, project: project, deviceID: device,
             branch: p["branch"] as? String ?? "main", intervalHours: hours, enabled: p["enabled"] as? Bool ?? false)
+        target.iconPNG = app.iconPNG
         target.repository = p["repository"] as? String
         targets.append(target); try saveTargets(); return try object(target)
+    }
+    /// Backfill catalogs from before icons were retained. Failed/missing icons
+    /// never hide targets or invoke a build, and polling does not hammer Xcode.
+    func populateMissingTargetIcons(discover: (CodeProject) async throws -> [CodeBuildApp]) async {
+        var changed = false
+        for target in targets where target.iconPNG == nil {
+            let key = target.project.path + "\u{0}" + target.project.scheme
+            guard Date().timeIntervalSince(iconLookups[key] ?? .distantPast) >= 300 else { continue }
+            iconLookups[key] = Date()
+            guard let apps = try? await discover(target.project),
+                  let icon = apps.first(where: { $0.project.path == target.project.path && $0.project.scheme == target.project.scheme })?.iconPNG else { continue }
+            // Discovery suspends this actor; a target may have been removed meanwhile.
+            for index in targets.indices where targets[index].project.path == target.project.path && targets[index].project.scheme == target.project.scheme {
+                targets[index].iconPNG = icon
+                changed = true
+            }
+        }
+        if changed { try? saveTargets() }
     }
     private func decoded(_ request: CodeRequest) async throws -> CodeResponse {
         let response = try JSONDecoder().decode(CodeResponse.self, from: await service.handle(JSONEncoder().encode(request)))

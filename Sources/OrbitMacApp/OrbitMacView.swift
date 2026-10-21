@@ -16,7 +16,10 @@ struct OrbitMacView: View {
                     Text("Apps").font(.title2)
                     ForEach(Array(model.targets.enumerated()), id: \.offset) { _, app in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(app["name"] as? String ?? "App").font(.headline)
+                            HStack(spacing: 12) {
+                                appIcon(app)
+                                Text(app["name"] as? String ?? "App").font(.headline)
+                            }
                             Text(app["failure"] as? String ?? ((app["enabled"] as? Bool == true) ? "Refresh every \(app["intervalHours"] ?? 144) hours" : "Manual refreshes")).font(.callout)
                             HStack {
                                 Button("Build and Install") { Task { do { _ = try await model.rpc("build", ["id": app["id"] ?? ""]); await model.refresh() } catch { model.status = error.localizedDescription } } }
@@ -57,5 +60,17 @@ struct OrbitMacView: View {
                 }
             }.padding().tabItem { Label("Add App", systemImage: "plus") }
         }
+    }
+    private func appIcon(_ app: [String: Any]) -> some View {
+        Group {
+            if let encoded = app["iconPNG"] as? String, let data = Data(base64Encoded: encoded), let icon = NSImage(data: data) {
+                Image(nsImage: icon).resizable().scaledToFit()
+            } else {
+                Image(systemName: "app.dashed").resizable().scaledToFit().foregroundStyle(.secondary).padding(6)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityHidden(true)
     }
 }
