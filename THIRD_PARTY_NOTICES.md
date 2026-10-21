@@ -11,3 +11,5 @@ Orbit's original code is MIT licensed. Dependencies keep their own licenses:
 - [Go](https://go.dev/LICENSE), BSD-style license, used to compile Orbit's source-built transport and installation helper.
 
 The Go TLS/relay implementation originated in Luna's transport sources, which were extracted with Orbit. Orbit does not embed a Tailscale SDK or distribute Syncthing's server. A user who separately installs either tool obtains it under its own license. The sample relay test downloads a pinned upstream server solely to exercise the protocol.
+
+Phone refresh additionally links SideSign and the pinned IDevice/minimuxer gateway. Preserve their notices and licensing terms in [refresh notices](docs/refresh-third-party-notices.md), `Vendor/DeviceGateway/LICENSE`, `Vendor/DeviceGateway/UPSTREAM.md`, and the pinned upstream packages. The phone source payload includes the vendored source and manifests; distribution does not relicense those dependencies as MIT.

@@ -5,7 +5,7 @@ import OrbitCore
 /// Separate from Luna's synchronized connection identity. Signing credentials
 /// and host pairing secrets stay on this phone and never go through Mac RPCs.
 struct CodeRefreshSecrets {
-    var service: String { (Bundle.main.bundleIdentifier ?? "LunaCode") + ".local-refresh" }
+    var service: String { (Bundle.main.bundleIdentifier ?? "Orbit") + ".local-refresh" }
     func read(_ account: String) throws -> Data? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false,

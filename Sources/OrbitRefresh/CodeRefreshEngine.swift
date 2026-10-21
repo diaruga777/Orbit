@@ -17,7 +17,11 @@ public actor CodeRefreshEngine {
     public func readiness() async throws -> [String: Bool] {
         let bundleID = Bundle.main.bundleIdentifier
         let cached = try store().apps().contains { $0.bundleID == bundleID }
-        return ["cache": cached, "account": try await account.team() != nil, "certificate": try await account.hasCertificate(), "pairing": try await device.hasPairing()]
+        return ["cache": cached, "account": try await account.team() != nil, "certificate": try await account.hasCertificate(), "pairing": try await device.hasPairing(), "connection": await device.recentlyChecked()]
+    }
+    public func verifyConnection() async throws {
+        guard !busy else { throw CodeFailure("Wait for the current refresh to finish.") }
+        _ = try await device.connect()
     }
     public func apps() throws -> [CodeLocalRefreshApp] {
         let store = try store()

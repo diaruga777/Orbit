@@ -6,6 +6,7 @@ import SideSign
 import OrbitCore
 
 @MainActor public final class CodeRefreshController: UITableViewController, UIDocumentPickerDelegate {
+    public var readinessChanged: (([String: Bool]) -> Void)?
     private let engine: CodeRefreshEngine
     private var apps: [CodeLocalRefreshApp] = []
     private var team: String?
@@ -30,11 +31,12 @@ import OrbitCore
                 pairing = try await engine.device.hasPairing()
                 certificate = try await engine.account.hasCertificate()
                 tableView.reloadData()
+                if let status = try? await engine.readiness() { readinessChanged?(status) }
             } catch { message(error.localizedDescription) }
         }
     }
     public override func numberOfSections(in tableView: UITableView) -> Int { 2 }
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 7 : apps.count }
+    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 8 : apps.count }
     public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? nil : "Cached Builds" }
     public override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         section == 0 ? "Connect to Wi-Fi and LocalDevVPN to refresh. iOS decides when automatic refresh can run; open Orbit before your apps expire." : nil
@@ -43,8 +45,8 @@ import OrbitCore
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil); cell.accessoryType = .disclosureIndicator
         cell.detailTextLabel?.numberOfLines = 0
         if indexPath.section == 0 {
-            cell.textLabel?.text = ["Apple Account", "Pairing File", "Signing Certificate", "Create Signing Certificate", "Cache Orbit", "Import Build", "Sign Out"][indexPath.row]
-            cell.detailTextLabel?.text = [team ?? "Sign in", pairing ? "Saved on this phone" : "Import from your computer", certificate ? "Saved on this phone" : "Import a .p12 file", nil, nil, nil, nil][indexPath.row]
+            cell.textLabel?.text = ["Apple Account", "Pairing File", "Signing Certificate", "Create Signing Certificate", "Cache Orbit", "Import Build", "Check Refresh Connection", "Sign Out"][indexPath.row]
+            cell.detailTextLabel?.text = [team ?? "Sign in", pairing ? "Saved on this phone" : "Import from your computer", certificate ? "Saved on this phone" : "Import a .p12 file", nil, nil, nil, nil, nil][indexPath.row]
         } else {
             let app = apps[indexPath.row]
             cell.textLabel?.text = app.name
@@ -67,6 +69,7 @@ import OrbitCore
             alert.addAction(UIAlertAction(title: "Create", style: .default) { _ in self.perform { try await self.engine.account.createCertificate() } }); present(alert, animated: true)
         case 4: perform { try await self.engine.cacheSelf() }
         case 5: pick("ipa")
+        case 6: perform { try await self.engine.verifyConnection(); self.message("Your refresh connection is ready.") }
         default: perform { try await self.engine.account.signOut() }
         }
     }
@@ -175,7 +178,7 @@ import OrbitCore
 }
 
 @MainActor public enum CodeRefreshBackground {
-    private static var identifier: String { (Bundle.main.bundleIdentifier ?? "LunaCode") + ".refresh-builds" }
+    private static var identifier: String { (Bundle.main.bundleIdentifier ?? "Orbit") + ".refresh-builds" }
     public static func register() {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
             let work = Task {

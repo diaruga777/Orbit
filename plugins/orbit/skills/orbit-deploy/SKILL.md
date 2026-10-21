@@ -14,3 +14,5 @@ Start `orbit_build`, poll `orbit_job`, and inspect a failure's actual log before
 `waitingForPhone` means the artifact is retained. Check Xcode trust, Developer Mode, phone unlock, the native connection, or the explicitly authorized remote forwarder. `unknownCompletion` requires readback reconciliation before treating installation as successful. Orbit cannot replace its own forwarding app through that same forwarding session.
 
 Enable or change `orbit_schedule` within the user's request. For a newly generated app, commit source, register, build now, and schedule it; do not stop at a build command or a plan. Report target/job IDs, confirmed installation state and next refresh conditions. Never use WebDriverAgent on a physical phone.
+
+After a confirmed app-catalog build, the user can choose Cache for Mac-Free Refresh in the phone Apps tab. Thereafter the phone can renew that exact installed revision through Refresh without the Mac. New code still needs a Mac build. Orbit self replacement uses the independent phone refresh connection or native Mac connection, never its active forwarding session.

@@ -2,11 +2,40 @@
 
 **Build an iOS app. Keep it on your phone.**
 
-Orbit is an open source iPhone/iPad source editor and Mac build companion. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices.
+Orbit is an open source iPhone/iPad source editor and Mac build companion. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices. Orbit also hosts single-file JavaScript Home Screen and Lock Screen widgets.
 
 You need a Mac, an iPhone, and either a coding agent subscription/credits or enough development experience to configure the tools yourself. Orbit includes an MCP and setup/deploy skills, so an agent can follow this README end to end. Orbit does not require an AI provider, subscription, hosted backend or paid Apple membership.
 
-> Free Apple accounts are supported. Apple limits Personal Teams to three installed development apps per device, three registered devices and ten App IDs; profiles expire after seven days. Orbit itself uses one app slot. Orbit defaults to **every six days**, leaving a day for recovery. This works for compatible apps within Apple's limits—not every app or entitlement. A refresh still needs an awake, logged-in Mac and a reachable, trusted phone. [Apple account limits](https://developer.apple.com/help/account/basics/about-your-developer-account)
+> Free Apple accounts are supported. Apple limits Personal Teams to three installed development apps per device, three registered devices and ten App IDs; profiles expire after seven days. Orbit itself uses one app slot. Orbit defaults to **every six days**, leaving a day for recovery. This works for compatible apps within Apple's limits—not every app or entitlement. A new build needs an awake, logged-in Mac and a reachable, trusted phone. Once cached on iPhone, the same installed build can be renewed without the Mac through the phone’s Refresh tab. [Apple account limits](https://developer.apple.com/help/account/basics/about-your-developer-account)
+
+## Install from a DMG
+
+Open **Orbit Mac** from the DMG to launch the resumable setup wizard. It installs
+itself, checks full Xcode and iOS tools, guides permissions and your Apple account,
+selects an iPhone and checks Developer Mode, provides Codex/MCP integration,
+builds/installs the phone app, pairs it and checks phone refresh setup. Apple’s
+App Store, account, license, device trust and permission prompts require your
+interaction; the wizard links to them and checks again when you return.
+
+The DMG contains the committed phone project, native archives and local agent
+launcher. End users do not need to clone this repository or install Go/XcodeGen.
+Xcode resolves the pinned Swift package sources on first build. See
+[DMG packaging](docs/distribution.md) for producing a release. A development-signed
+review DMG is not a publicly notarized download.
+
+## JavaScript widgets and phone refresh
+
+**Widgets → Add → Copy AI Prompt** gives you a prompt for public ChatGPT or another
+assistant. Import/paste its `.js` file, review the allowed websites, preview it,
+and select it in an Orbit Home Screen or Lock Screen widget. The Mac and MCP can
+queue files too. Hooks render native layouts, fetch network data, store private
+JSON values, and supply future timeline entries. iOS controls actual refresh times;
+exact polling is not guaranteed. See [widgets](docs/widgets/README.md).
+
+Cache a build in Apps → Cache for Mac-Free Refresh, or cache Orbit itself in the
+Refresh tab. Set up your phone’s Apple Account/team, certificate, pairing file and
+LocalDevVPN once; then renew cached installed revisions without the Mac. New code
+still needs a Mac build. See [phone refresh](docs/local-refresh.md).
 
 ## Quick path with an agent
 
@@ -22,7 +51,7 @@ Install the bundled plugin or [MCP](#connect-your-agent) once the Mac app is run
 2. Open Xcode once, accept its license and install requested iOS platform components. In Xcode → Settings → Locations, select that Xcode for Command Line Tools. `xcode-select -p` should point inside the full Xcode app, not just `/Library/Developer/CommandLineTools`.
 3. In Xcode → Settings → Accounts, add your Apple Account. Create an account through Apple's sign-in flow if you need one. A free account appears as **Personal Team**. If you already pay for the [Apple Developer Program](https://developer.apple.com/programs/enroll/), choose that team instead. Do not enroll in the paid program just to try Orbit.
 4. Connect your iPhone by USB, unlock it, choose Trust on both devices, and enable [Developer Mode](https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device). In Xcode's Devices and Simulators window, finish pairing and enable Connect via network. First installation and any Apple trust prompts require your attention.
-5. If needed, run a small app once from Xcode with your selected team. Resolve account agreements, signing and device support in Xcode before automating them. Orbit uses this existing setup; it never asks for your Apple password or exports a signing key.
+5. If needed, run a small app once from Xcode with your selected team. Resolve account agreements, signing and device support in Xcode before automating them. Orbit uses this existing setup; Mac builds do not ask for your Apple password or export a signing key. Optional phone refresh has its own explicit Apple sign-in on iPhone.
 
 Install [Homebrew](https://brew.sh/) if you use it, then:
 
@@ -49,7 +78,7 @@ ORBIT_BUNDLE_PREFIX = com.yourname.orbit
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 ```
 
-Use your own unique reverse-DNS prefix and your team identifier from Xcode. The resulting apps are `com.yourname.orbit.ios` and `com.yourname.orbit.mac`. Neither app requires App Groups, iCloud, shared keychain groups or Luna's premium system. No developer account or team ID is included in the repository. If building for Simulator first, leave the team unset.
+Use your own unique reverse-DNS prefix and your team identifier from Xcode. The resulting apps are `com.yourname.orbit.ios` and `com.yourname.orbit.mac`. Neither app requires App Groups, iCloud or Luna’s premium system. The iOS app and widget extension explicitly share the containing app’s Keychain access group; it is separate from Luna’s identities. No developer account or team ID is included in the repository. If building for Simulator first, leave the team unset.
 
 Open `Orbit.xcodeproj`. Select the **Orbit** scheme and your phone, then Run. Xcode uses automatic development signing. The phone may ask you to trust your development certificate in Settings → General → VPN & Device Management. Keep the app installed; reinstalling from scratch can discard its local drafts and pairing identity.
 

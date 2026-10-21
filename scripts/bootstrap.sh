@@ -6,6 +6,7 @@ for tool in xcodebuild swift go python3 xcodegen; do
  command -v "$tool" >/dev/null || { echo "Missing $tool. Follow README.md setup." >&2; exit 1; }
 done
 if [[ ! -d Vendor/OrbitNet.xcframework ]]; then ./scripts/build_transport.sh; fi
+python3 scripts/bootstrap_refresh.py
 xcodegen generate
 swift package resolve
 if [[ ! -f Config/Local.xcconfig ]]; then

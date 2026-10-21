@@ -30,6 +30,13 @@ type reply struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--export-pairing" {
+		if err := exportPairing(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	result := run()
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		os.Exit(2)
@@ -109,4 +116,27 @@ func load(path string) (request, error) {
 		return value, fmt.Errorf("broker directory must be owner-only")
 	}
 	return value, nil
+}
+
+// Explicit local setup action only; never serialize pairing secrets to stdout.
+func exportPairing(args []string) error {
+	if len(args) != 2 || !filepath.IsAbs(args[1]) {
+		return errors.New("expected a phone UDID and a new absolute output path")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	data, err := adapter.ExportMacPairRecord(ctx, args[0])
+	if err != nil {
+		return err
+	}
+	file, err := os.OpenFile(args[1], os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if _, err = file.Write(data); err != nil {
+		os.Remove(args[1])
+		return err
+	}
+	return file.Sync()
 }

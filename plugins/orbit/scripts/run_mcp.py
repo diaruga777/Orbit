@@ -7,6 +7,10 @@ import sys
 
 root = Path(os.environ.get('ORBIT_HOME', str(Path.home()/'.orbit')))
 checkout = os.environ.get('ORBIT_CHECKOUT')
+# Distributed plugins resolve tools from the installed app, independently of a source checkout.
+bundled = Path(__file__).resolve().parents[3]
+if not checkout and (bundled/'bin/orbit').is_file():
+    checkout = str(bundled)
 if not checkout:
     try:
         checkout = json.loads((root/'installation.json').read_text())['checkout']

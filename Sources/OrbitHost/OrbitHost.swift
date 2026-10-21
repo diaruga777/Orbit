@@ -8,7 +8,7 @@ import OrbitTransport
 public actor OrbitHost {
     private let stateLock: OrbitStateLock
     public let root: URL
-    public let service: CodeService
+    public private(set) var service: CodeService
     private var targets: [OrbitTarget]
     public private(set) var configuration: OrbitConfiguration
     public private(set) var pairingUntil = Date.distantPast
@@ -21,7 +21,7 @@ public actor OrbitHost {
         targets = FileManager.default.fileExists(atPath: targetsURL.path) ? try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: targetsURL)) : []
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
         service = try CodeService(root: root.appendingPathComponent("Builds"),
-            installBundleID: Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String,
+            installBundleID: configuration.phoneBundleID ?? Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String,
             installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"))
     }
     public func openPairing() { pairingUntil = Date().addingTimeInterval(300) }
@@ -72,6 +72,25 @@ public actor OrbitHost {
             let id = try required(p, "id")
             guard try widgetDeployments().contains(where: { $0["id"] == id }) else { throw CodeFailure("Widget not found.") }
             try FileManager.default.removeItem(at: root.appendingPathComponent("Widgets/" + id + ".js")); return ["removed": id]
+        case "setup_phone":
+            guard peer == nil, targets.allSatisfy({ $0.jobID == nil && $0.pendingRequest == nil }) else { throw CodeFailure("Finish active builds before changing phone setup.") }
+            let prefix = try required(p, "bundlePrefix")
+            guard OrbitSetupState.validPrefix(prefix) else { throw CodeFailure("Choose a reverse-DNS bundle prefix.") }
+            let bundleID = prefix + ".ios"
+            if let existing = configuration.phoneBundleID, existing != bundleID { throw CodeFailure("Keep Orbit’s existing bundle prefix to preserve phone data.") }
+            if configuration.phoneBundleID == bundleID { return ["bundleID": bundleID] }
+            configuration.phoneBundleID = bundleID; try saveConfiguration()
+            service = try CodeService(root: root.appendingPathComponent("Builds"), installBundleID: bundleID, installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"))
+            return ["bundleID": bundleID]
+        case "phone_setup_status":
+            if let peer {
+                let allowed = ["cache", "account", "certificate", "pairing", "connection"]
+                guard p.keys.allSatisfy(allowed.contains), allowed.allSatisfy({ p[$0] is Bool }) else { throw CodeFailure("Invalid phone readiness.") }
+                let value: [String: Any] = ["peer": peer, "updatedAt": Date().timeIntervalSince1970, "readiness": p]
+                try JSONSerialization.data(withJSONObject: value).write(to: root.appendingPathComponent("phone-setup.json"), options: .atomic)
+                return ["received": true]
+            }
+            return (try? JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("phone-setup.json")))) ?? NSNull()
         case "artifact": return try object(await service.refreshBuild(jobID: required(p, "jobID"), offset: p["offset"] as? Int ?? 0))
         case "devices":
             let result = await service.handle(try JSONEncoder().encode(CodeRequest(.devices)))
@@ -147,6 +166,9 @@ public actor OrbitHost {
         let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
         guard path.hasPrefix("/"), ["xcodeproj", "xcworkspace"].contains(url.pathExtension), FileManager.default.fileExists(atPath: url.path) else { throw CodeFailure("Choose an existing Xcode project or workspace.") }
         var project = CodeProject(path: url.path, scheme: scheme)
+        if let prefix = p["bundlePrefix"] as? String {
+            guard OrbitSetupState.validPrefix(prefix) else { throw CodeFailure("Invalid bundle prefix.") }; project.bundlePrefix = prefix
+        }
         if let team = p["teamID"] as? String, !team.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { project.developmentTeam = team }
         var request = CodeRequest(.apps, path: url.path); request.project = project
         let response = try JSONDecoder().decode(CodeResponse.self, from: await service.handle(JSONEncoder().encode(request)))

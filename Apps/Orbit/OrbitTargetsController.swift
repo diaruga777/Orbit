@@ -1,5 +1,6 @@
 import UIKit
 import OrbitCore
+import OrbitRefresh
 
 @MainActor final class OrbitTargetsController: UITableViewController, UISearchResultsUpdating {
     private let connection: OrbitPhoneConnection
@@ -51,6 +52,17 @@ import OrbitCore
             let enabled = app["enabled"] as? Bool == true
             alert.addAction(UIAlertAction(title: enabled ? "Pause Refreshes" : "Refresh Every Six Days", style: .default) { _ in Task { do { _ = try await self.connection.rpc("schedule", ["id": id, "enabled": !enabled, "intervalHours": 144]); self.refresh() } catch { self.show(error.localizedDescription) } } })
             if let jobID = (app["jobID"] ?? app["lastJobID"]) as? String { alert.addAction(UIAlertAction(title: "View Build Log", style: .default) { _ in Task { do { let job = try await self.connection.rpc("job", ["id": jobID]) as? [String: Any] ?? [:]; self.show((job["state"] as? String ?? "") + "\n" + (job["log"] as? String ?? "")) } catch { self.show(error.localizedDescription) } } }) }
+            if let jobID = (app["lastJobID"] ?? app["jobID"]) as? String {
+                alert.addAction(UIAlertAction(title: "Cache for Mac-Free Refresh", style: .default) { _ in Task {
+                    do {
+                        try await CodeRefreshEngine.shared.cacheFromMac { offset in
+                            let result = try await self.connection.rpc("artifact", ["jobID": jobID, "offset": offset])
+                            return try JSONDecoder().decode(CodeRefreshArchiveChunk.self, from: JSONSerialization.data(withJSONObject: result))
+                        }
+                        self.show("Build cached. Open Refresh to renew it on this phone.")
+                    } catch { self.show(error.localizedDescription) }
+                } })
+            }
             alert.addAction(UIAlertAction(title: "Remove App Target", style: .destructive) { _ in Task { do { _ = try await self.connection.rpc("target_remove", ["id": id]); self.refresh() } catch { self.show(error.localizedDescription) } } })
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = view; present(alert, animated: true)
         }

@@ -39,6 +39,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources/
 cp "$BUILD/OrbitMacApp" "$APP/Contents/MacOS/OrbitMacApp"
 cp "$BUILD/orbit-apple-adapter" "$APP/Contents/Helpers/"
 cp -R "$BUILD/apple-adapter-notices/." "$APP/Contents/Resources/AppleAdapterNotices/"
+# Bundle everything setup needs except Apple-owned Xcode/account prerequisites.
+python3 "$ROOT/scripts/package_phone_source.py" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/Resources/AgentTools/bin" "$APP/Contents/Resources/AgentTools/plugins"
+cp "$ROOT/bin/orbit" "$APP/Contents/Resources/AgentTools/bin/orbit"
+python3 "$ROOT/scripts/package_plugin.py" codex "$APP/Contents/Resources/AgentTools/plugins/orbit"
 for resource in "$BUILD"/*.bundle; do [[ ! -d "$resource" ]] || cp -R "$resource" "$APP/Contents/Resources/"; done
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -53,8 +58,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <key>NSLocalNetworkUsageDescription</key><string>Orbit connects to your phone to build and install your apps.</string>
 </dict></plist>
 PLIST
-codesign --force --sign "${IDENTITY:--}" --timestamp=none "$APP/Contents/Helpers/orbit-apple-adapter"
-codesign --force --sign "${IDENTITY:--}" --timestamp=none "$APP"
+if [[ "${ORBIT_DISTRIBUTION_MODE:---review}" == --release ]]; then
+ codesign --force --options runtime --sign "$IDENTITY" --timestamp "$APP/Contents/Helpers/orbit-apple-adapter"
+else
+ codesign --force --sign "${IDENTITY:--}" --timestamp=none "$APP/Contents/Helpers/orbit-apple-adapter"
+fi
+if [[ "${ORBIT_DISTRIBUTION_MODE:---review}" == --release ]]; then
+ codesign --force --options runtime --sign "$IDENTITY" --timestamp "$APP"
+else
+ codesign --force --sign "${IDENTITY:--}" --timestamp=none "$APP"
+fi
 codesign --verify --deep --strict "$APP"
 codesign -dv --verbose=2 "$APP"
 if [[ "$MODE" != --build-only && -d "$BUNDLE" ]]; then

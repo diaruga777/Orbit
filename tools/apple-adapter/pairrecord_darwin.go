@@ -91,3 +91,52 @@ func muxQuery(ctx context.Context, dial func(context.Context) (net.Conn, error),
 	}
 	return reply, nil
 }
+
+// ExportMacPairRecord is an explicit setup-only operation. The caller chooses
+// one phone and writes the result to a new owner-only file for manual import.
+// It is never reachable through the network/control RPC or installer protocol.
+func ExportMacPairRecord(ctx context.Context, deviceID string) ([]byte, error) {
+	_, err := ReadMacPairRecord(ctx, deviceID) // validates identity and existing trust
+	if err != nil {
+		return nil, err
+	}
+	return exportMacPairRecord(ctx, deviceID, func(ctx context.Context) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", "/var/run/usbmuxd")
+	})
+}
+func exportMacPairRecord(ctx context.Context, deviceID string, dial func(context.Context) (net.Conn, error)) ([]byte, error) {
+	reply, err := muxQuery(ctx, dial, map[string]any{"MessageType": "ReadPairRecord", "PairRecordID": deviceID})
+	if err != nil {
+		return nil, err
+	}
+	data, ok := reply["PairRecordData"].([]byte)
+	if !ok || len(data) > maxPlist {
+		return nil, errors.New("existing pairing record unavailable")
+	}
+	var value map[string]any
+	if _, err = plist.Unmarshal(data, &value); err != nil {
+		return nil, errors.New("invalid pairing record")
+	}
+	if old, ok := value["UDID"].(string); ok && old != "" && old != deviceID {
+		return nil, errors.New("pairing record belongs to another phone")
+	}
+	value["UDID"] = deviceID
+	if value["SystemBUID"] == nil || value["SystemBUID"] == "" {
+		reply, err = muxQuery(ctx, dial, map[string]any{"MessageType": "ReadBUID"})
+		if err != nil {
+			return nil, err
+		}
+		value["SystemBUID"] = reply["BUID"]
+	}
+	for _, key := range []string{"HostID", "SystemBUID", "WiFiMACAddress"} {
+		if text, ok := value[key].(string); !ok || text == "" {
+			return nil, errors.New("complete phone pairing record unavailable: " + key)
+		}
+	}
+	for _, key := range []string{"HostCertificate", "HostPrivateKey", "RootCertificate", "RootPrivateKey", "DeviceCertificate", "EscrowBag"} {
+		if bytes, ok := value[key].([]byte); !ok || len(bytes) == 0 {
+			return nil, errors.New("complete phone pairing record unavailable: " + key)
+		}
+	}
+	return plist.Marshal(value, plist.XMLFormat)
+}

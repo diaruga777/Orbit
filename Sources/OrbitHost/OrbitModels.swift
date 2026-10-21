@@ -27,6 +27,7 @@ public struct OrbitTarget: Codable, Identifiable, Sendable {
     }
 }
 public struct OrbitConfiguration: Codable, Sendable {
+    public var phoneBundleID: String?
     public var listen = "0.0.0.0:49210"
     public var provider = "local"
     public var relay: String?

@@ -1,12 +1,15 @@
 import UIKit
 import BackgroundTasks
 import OrbitCore
+import OrbitRefresh
+import OrbitWidgetUI
 import OrbitUI
 import OrbitTransport
 import OrbitWire
 
 @main final class OrbitAppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        CodeRefreshBackground.register()
         let identifier = (Bundle.main.bundleIdentifier ?? "org.example.orbit.ios") + ".overnight-builds"
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
             let work = Task {
@@ -30,6 +33,7 @@ import OrbitWire
 }
 @MainActor final class OrbitSceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControllerDelegate {
     var window: UIWindow?
+    private var widgets: OrbitWidgetsController?
     let connection = OrbitPhoneConnection.shared
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
@@ -62,8 +66,19 @@ import OrbitWire
             apps.tabBarItem = UITabBarItem(title: "Apps", image: UIImage(systemName: "apps.iphone"), tag: 2)
             let settings = UINavigationController(rootViewController: OrbitConnectionController(connection: connection))
             settings.tabBarItem = UITabBarItem(title: "Mac", image: UIImage(systemName: "desktopcomputer"), tag: 3)
-            tabs.viewControllers = [project, apps, settings]
-            tabs.selectedIndex = connection.pairingCode.isEmpty ? 2 : min(2, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
+            let refreshController = CodeRefreshController()
+            refreshController.readinessChanged = { readiness in Task { _ = try? await connection.rpc("phone_setup_status", readiness) } }
+            let refresh = UINavigationController(rootViewController: refreshController)
+            refresh.tabBarItem = UITabBarItem(title: "Refresh", image: UIImage(systemName: "arrow.clockwise"), tag: 4)
+            let widgets = OrbitWidgetsController(deployments: {
+                let result = try await connection.rpc("widgets") as? [[String: Any]] ?? []
+                return result.compactMap { $0["source"] as? String }
+            })
+            self.widgets = widgets
+            let widgetNavigation = UINavigationController(rootViewController: widgets)
+            widgetNavigation.tabBarItem = UITabBarItem(title: "Widgets", image: UIImage(systemName: "square.grid.2x2"), tag: 5)
+            tabs.viewControllers = [project, apps, widgetNavigation, refresh, settings]
+            tabs.selectedIndex = connection.pairingCode.isEmpty ? 4 : min(4, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
             window.rootViewController = tabs
         } catch {
             let controller = UIViewController(); controller.view.backgroundColor = .systemBackground
@@ -72,6 +87,15 @@ import OrbitWire
             window.rootViewController = controller
         }
         window.makeKeyAndVisible()
+        if let url = options.urlContexts.first?.url { openWidget(url) }
+    }
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        if let url = URLContexts.first?.url { openWidget(url) }
+    }
+    private func openWidget(_ url: URL) {
+        guard url.isFileURL, let widgets, let tabs = window?.rootViewController as? UITabBarController else { return }
+        tabs.selectedIndex = 2
+        DispatchQueue.main.async { widgets.open(url) }
     }
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         UserDefaults.standard.set(tabBarController.selectedIndex, forKey: "Orbit.selectedTab")
@@ -80,6 +104,9 @@ import OrbitWire
     func sceneDidBecomeActive(_ scene: UIScene) {
         readiness?.cancel()
         readiness = Task { await connection.offerInstallWindow(seconds: 3600) }
+        Task {
+            if let readiness = try? await CodeRefreshEngine.shared.readiness() { _ = try? await connection.rpc("phone_setup_status", readiness) }
+        }
     }
     func sceneDidEnterBackground(_ scene: UIScene) { readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
 }

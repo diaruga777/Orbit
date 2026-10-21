@@ -13,6 +13,7 @@ settings:
     MARKETING_VERSION: '0.1.0'
     CURRENT_PROJECT_VERSION: '1'
     CODE_SIGN_STYLE: Automatic
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]': x86_64
 configFiles:
   Debug: Config/Orbit.xcconfig
   Release: Config/Orbit.xcconfig
@@ -23,15 +24,61 @@ targets:
     sources: [Apps/Orbit]
     info:
       path: Apps/Orbit/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSLocalNetworkUsageDescription: Orbit connects to your Mac to edit files and build apps.
+        OrbitWidgetKeychainGroup: $(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios
+        BGTaskSchedulerPermittedIdentifiers:
+          - $(PRODUCT_BUNDLE_IDENTIFIER).overnight-builds
+          - $(PRODUCT_BUNDLE_IDENTIFIER).refresh-builds
+        UIBackgroundModes: [processing]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen: {}
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Orbit Widget
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.netscape.javascript-source, public.plain-text]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).ios
+        CODE_SIGN_ENTITLEMENTS: Apps/Orbit/Orbit.entitlements
         TARGETED_DEVICE_FAMILY: '1,2'
     dependencies:
+      - target: OrbitWidgetExtension
+      - package: Orbit
+        product: OrbitWidgetUI
+      - package: Orbit
+        product: OrbitRefresh
       - package: Orbit
         product: OrbitUI
       - package: Orbit
         product: OrbitTransport
+  OrbitWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources: [Apps/OrbitWidgets]
+    info:
+      path: Apps/OrbitWidgets/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        OrbitWidgetKeychainGroup: $(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).ios.widgets
+        CODE_SIGN_ENTITLEMENTS: Apps/OrbitWidgets/OrbitWidgets.entitlements
+        TARGETED_DEVICE_FAMILY: '1,2'
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    dependencies:
+      - package: Orbit
+        product: OrbitWidgetUI
+      - package: Orbit
+        product: OrbitWidgets
   OrbitUITests:
     type: bundle.ui-testing
     platform: iOS
