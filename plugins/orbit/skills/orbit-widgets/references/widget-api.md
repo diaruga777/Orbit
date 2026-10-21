@@ -29,4 +29,3 @@ Layout nodes (JSON objects only):
 Colors: primary/secondary/accent/red/orange/green/blue/purple. Weights: regular/medium/semibold/bold. Font sizes 8–72, spacing 0–40. At most 120 nodes, depth 8. Fit the selected family; inline/circular are tiny. No HTML, CSS, image URLs, arbitrary SwiftUI, or interactivity. Include an empty-data layout.
 
 render supplies the current entry. Optional timeline returns up to 63 additional entries with strictly increasing ISO8601 dates after ctx.now within 48 hours. Fetch several departures in update, then build future layouts at departure times so the display changes between network refreshes. Preserve an indication of when the data was fetched. Never promise precise scheduled network refreshes. Return only the .js file.
-

@@ -28,8 +28,13 @@ def package(destination):
                 if file.is_symlink():
                     raise RuntimeError('Native payload contains a symlink: '+str(file))
                 if file.is_file(): output.write(file,file.relative_to(ROOT))
+    hasher = hashlib.sha256()
     with archive.open('rb') as file:
-        digest = hashlib.file_digest(file,'sha256').hexdigest()
+        while True:
+            block = file.read(1024 * 1024)
+            if not block: break
+            hasher.update(block)
+    digest = hasher.hexdigest()
     (destination/'OrbitPhoneSource.json').write_text(json.dumps({'revision':revision,'sha256':digest},indent=2)+'\n')
     return archive
 

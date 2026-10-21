@@ -56,3 +56,38 @@ Local verification used Xcode 26.2, Go 1.26.4 and an iOS 26.2 Simulator:
 - Luna Mac's remaining 13 tests and Luna Vault's Simulator build passed after removal of Code services.
 
 Mac window visual inspection was unavailable while the screen was locked. No physical phone, Personal Team renewal cycle, unattended background installation or public marketplace acceptance is claimed by these checks.
+
+## Wizard, phone refresh and widget integration (2026-10-21)
+
+The expanded suite covers the cached-build export/refresh policy, IPA traversal
+and pairing validation, metadata-before-execution, exact-host HTTPS grants,
+JavaScript hooks/timelines, layout and K-V quotas, stale update rejection, setup
+state, native Developer Mode evidence, and local-only widget deployment.
+
+The real Simulator import test pastes a JavaScript file, reviews the consent,
+installs it in the shared Keychain store and renders its native SwiftUI preview:
+
+```sh
+xcodebuild test -project Orbit.xcodeproj -scheme Orbit \
+  -destination 'platform=iOS Simulator,id=YOUR_BOOTED_SIMULATOR' \
+  -only-testing:OrbitUITests/OrbitWidgetsUITests
+```
+
+The review DMG’s source payload is checksum-verified and checked for required
+sources, native frameworks, background task/WidgetKit metadata and exclusion of
+local signing configuration. This integration test extracts the actual bundled
+payload, commits its ignored native binaries, checks SwiftPM’s target discovery,
+and resumes interrupted setup without creating another source commit:
+
+```sh
+ORBIT_TEST_SETUP_BUNDLE='/absolute/path/dist/Orbit Mac.app' \
+  swift test --filter OrbitSetupPayloadTests
+```
+
+The packaged CLI/MCP launcher was also exercised against the running isolated
+Mac host. Go transport/helper race suites, Python CLI/plugin tests, iOS Simulator
+build and signed Mac review packaging pass. A desktop visual review was blocked
+by the locked Mac. No Apple account sign-in, physical device access, actual
+seven-day/self/extension renewal, installed SpringBoard widget refresh cycle,
+background reliability, public notarization or marketplace acceptance is claimed.
+The review DMG is development signed; release packaging requires Developer ID.

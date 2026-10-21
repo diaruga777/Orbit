@@ -117,19 +117,22 @@ public actor OrbitSetup {
         }
         struct Manifest: Decodable { var sha256: String; var revision: String }
         let info = try JSONDecoder().decode(Manifest.self, from: Data(contentsOf: manifest))
-        guard info.revision.count <= 64, info.revision.allSatisfy({ $0.isHexDigit }) else { throw CodeFailure("Invalid phone source manifest.") }
+        guard (40...64).contains(info.revision.count), info.revision.allSatisfy({ $0.isHexDigit }) else { throw CodeFailure("Invalid phone source manifest.") }
         let handle = try FileHandle(forReadingFrom: archive); defer { try? handle.close() }
         var hash = SHA256()
         while let bytes = try handle.read(upToCount: 1024 * 1024), !bytes.isEmpty { hash.update(data: bytes) }
         guard hash.finalize().map({ String(format: "%02x", $0) }).joined() == info.sha256 else { throw CodeFailure("The phone installer failed its integrity check. Download Orbit again.") }
-        let target = root.appendingPathComponent("PhoneSource/" + info.revision)
+        let target = root.appendingPathComponent("PhoneSource/" + info.revision, isDirectory: true)
         if FileManager.default.fileExists(atPath: target.appendingPathComponent(".orbit-source-ready").path) { return target }
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         _ = try await OrbitCommand.run("/usr/bin/ditto", ["-x", "-k", archive.path, target.path])
         _ = try await OrbitCommand.run("/usr/bin/git", ["init", "--initial-branch=main"], directory: target)
         _ = try await OrbitCommand.run("/usr/bin/git", ["add", "."], directory: target)
         _ = try await OrbitCommand.run("/usr/bin/git", ["add", "--force", "Vendor/OrbitNet.xcframework", "Vendor/DeviceGateway/IDevice.xcframework"], directory: target)
-        _ = try await OrbitCommand.run("/usr/bin/git", ["-c", "user.name=Orbit Setup", "-c", "user.email=setup@localhost", "-c", "commit.gpgsign=false", "commit", "-m", "Install bundled Orbit phone source"], directory: target)
+        let staged = try await OrbitCommand.run("/usr/bin/git", ["status", "--porcelain", "--untracked-files=no"], directory: target)
+        if !staged.isEmpty {
+            _ = try await OrbitCommand.run("/usr/bin/git", ["-c", "user.name=Orbit Setup", "-c", "user.email=setup@localhost", "-c", "commit.gpgsign=false", "commit", "-m", "Install bundled Orbit phone source"], directory: target)
+        }
         try Data("ready".utf8).write(to: target.appendingPathComponent(".orbit-source-ready"), options: .atomic)
         return target
     }
