@@ -55,6 +55,7 @@ public actor OrbitHost {
             return try JSONSerialization.jsonObject(with: response)
         case "browse": return try browse(p)
         case "targets": return try object(targets)
+        case "artifact": return try object(await service.refreshBuild(jobID: required(p, "jobID"), offset: p["offset"] as? Int ?? 0))
         case "devices":
             let result = await service.handle(try JSONEncoder().encode(CodeRequest(.devices)))
             let response = try JSONDecoder().decode(CodeResponse.self, from: result)

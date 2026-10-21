@@ -2,6 +2,7 @@ import Foundation
 import OrbitCore
 
 public actor CodeService {
+    private let refreshExport = CodeRefreshExport()
     private let files = CodeFiles()
     private let jobs: CodeJobs
     public let reverseFlows: CodeReverseFlowHub?
@@ -31,6 +32,13 @@ public actor CodeService {
         if let reverseFlows, let installHelper, let installBundleID { remote = CodeReverseInstallerConfiguration(hub: reverseFlows, helper: installHelper, forwarderBundleID: installBundleID, diagnostics: root.appendingPathComponent("Overnight")) }
         else { remote = nil }
         overnight = try CodeOvernightService(root: root, builds: builds, remote: remote, journal: journal)
+    }
+    public func refreshBuild(jobID: String, offset: Int) async throws -> CodeRefreshArchiveChunk {
+        guard let artifact = try await overnight.status().first(where: { $0.id == jobID || $0.compilationJobID == jobID })?.artifact else {
+            throw CodeFailure("Complete an app-catalog build before caching it for refresh.")
+        }
+        return try await refreshExport.chunk(artifact: artifact, artifacts: root.appendingPathComponent("Jobs/Artifacts"),
+            root: root.appendingPathComponent("RefreshExports"), offset: offset)
     }
     public func revokeEndpointAuthorizations() async throws { try await endpoints?.revokeAll(); await reverseFlows?.revoke() }
     public func handle(_ data: Data, authenticatedPeerID: String? = nil) async -> Data {

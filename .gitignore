@@ -9,3 +9,5 @@ xcuserdata/
 .DS_Store
 __pycache__/
 *.pyc
+
+Vendor/DeviceGateway/IDevice.xcframework/
