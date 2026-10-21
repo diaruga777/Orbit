@@ -3,6 +3,8 @@ import PackageDescription
 let package = Package(
     name: "Orbit", platforms: [.iOS(.v26), .macOS(.v15)],
     products: [
+        .library(name: "OrbitWidgets", targets: ["OrbitWidgets"]),
+        .library(name: "OrbitWidgetUI", targets: ["OrbitWidgetUI"]),
         .library(name: "OrbitCore", targets: ["OrbitCore"]),
         .library(name: "OrbitMac", targets: ["OrbitMac"]),
         .library(name: "OrbitRefresh", targets: ["OrbitRefresh"]),
@@ -23,8 +25,11 @@ let package = Package(
         .binaryTarget(name: "COrbitNet", path: "Vendor/OrbitNet.xcframework"),
         .target(name: "OrbitWire"),
         .target(name: "OrbitTransport", dependencies: ["OrbitWire", "OrbitCore", "COrbitNet", .product(name: "IrohLib", package: "iroh-ffi")], linkerSettings: [.linkedFramework("Security"), .linkedLibrary("resolv")]),
-        .target(name: "OrbitHost", dependencies: ["OrbitCore", "OrbitMac", "OrbitTransport", "OrbitWire"]),
+        .target(name: "OrbitHost", dependencies: ["OrbitWidgets", "OrbitCore", "OrbitMac", "OrbitTransport", "OrbitWire"]),
         .executableTarget(name: "OrbitMacApp", dependencies: ["OrbitHost", "OrbitCore"]),
+        .target(name: "OrbitWidgets"),
+        .target(name: "OrbitWidgetUI", dependencies: ["OrbitWidgets"]),
+        .testTarget(name: "OrbitWidgetTests", dependencies: ["OrbitWidgets"]),
         .target(name: "OrbitCore"),
         .target(name: "OrbitRefresh", dependencies: ["OrbitCore", .product(name: "SideSign", package: "SideSign"), .product(name: "IdeviceGateway", package: "DeviceGateway")]),
         .testTarget(name: "OrbitRefreshTests", dependencies: ["OrbitRefresh", .product(name: "SideSign", package: "SideSign"), .product(name: "IdeviceGateway", package: "DeviceGateway")]),

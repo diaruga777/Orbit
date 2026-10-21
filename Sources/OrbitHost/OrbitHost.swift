@@ -1,5 +1,6 @@
 import Foundation
 import OrbitCore
+import OrbitWidgets
 import OrbitMac
 import OrbitWire
 import OrbitTransport
@@ -55,6 +56,22 @@ public actor OrbitHost {
             return try JSONSerialization.jsonObject(with: response)
         case "browse": return try browse(p)
         case "targets": return try object(targets)
+        case "widgets": return try widgetDeployments()
+        case "widget_add":
+            guard peer == nil else { throw CodeFailure("Deploy widget files from the Mac.") }
+            let path = try required(p, "path")
+            guard path.hasPrefix("/"), (try URL(fileURLWithPath: path).resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= OrbitWidgetDefinition.maximumSourceBytes else { throw CodeFailure("Choose a JavaScript file under 128 KB.") }
+            let script = try OrbitWidgetScript(source: String(contentsOfFile: path, encoding: .utf8))
+            let directory = root.appendingPathComponent("Widgets"); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let existing = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            guard existing.count < 24 || existing.contains(where: { $0.lastPathComponent == script.id + ".js" }) else { throw CodeFailure("Remove a widget before adding another.") }
+            try Data(script.source.utf8).write(to: directory.appendingPathComponent(script.id + ".js"), options: .atomic)
+            return ["id": script.id, "name": script.definition.name, "pendingPhoneApproval": true]
+        case "widget_remove":
+            guard peer == nil else { throw CodeFailure("Remove Mac widget deployments on the Mac.") }
+            let id = try required(p, "id")
+            guard try widgetDeployments().contains(where: { $0["id"] == id }) else { throw CodeFailure("Widget not found.") }
+            try FileManager.default.removeItem(at: root.appendingPathComponent("Widgets/" + id + ".js")); return ["removed": id]
         case "artifact": return try object(await service.refreshBuild(jobID: required(p, "jobID"), offset: p["offset"] as? Int ?? 0))
         case "devices":
             let result = await service.handle(try JSONEncoder().encode(CodeRequest(.devices)))
@@ -110,6 +127,14 @@ public actor OrbitHost {
             configuration.trustedPeers.removeAll(); pairingUntil = .distantPast
             try await service.revokeEndpointAuthorizations(); try saveConfiguration(); return ["forgotten": true]
         default: throw CodeFailure("Unknown Orbit method: \(method)")
+        }
+    }
+    private func widgetDeployments() throws -> [[String: String]] {
+        let directory = root.appendingPathComponent("Widgets")
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "js" }.prefix(24).map {
+            let source = try String(contentsOf: $0, encoding: .utf8), definition = try OrbitWidgetDefinition.parse(source)
+            return ["id": definition.id, "name": definition.name, "source": source, "digest": OrbitWidgetDefinition.digest(source)]
         }
     }
     private func index(_ p: [String: Any]) throws -> Int {

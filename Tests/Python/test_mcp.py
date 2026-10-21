@@ -22,6 +22,17 @@ class MCPTests(unittest.TestCase):
         names = {t['name'] for t in tools}
         self.assertTrue({'orbit_build','orbit_add_github','orbit_schedule','orbit_add_target'} <= names)
         self.assertTrue(all('trust' in t['inputSchema']['required'] for t in tools if t['name'] in {'orbit_add_target','orbit_add_github'}))
+    def test_widget_deployment_forwards_only_a_file_path(self):
+        with patch.object(orbit,'rpc',return_value={'id':'trains','pendingPhoneApproval':True}) as rpc:
+            result=orbit.handle_mcp({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'orbit_widget_add','arguments':{'path':'/tmp/train.js'}}})
+            rpc.assert_called_once_with('widget_add',{'path':'/tmp/train.js'})
+            self.assertFalse(result['result']['isError'])
+
+    def test_widget_cli_routes_the_positional_argument_as_path(self):
+        with patch.object(orbit,'rpc',return_value={}) as rpc, patch('sys.argv',['orbit','widget-add','/tmp/train.js']):
+            orbit.main()
+            rpc.assert_called_once_with('widget_add',{'path':'/tmp/train.js'})
+
     def test_notifications_get_no_response(self):
         self.assertIsNone(orbit.handle_mcp({'jsonrpc':'2.0','method':'notifications/initialized'}))
     def test_unknown_tool_and_missing_fields_do_not_dispatch(self):
