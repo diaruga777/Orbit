@@ -5,6 +5,7 @@ import Foundation
 final class OrbitWidgetNetwork: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let definition: OrbitWidgetDefinition
     private let completion: @Sendable (Result<(Int, Data), Error>) -> Void
+    private let sessionLock = NSLock()
     private var session: URLSession?
     private var bytes = Data()
     private var status = 0
@@ -26,9 +27,13 @@ final class OrbitWidgetNetwork: NSObject, URLSessionDataDelegate, @unchecked Sen
         configuration.httpCookieStorage = nil; configuration.urlCredentialStorage = nil; configuration.urlCache = nil
         configuration.timeoutIntervalForRequest = 10; configuration.timeoutIntervalForResource = 12
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        self.session = session; session.dataTask(with: request).resume()
+        sessionLock.lock(); self.session = session; sessionLock.unlock()
+        session.dataTask(with: request).resume()
     }
-    func cancel() { session?.invalidateAndCancel() }
+    func cancel() {
+        sessionLock.lock(); let session = self.session; sessionLock.unlock()
+        session?.invalidateAndCancel()
+    }
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
         guard let url = request.url, definition.permits(url), response.url?.host == url.host else {
@@ -49,6 +54,7 @@ final class OrbitWidgetNetwork: NSObject, URLSessionDataDelegate, @unchecked Sen
     }
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if let error = failure ?? error { completion(.failure(error)) } else { completion(.success((status, bytes))) }
-        session.finishTasksAndInvalidate(); self.session = nil
+        session.finishTasksAndInvalidate()
+        sessionLock.lock(); self.session = nil; sessionLock.unlock()
     }
 }
