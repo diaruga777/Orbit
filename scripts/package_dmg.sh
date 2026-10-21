@@ -35,5 +35,15 @@ if [[ "$MODE" == --release ]]; then
  xcrun stapler staple "$OUTPUT"
  xcrun stapler validate "$OUTPUT"
 fi
-shasum -a 256 "$OUTPUT" > "$OUTPUT.sha256"
+python3 - "$OUTPUT" <<'CHECKSUM' > "$OUTPUT.sha256"
+import hashlib, sys
+from pathlib import Path
+path=Path(sys.argv[1]); digest=hashlib.sha256()
+with path.open('rb') as file:
+ while True:
+  block=file.read(1024*1024)
+  if not block: break
+  digest.update(block)
+print(digest.hexdigest()+'  '+path.name)
+CHECKSUM
 echo "$OUTPUT"
