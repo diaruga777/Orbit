@@ -148,6 +148,14 @@ Keep your app's bundle identifiers unique and configure its entitlements for you
 
 **Commit the source you want to install.** Orbit builds a detached Git worktree from the selected branch; unsaved/uncommitted edits in the source editor or an agent's working tree are not part of that revision. Local targets use that local branch as-is. Targets cloned by Orbit fetch the chosen GitHub branch before each fresh build without changing the checkout's active branch.
 
+On iOS, Play defaults to **Build & Install**. Enable **Launch After Install** in a
+scheme's row menu to open the app too. Each scheme keeps its own preference,
+including schemes for the same app. Install-only builds compile for a generic
+iOS destination and skip launching, so locking the phone after the build starts
+doesn't cause a launch failure. The Mac still needs its trusted native Apple
+connection for installation; device trust or installation prompts may require
+unlocking. With launch enabled, keep the phone unlocked for that final step.
+
 To use GitHub directly:
 
 ```sh

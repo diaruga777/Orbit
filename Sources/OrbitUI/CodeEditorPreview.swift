@@ -39,6 +39,8 @@ private actor PreviewFiles {
         return UIImage(named: name)?.pngData()
     }()
     private var buildStartedAt: Date?
+    private var installOnly = true
+    private var buildTitle: String { installOnly ? "Build & Install" : "Build & Run" }
     private var handoffAcknowledgedAt: Date?
     private let stateURL: URL
     private struct BuildState: Codable { var startedAt: Date?; var acknowledgedAt: Date? }
@@ -75,7 +77,7 @@ private actor PreviewFiles {
     }
     """
     private func selfUpdateJob() -> CodeJob {
-        var job = CodeJob(id: "preview-build", title: "Build & Run")
+        var job = CodeJob(id: "preview-build", title: buildTitle)
         job.startedAt = buildStartedAt ?? Date()
         let elapsed = Date().timeIntervalSince(job.startedAt)
         if elapsed >= 3 {
@@ -118,10 +120,14 @@ private actor PreviewFiles {
                 return try JSONEncoder().encode(response)
             case .runOnDevice:
                 guard request.deviceBuild?.branch == "main", request.deviceBuild?.deviceID == "preview-phone" else { throw CodeFailure("Unexpected preview build settings.") }
+                installOnly = request.deviceBuild?.installOnly == true
+                guard installOnly != ProcessInfo.processInfo.arguments.contains("--expect-build-launch") else {
+                    throw CodeFailure("Unexpected preview launch setting.")
+                }
                 if ProcessInfo.processInfo.arguments.contains("--build-start-delay") { try await Task.sleep(for: .seconds(5)) }
                 buildStartedAt = Date(); handoffAcknowledgedAt = nil
                 if ProcessInfo.processInfo.arguments.contains("--build-self-update") { persistBuild() }
-                response.job = CodeJob(id: "preview-build", title: "Build & Run · " + (request.project?.scheme ?? ""), state: .running, log: "Preview build from main on Preview iPhone. No Mac command was executed.")
+                response.job = CodeJob(id: "preview-build", title: buildTitle + " · " + (request.project?.scheme ?? ""), state: .running, log: "Preview build from main on Preview iPhone. No Mac command was executed.")
                 response.job?.startedAt = buildStartedAt ?? Date()
                 response.job?.progress = CodeJobProgress(stage: "Preparing checkout…", start: 0.05, end: 0.25, estimatedSeconds: 3)
                 if ProcessInfo.processInfo.arguments.contains("--build-no-progress") { response.job?.progress = nil }
@@ -129,7 +135,7 @@ private actor PreviewFiles {
             case .job:
                 let flags = ProcessInfo.processInfo.arguments
                 let duration: TimeInterval = flags.contains("--build-no-progress") ? 25 : flags.contains("--build-events") ? 18 : 6
-                response.job = CodeJob(id: "preview-build", title: "Build & Run", state: Date().timeIntervalSince(buildStartedAt ?? .distantPast) > duration ? .succeeded : .running, log: "Preview build from main on Preview iPhone. No Mac command was executed.")
+                response.job = CodeJob(id: "preview-build", title: buildTitle, state: Date().timeIntervalSince(buildStartedAt ?? .distantPast) > duration ? .succeeded : .running, log: "Preview build from main on Preview iPhone. No Mac command was executed.")
                 response.job?.startedAt = buildStartedAt ?? Date()
                 response.job?.progress = CodeJobProgress(stage: "Compiling on your Mac…", start: 0.25, end: 0.80, estimatedSeconds: 4, startedAt: buildStartedAt ?? Date())
                 if flags.contains("--build-no-progress") { response.job?.progress = nil }

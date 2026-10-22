@@ -19,6 +19,14 @@ Swift tests cover document version/conflict handling, SourceKit jobs, detached c
 
 `OrbitHostTests.testTargetIconsBackfillOlderCatalogAndSurviveRestart` covers legacy target icon migration, wire encoding, persistence and throttled lookup failures. `CodeEditorUITests.testTargetListDisplaysIconsAndMissingImageFallbacks` exercises the actual Apps controller with a thumbnail, absent image and invalid image; its screenshot attachment supports visual review without pairing a phone.
 
+Build-catalog tests cover legacy install-only defaults and per-scheme launch
+preferences surviving discovery and cache reload. The Simulator build fixture
+rejects Play requests with an unexpected `installOnly` value.
+`CodeEditorUITests.testLaunchAfterInstallIsPerSchemeAndPersistsAcrossDiscoveryAndRelaunch`
+checks launch opt-in, persistence and independence between schemes sharing a
+bundle ID. The existing background/startup tests exercise default install-only
+requests after leaving Orbit. These fixtures never install on a physical phone.
+
 ## SourceKit with a real disposable Xcode app
 
 `scripts/test_code_intelligence.sh` generates a UIKit fixture with a local package, builds it for Simulator and checks real SourceKit completion/diagnostics with unsaved edits. It leaves the fixture source unchanged and never launches an app or contacts a phone.
@@ -40,6 +48,10 @@ Before treating a release as verified for unattended personal use, test using th
 - First installation with a free Personal Team, then profile renewal before seven-day expiry; verify the installed profile's new expiration and extensions.
 - Scheduled install while the Mac is awake and iPhone is available; confirm the exact installed bundle/version/build.
 - Mac/app restart, queued job recovery, missing phone, a locked phone, network change and signing failure.
+- iOS Play with Launch After Install off: lock after the Mac accepts the build,
+  confirm installation over native USB/Wi-Fi, and verify the app stays closed.
+  Enable it for that scheme and verify launch while unlocked. Check other
+  schemes keep install-only behavior, including aliases for the same app.
 - Local Wi-Fi and chosen remote pipe; explicit phone authorization, foreground and iOS-controlled background readiness, peer revocation and refusal to self-replace the active forwarder.
 - Updating Orbit through an independent native Apple connection; preserving drafts and app identity.
 

@@ -36,7 +36,7 @@ import OrbitCore
         if isStarting { return "Keep Orbit open while the build starts." }
         if let handoff = job?.installHandoff {
             return handoff.acknowledged
-                ? "Installing the update. Orbit may close and reopen."
+                ? "Installing the update. Orbit may close."
                 : "Keep Orbit open until the update starts installing."
         }
         if disconnected { return "Reconnecting… Your Mac can keep building while you wait." }

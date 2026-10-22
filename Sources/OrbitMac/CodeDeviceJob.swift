@@ -17,6 +17,8 @@ extension CodeJobs {
             if options.installOnly != true {
                 try await CodeDeviceSupport.validateDestination(buildProject, deviceID: options.deviceID, root: root, process: process)
             }
+            // Install-only builds must not wait on a live Xcode destination if
+            // the phone locks after submission. CoreDevice connects at install.
             let destination = options.installOnly == true ? "generic/platform=iOS" : "platform=iOS,id=" + options.deviceID
             let settings = try await CodeDeviceSupport.settings(buildProject, root: root, process: process, destination: destination)
             guard let app = try CodeDeviceSupport.primarySettings(settings, project: buildProject), CodeDeviceSupport.isApp(app),
@@ -44,7 +46,7 @@ extension CodeJobs {
                 "-derivedDataPath", derived.path, "-resultBundlePath", root.appendingPathComponent(job.id + ".xcresult").path,
                 "-allowProvisioningUpdates", "CONFIGURATION_BUILD_DIR=" + products.path] + signing + artifactFlags + ["build"], directory: checkout.directory.path, process: process, log: log, id: job.id,
                 workloadKey: project.path + "|" + project.scheme + "|device", from: 0.25, to: 0.80) == 0 else {
-                throw CodeFailure("Build & Run stopped. See the Mac job log for details.")
+                throw CodeFailure("The build stopped. See the Mac job log for details.")
             }
             recordCompilation(job.id, revision: checkout.revision)
             let appURL = products.appendingPathComponent(product)
@@ -83,7 +85,7 @@ extension CodeJobs {
         await checkout.remove(root: root)
     }
     private func command(_ executable: String, _ arguments: [String], directory: String, process: CodeProcess, log: URL) async throws {
-        guard try await process.run(executable, arguments, directory: directory, log: log, timeout: 180) == 0 else { throw CodeFailure("Build & Run stopped. See the Mac job log for details.") }
+        guard try await process.run(executable, arguments, directory: directory, log: log, timeout: 180) == 0 else { throw CodeFailure("The device command failed. See the Mac job log for details.") }
     }
 }
 
@@ -97,7 +99,7 @@ enum CodeDeviceSigning {
         // settings on the editor's branch.
         if team(checkout) != nil { return [] }
         guard let local, let team = team(local) else {
-            throw CodeFailure("No development team is configured for this app. Set its Signing & Capabilities team in the original project on your Mac (or its local signing configuration), then retry Build & Run.")
+            throw CodeFailure("No development team is configured for this app. Set its Signing & Capabilities team in the original project on your Mac (or its local signing configuration), then retry the build.")
         }
         // Apply to the entire build so embedded extensions share the app's team.
         // Keep provisioning, certificates and entitlements under Xcode's control.

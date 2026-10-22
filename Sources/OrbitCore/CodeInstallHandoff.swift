@@ -1,6 +1,6 @@
 import Foundation
 
-/// The job remains running until installation and launch finish on the Mac.
+/// The job remains running until installation and any requested launch finish on the Mac.
 /// Only the phone's compilation-monitoring activity ends at this boundary.
 public struct CodeInstallHandoff: Codable, Equatable, Sendable {
     public var token: String

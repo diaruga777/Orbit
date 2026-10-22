@@ -202,6 +202,40 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(row.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "abc12345")).firstMatch.exists)
     }
 
+    func testLaunchAfterInstallIsPerSchemeAndPersistsAcrossDiscoveryAndRelaunch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--editor-preview", "--workspace-preview", "--reset-preview", "--expect-build-launch"]
+        app.launch()
+        let project = app.cells["CodeFile:/Preview/Sample.xcodeproj"]
+        XCTAssertTrue(project.waitForExistence(timeout: 15)); project.tap()
+        app.tabBars.buttons["Builds"].tap()
+        let run = app.buttons["CodeRun:Sample"]
+        XCTAssertTrue(run.waitForExistence(timeout: 15))
+        XCTAssertEqual(run.label, "Build and Install Sample")
+        app.buttons["CodeBuildOptions:Sample"].tap()
+        let launch = app.buttons["Launch After Install"]
+        XCTAssertTrue(launch.waitForExistence(timeout: 5)); launch.tap()
+        XCTAssertEqual(run.label, "Build and Run Sample")
+        let alias = app.buttons["CodeRun:SampleAlias"]
+        XCTAssertTrue(alias.waitForExistence(timeout: 15))
+        XCTAssertEqual(alias.label, "Build and Install SampleAlias")
+        app.terminate()
+        app.launchArguments = ["--editor-preview", "--workspace-preview", "--expect-build-launch"]
+        app.launch()
+        XCTAssertTrue(run.waitForExistence(timeout: 15))
+        XCTAssertEqual(run.label, "Build and Run Sample")
+        XCTAssertEqual(alias.label, "Build and Install SampleAlias")
+        run.tap()
+        // The fixture rejects a request that doesn't match the selected launch mode.
+        XCTAssertTrue(app.staticTexts["Build Completed"].waitForExistence(timeout: 20))
+        app.buttons["Done"].tap()
+        app.buttons["CodeBuildOptions:Sample"].tap()
+        XCTAssertTrue(launch.waitForExistence(timeout: 5)); launch.tap()
+        XCTAssertEqual(run.label, "Build and Install Sample")
+        attach("Per-scheme launch setting", app)
+    }
+
     func testBuildRowFitsAtAccessibilityTextSize() {
         continueAfterFailure = false
         let app = XCUIApplication()
@@ -273,7 +307,7 @@ final class CodeEditorUITests: XCTestCase {
         let run = app.buttons["CodeRun:Sample"]
         XCTAssertTrue(run.waitForExistence(timeout: 15)); run.tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Starting… · Keep Orbit open")).firstMatch.waitForExistence(timeout: 3))
-        XCTAssertTrue(app.descendants(matching: .any)["CodeRowProgress:Sample"].exists, app.debugDescription)
+        XCTAssertFalse(run.isEnabled, "Play must stay disabled while the Mac accepts the build")
         attach("Remote build startup", app)
         XCUIDevice.shared.press(.home)
         Thread.sleep(forTimeInterval: 13)
@@ -343,7 +377,7 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(run.waitForExistence(timeout: 15)); run.tap()
         XCTAssertTrue(app.staticTexts["Build Complete — Updating Orbit"].waitForExistence(timeout: 15))
         let detail = app.staticTexts["CodeBuildStatus"]
-        expectation(for: NSPredicate(format: "label CONTAINS %@", "Your Mac is installing the update"), evaluatedWith: detail)
+        expectation(for: NSPredicate(format: "label CONTAINS %@", "Installing the update. Orbit may close."), evaluatedWith: detail)
         waitForExpectations(timeout: 5)
         XCTAssertFalse(app.staticTexts["Build Completed"].exists, "Installation has not completed yet")
         attach("Self-update handed off", app)

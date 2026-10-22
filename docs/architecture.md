@@ -25,6 +25,16 @@ The Mac checks its schedule every minute. Success means a confirmed installation
 
 App targets retain the configured Xcode app-icon thumbnail discovered at registration and send it to both clients' Apps lists. Older catalogs fill missing icons on listing without building or installing an app. Unavailable projects and missing icons keep their rows with a placeholder; failed icon lookups retry after five minutes rather than on every poll.
 
+The iOS Builds tab stores `launchAfterInstall` per paired Mac, project path and
+scheme; missing preferences default to false. Discovery preserves it alongside
+branch and device choices. Play sends `CodeDeviceBuild.installOnly = true` by
+default, using the existing generic-iOS compilation path and native install
+without `devicectl device process launch`. Opting in restores Build & Run and its
+device-specific destination. Accepted work belongs to the Mac and continues if
+phone monitoring disconnects. The `.remote-build` continued-processing task is
+declared in the phone's permitted background identifiers for status monitoring
+and the existing self-update handoff; iOS still controls its lifetime.
+
 Profile refresh is scoped to the selected automatic-signing team, bundle identifier and phone. Only cache entries expiring before the requested lifetime are moved aside, with a recovery journal. Xcode does the actual provisioning. The built app and extensions are checked before deployment. Credentials remain in Apple's existing tools.
 
 ## Remote installation

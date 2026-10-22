@@ -13,6 +13,8 @@ public struct CodeBuildApp: Codable, Equatable, Sendable {
     public var iconPNG: Data?
     public var branch: String
     public var deviceID: String?
+    /// Per-scheme Play preference. Missing values in older caches mean install only.
+    public var launchAfterInstall: Bool?
     public var jobID: String?
     public var lastBuiltAt: Date?
     public var commitHash: String?
@@ -56,6 +58,7 @@ public final class CodeBuildCatalog {
         let updated = discovered.map { app -> CodeBuildApp in
             guard let previous = old.first(where: { $0.key == app.key }) else { return app }
             var result = app; result.branch = previous.branch; result.deviceID = previous.deviceID; result.jobID = previous.jobID
+            result.launchAfterInstall = previous.launchAfterInstall
             result.nightlyEnabled = previous.nightlyEnabled
             result.lastNightlyAttempt = previous.lastNightlyAttempt
             result.nightlyFailure = previous.nightlyFailure

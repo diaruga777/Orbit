@@ -36,8 +36,8 @@ public actor CodeJobs {
             guard existing.requestFingerprint == nil || existing.requestFingerprint == fingerprint else { throw CodeFailure("A request ID was reused with different content.") }
             return existing
         }
-        let overnight = request.operation == .runOnDevice && request.deviceBuild?.installOnly == true
-        guard processes.isEmpty || overnight else { throw CodeFailure("A Mac build is already running. Wait for it or cancel it first.") }
+        let installOnly = request.operation == .runOnDevice && request.deviceBuild?.installOnly == true
+        guard processes.isEmpty || installOnly else { throw CodeFailure("A Mac build is already running. Wait for it or cancel it first.") }
         guard let project = request.project, FileManager.default.fileExists(atPath: project.path),
               ["xcodeproj", "xcworkspace"].contains(URL(fileURLWithPath: project.path).pathExtension),
               !project.scheme.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -48,9 +48,12 @@ public actor CodeJobs {
         }
         if let target = request.deviceBuild?.artifactTarget {
             guard target.project == request.project, target.deviceID == request.deviceBuild?.deviceID,
-                  target.branch == request.deviceBuild?.branch, overnight else { throw CodeFailure("The artifact target does not match this build request.") }
+                  target.branch == request.deviceBuild?.branch, installOnly else { throw CodeFailure("The artifact target does not match this build request.") }
         }
-        let title = overnight ? "Overnight Build · " + project.scheme : request.operation == .runOnDevice ? "Build & Run · " + project.scheme : request.operation == .deploy ? "Build & Deploy" : (request.operation == .prepare ? "Prepare Code Intelligence" : "Build")
+        let deviceTitle = request.deviceBuild?.artifactTarget != nil ? "Overnight Build · " : installOnly ? "Build & Install · " : "Build & Run · "
+        let title = request.operation == .runOnDevice
+            ? deviceTitle + project.scheme
+            : request.operation == .deploy ? "Build & Deploy" : (request.operation == .prepare ? "Prepare Code Intelligence" : "Build")
         var job = CodeJob(id: UUID().uuidString, title: title)
         job.projectKey = project.path + "\u{0}" + project.scheme; job.requestID = request.id; job.requestFingerprint = fingerprint
         job.progress = CodeJobProgress(stage: "Preparing on your Mac…", start: 0.05, end: 0.05, estimatedSeconds: 15, reportedFraction: 0.05)

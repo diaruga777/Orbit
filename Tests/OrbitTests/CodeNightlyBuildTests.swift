@@ -90,6 +90,8 @@ final class CodeNightlyBuildTests: XCTestCase {
         var second = first; second.id = "second"; second.project?.scheme = "Two"
         let accepted = try await jobs.enqueueForTest([first, second])
         XCTAssertEqual(accepted.count, 2)
+        XCTAssertEqual(accepted[0].title, "Build & Install · One")
+        XCTAssertEqual(accepted[1].title, "Build & Install · Two")
         XCTAssertEqual(accepted[1].progress?.stage, "Waiting for another Mac build…")
         // The fixture isn't a Git repository: both builds should fail in order
         // without leaving the second accepted job stuck in the queue.

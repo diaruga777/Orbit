@@ -19,7 +19,7 @@ actor CodeInstallHandoffGate {
             guard let value = pending[id] else { throw CancellationError() }
             if value.acknowledged { return }
             guard clock.now < deadline else {
-                throw CodeFailure("The build finished, but the update couldn’t start installing. Reopen Orbit and try Build & Run again.")
+                throw CodeFailure("The build finished, but the update couldn’t start installing. Reopen Orbit and try the build again.")
             }
             try await Task.sleep(for: .milliseconds(100))
         }

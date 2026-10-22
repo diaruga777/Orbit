@@ -192,7 +192,6 @@ import OrbitCore
         let cell = CodeBuildAppCell()
         cell.accessibilityIdentifier = "CodeBuildApp:" + app.project.scheme
         let play = cell.play
-        play.accessibilityLabel = "Build and Run " + app.name
         play.accessibilityIdentifier = "CodeRun:" + app.project.scheme
         play.addAction(UIAction { [weak self] _ in
             guard let self, let current = self.displayedApps[app.key] else { return }
@@ -233,6 +232,7 @@ import OrbitCore
         cell.progress.progress = Float(fraction)
         cell.progress.accessibilityValue = "\(Int(fraction * 100)) percent estimated"
         let play = cell.play
+        play.accessibilityLabel = (app.launchAfterInstall == true ? "Build and Run " : "Build and Install ") + app.name
         if play.configuration == nil {
             var config = UIButton.Configuration.tinted(); config.image = UIImage(systemName: "play.fill"); config.cornerStyle = .capsule
             config.showsActivityIndicator = false
@@ -258,6 +258,9 @@ import OrbitCore
         var actions: [UIMenuElement] = [
             UIMenu(title: "Target Device", children: [defaults] + phones + [UIAction(title: "Refresh Connected Phones…") { [weak self] _ in self?.chooseDefaultPhone() }]),
             UIAction(title: "Branch: " + app.branch, image: UIImage(systemName: "arrow.triangle.branch")) { [weak self] _ in self?.chooseBranch(app) },
+            UIAction(title: "Launch After Install", image: UIImage(systemName: "play.fill"), state: app.launchAfterInstall == true ? .on : .off) { [weak self] _ in
+                self?.edit(app) { $0.launchAfterInstall = app.launchAfterInstall != true }
+            },
             UIAction(title: "Open in Project", image: UIImage(systemName: "curlybraces")) { [weak self] _ in
                 guard let self else { return }
                 var project = self.environment.session.recentProjects(peer: self.environment.peerID()).first { $0.path == app.project.path } ?? app.project
@@ -280,7 +283,8 @@ import OrbitCore
     }
     private func build(_ app: CodeBuildApp) {
         guard starting == nil else { return }
-        do { try environment.builds.begin(title: "Build & Run · " + app.project.scheme) }
+        let title = (app.launchAfterInstall == true ? "Build & Run · " : "Build & Install · ") + app.project.scheme
+        do { try environment.builds.begin(title: title) }
         catch { showError(error); return }
         starting = app.key; reload()
         let peer = environment.peerID()
@@ -299,6 +303,7 @@ import OrbitCore
                 if catalog.defaultDevice(peer: peer) == nil { catalog.setDefaultDevice(target.id, peer: peer) }
                 var request = CodeRequest(.runOnDevice); request.project = app.project
                 request.deviceBuild = CodeDeviceBuild(branch: app.branch, deviceID: target.id, monitorBundleID: Bundle.main.bundleIdentifier)
+                request.deviceBuild?.installOnly = app.launchAfterInstall != true
                 let response = try await environment.client.call(request)
                 guard peer == environment.peerID() else { return }
                 guard let job = response.job else { throw CodeFailure("The Mac did not confirm the build. Update Orbit Mac and try again.") }

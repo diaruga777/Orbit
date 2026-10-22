@@ -12,6 +12,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         let catalog = CodeBuildCatalog(defaults: defaults)
         var reader = CodeBuildApp(project: CodeProject(path: "/Orbit/Orbit.xcodeproj", scheme: "Reader"), name: "Reader", bundleID: "reader", branch: "feature/reader", deviceID: "phone")
         reader.jobID = "job"
+        reader.launchAfterInstall = true
         let code = CodeBuildApp(project: CodeProject(path: "/Orbit/Orbit.xcodeproj", scheme: "Code"), name: "Code", bundleID: "code")
         let other = CodeBuildApp(project: CodeProject(path: "/Other/Other.xcodeproj", scheme: "Other"), name: "Other", bundleID: "other")
         catalog.save([reader, code, other], peer: "mac")
@@ -24,6 +25,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         let row = restored.apps(peer: "mac").first { $0.bundleID == "reader" }
         XCTAssertEqual(row?.project.scheme, "Reader"); XCTAssertEqual(row?.name, "Orbit Reader"); XCTAssertEqual(row?.branch, "feature/reader")
         XCTAssertEqual(row?.deviceID, "phone"); XCTAssertEqual(row?.jobID, "job")
+        XCTAssertEqual(row?.launchAfterInstall, true)
         XCTAssertEqual(restored.apps(peer: "mac").count, 3)
         XCTAssertTrue(restored.apps(peer: "anotherMac").isEmpty)
         XCTAssertNil(restored.defaultDevice(peer: "anotherMac"))
@@ -32,6 +34,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         let catalog = CodeBuildCatalog(defaults: defaults)
         var first = CodeBuildApp(project: CodeProject(path: "/App.xcodeproj", scheme: "App"), name: "App", bundleID: "app", branch: "feature", deviceID: "phone")
         first.jobID = "job"
+        first.launchAfterInstall = true
         let alias = CodeBuildApp(project: CodeProject(path: first.project.path, scheme: "App Release"), name: "App", bundleID: "app")
         catalog.save([first], peer: "mac")
         catalog.merge([CodeBuildApp(project: first.project, name: "App", bundleID: "app"), alias], path: first.project.path, peer: "mac")
@@ -41,6 +44,19 @@ final class CodeBuildCatalogTests: XCTestCase {
         XCTAssertEqual(rows.first { $0.key == alias.key }?.branch, "main")
         XCTAssertNil(rows.first { $0.key == alias.key }?.deviceID)
         XCTAssertNil(rows.first { $0.key == alias.key }?.jobID)
+        XCTAssertEqual(rows.first { $0.key == first.key }?.launchAfterInstall, true)
+        XCTAssertNil(rows.first { $0.key == alias.key }?.launchAfterInstall)
+    }
+    func testOlderBuildRowsDefaultToInstallOnlyAndExplicitOptOutSurvivesDiscovery() throws {
+        let legacy = Data(#"{"project":{"path":"/App.xcodeproj","scheme":"App","appID":"","groupID":""},"name":"App","bundleID":"app","branch":"main"}"#.utf8)
+        let app = try JSONDecoder().decode(CodeBuildApp.self, from: legacy)
+        XCTAssertNil(app.launchAfterInstall)
+        let catalog = CodeBuildCatalog(defaults: defaults)
+        catalog.save([app], peer: "mac")
+        catalog.edit(key: app.key, peer: "mac") { $0.launchAfterInstall = false }
+        var discovered = app; discovered.launchAfterInstall = true
+        catalog.merge([discovered], path: app.project.path, peer: "mac")
+        XCTAssertEqual(catalog.apps(peer: "mac").first?.launchAfterInstall, false)
     }
     func testExplicitSchemeSelectsRunAppInsteadOfFirstDependency() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

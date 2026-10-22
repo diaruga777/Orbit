@@ -30,6 +30,7 @@ targets:
         NSLocalNetworkUsageDescription: Orbit connects to your Mac to edit files and build apps.
         OrbitWidgetKeychainGroup: $(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios
         BGTaskSchedulerPermittedIdentifiers:
+          - $(PRODUCT_BUNDLE_IDENTIFIER).remote-build
           - $(PRODUCT_BUNDLE_IDENTIFIER).overnight-builds
           - $(PRODUCT_BUNDLE_IDENTIFIER).refresh-builds
         UIBackgroundModes: [processing]
