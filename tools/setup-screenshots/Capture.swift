@@ -4,6 +4,7 @@ import SwiftUI
 // Screenshot-only models. Every action is inert, including bindings that would
 // normally persist settings. Values below are fictional, never user state.
 struct ScreenshotPhone { var id: String; var name: String }
+@MainActor enum ScreenshotEnvironment { static var fromDiskImage = false }
 @MainActor final class OrbitMacModel: ObservableObject {
     @Published var pairing = ""
     func pair() {}
@@ -52,6 +53,7 @@ struct ScreenshotPhone { var id: String; var name: String }
         window.backgroundColor = .windowBackgroundColor
         var captures: [[String: String]] = []
         let variants: [(String, OrbitSetupStep, String)] = [
+            ("00-install-on-mac", .welcome, "disk-image"),
             ("01-welcome", .welcome, "default"),
             ("02-developer-tools", .tools, "ready"),
             ("03-mac-access", .access, "default"),
@@ -70,6 +72,7 @@ struct ScreenshotPhone { var id: String; var name: String }
             ("16-install-verified", .install, "verified")
         ]
         for (name, step, variant) in variants {
+            ScreenshotEnvironment.fromDiskImage = variant == "disk-image"
             let setup = OrbitSetupModel()
             let model = OrbitMacModel()
             setup.state.step = step
@@ -118,7 +121,9 @@ struct ScreenshotPhone { var id: String; var name: String }
             }
             if step == .refresh { setup.phoneRefreshReady = false }
             let view = NSHostingView(rootView: OrbitSetupView(setup: setup, model: model)
-                .environment(\.colorScheme, .light))
+                .environment(\.colorScheme, .light)
+                .environment(\.controlActiveState, .active)
+                .background(Color(nsColor: .windowBackgroundColor)))
             window.contentView = view
             window.setContentSize(NSSize(width: 1000, height: 740))
             window.orderFront(nil)

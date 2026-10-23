@@ -41,6 +41,22 @@ ORBIT_TEST_RELAY_BINARY=/tmp/orbit-strelaysrv tools/apple-adapter/integration/ru
 
 The runner starts a private loopback relay with public pools, NAT traversal and status disabled, then connects the production TLS/stream broker and pinned helper to a synthetic Apple service. It checks successful readback, lost replies, wrong UDID and wrong certificate. It never reads real pairing records or installs an app on a phone.
 
+## Mock Mac setup screenshots
+
+Run `scripts/capture_setup_screenshots.sh` to capture the complete Mac wizard
+without Apple sign-in, phone discovery, installation, networking or setup-state
+writes. It compiles the current `OrbitSetupView` and setup value types with inert
+fixture models into a separate accessory utility. The only view substitution is
+the disk-image path check, so the initial Install Orbit Mac screen can be shown
+without mounting a DMG. Continue enablement is extracted from the actual model.
+
+The 17 PNGs and `manifest.json` go to `dist/setup-screenshots` (or the directory
+passed as the first argument). They cover the ten steps, DMG installation, missing
+tools and first launch, alternate AI integrations, and mock installation progress
+and success. All account/device/pairing values are fictional. Captures show the
+wizard content at 1000 × 740 points in light appearance, without window chrome.
+They are visual fixtures, not physical acceptance or proof of installation.
+
 ## Physical acceptance
 
 Before treating a release as verified for unattended personal use, test using the intended Xcode/account/phone:

@@ -234,6 +234,10 @@ xcodebuild -project Orbit.xcodeproj -scheme Orbit \
 
 The transport XCFramework is generated from this repository's Go sources and ignored by Git. Dependencies are pinned in `Package.resolved` and Go module files. The optional synthetic private-relay test is documented in [Testing](docs/testing.md). CI builds both clients and runs unit tests; it does not contact a real phone, sign into Apple or publish an app.
 
+For a visual review of the full Mac setup wizard, run
+`scripts/capture_setup_screenshots.sh`. It renders the actual SwiftUI view with
+fictional data and inert actions. See [mock screenshots](docs/testing.md#mock-mac-setup-screenshots).
+
 [Architecture and limits](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Orbit was extracted from Luna Code. It has independent app identities and storage; it does not read Luna's App Group or migrate Luna's Apple credentials. MIT licensed; third-party components retain their own licenses.
