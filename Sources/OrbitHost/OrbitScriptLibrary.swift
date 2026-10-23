@@ -19,7 +19,7 @@ final class OrbitScriptLibrary {
         for folder in Set(folders.values).sorted(by: { $0.path < $1.path }) {
             do {
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                let urls = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles])
+                let urls = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey], options: [])
                     .filter { $0.pathExtension.lowercased() == "js" }.sorted { $0.path < $1.path }
                 if urls.count > 256 { failures.append("\(folder.lastPathComponent): only the first 256 JavaScript files are checked.") }
                 for url in urls.prefix(256) {

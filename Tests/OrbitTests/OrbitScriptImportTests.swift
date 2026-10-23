@@ -24,6 +24,11 @@ final class OrbitScriptImportTests: XCTestCase {
         let restarted = try OrbitHost(root: root.appendingPathComponent("state"))
         let listed = try await call(restarted, "applets")
         XCTAssertEqual((listed["result"] as? [[String: String]])?.count, 1)
+        // Leading dots are valid manifest IDs and must remain discoverable after copying.
+        try Data(widget.replacingOccurrences(of: "weather", with: ".weather").utf8).write(to: source)
+        let hidden = try await call(restarted, "script_import", ["path": source.path]); XCTAssertNil(hidden["error"])
+        let widgets = try await call(restarted, "widgets")
+        XCTAssertEqual((widgets["result"] as? [[String: String]])?.first?["id"], ".weather")
     }
     func testFolderAddsUpdatesAndBadFilesDoNotBlockPhoneDelivery() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
