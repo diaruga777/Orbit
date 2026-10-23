@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 @main struct OrbitMacApplication: App {
     @NSApplicationDelegateAdaptor(OrbitMacDelegate.self) private var delegate
@@ -12,6 +13,8 @@ import AppKit
                 else if setup.state.finished { OrbitMacView(model: model, setup: setup).frame(minWidth: 760, minHeight: 540) }
                 else { OrbitSetupView(setup: setup, model: model) }
             }
+            .onDrop(of: [UTType.fileURL], isTargeted: nil, perform: model.acceptDrop)
+            .alert("Couldn’t Import", isPresented: $model.scriptImportFailed) { Button("OK", role: .cancel) {} } message: { Text(model.scriptMessage) }
         }.commands {
             CommandGroup(after: .appSettings) {
                 Button("Setup…") { setup.state.finished = false; setup.state.step = .welcome; setup.persist() }

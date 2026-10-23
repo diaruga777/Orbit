@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 struct OrbitMacWidgetsView: View {
     @ObservedObject var model: OrbitMacModel
-    @State private var scripts: [[String: String]] = []
+    private var scripts: [[String: String]] { model.widgets }
     @State private var message = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -13,6 +13,7 @@ struct OrbitMacWidgetsView: View {
                 Spacer()
                 Button("Add JavaScript", action: add).buttonStyle(.borderedProminent)
             }
+            OrbitScriptFolderView(model: model, applets: false)
             if scripts.isEmpty { ContentUnavailableView("Make It Yours", systemImage: "square.grid.2x2", description: Text("Add a JavaScript widget, then approve it in Orbit on your iPhone.")) }
             else {
                 List(Array(scripts.enumerated()), id: \.offset) { _, script in
@@ -23,14 +24,16 @@ struct OrbitMacWidgetsView: View {
                     }.padding(.vertical, 8)
                 }
             }
-            Text("On iPhone, open Widgets → Add → From Mac to review each script and its websites. Updating JavaScript doesn’t rebuild the app.").foregroundStyle(.secondary)
+            Text("Files sync when Orbit is open on your connected iPhone. Review new files and updates in Widgets. Updating JavaScript doesn’t rebuild the app.").foregroundStyle(.secondary)
+            if !model.scriptMessage.isEmpty { Text(model.scriptMessage).font(.callout).textSelection(.enabled) }
+            if !model.scriptIssues.isEmpty { Text(model.scriptIssues.joined(separator: "\n")).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
             if !message.isEmpty { Text(message).font(.callout).textSelection(.enabled) }
         }.padding(28).task { await reload() }
     }
-    private func reload() async { do { scripts = try await model.rpc("widgets") as? [[String: String]] ?? [] } catch { message = error.localizedDescription } }
+    private func reload() async { await model.refreshScripts() }
     private func add() {
-        let panel = NSOpenPanel(); panel.allowedContentTypes = [.javaScript, .plainText]; panel.prompt = "Send to iPhone"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { do { _ = try await model.rpc("widget_add", ["path": url.path]); message = "Open From Mac in Orbit’s Widgets tab on your iPhone."; await reload() } catch { message = error.localizedDescription } }
+        let panel = NSOpenPanel(); panel.allowedContentTypes = [.javaScript]; panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        Task { await model.importScripts(panel.urls) }
     }
 }

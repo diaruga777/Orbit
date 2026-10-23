@@ -14,7 +14,9 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Orbit Widget</string>
+			<string>Orbit JavaScript</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
 			<key>LSHandlerRank</key>
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>

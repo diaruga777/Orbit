@@ -42,15 +42,22 @@ review DMG is not a publicly notarized download.
 ## JavaScript applets, widgets and phone refresh
 
 **Applets → Add → Copy AI Prompt** gives public ChatGPT or another assistant the
-complete single-file applet API. Import/paste its `.js` file on iPhone or queue it
-from Mac, approve its websites, then tap to open a native interactive applet.
+complete single-file applet API. Drop its `.js` file anywhere in the Mac window,
+use **Add JavaScript**, or save it in a watched folder. Orbit reads the header to
+choose Applets or Widgets. Both tabs show their folder and let you change it;
+defaults are **Applets** and **Widgets** inside your setup folder. Folder additions
+and edits appear automatically. The paired iPhone receives them while Orbit is
+open and connected, with a badge for files waiting for review. Approve each new
+file or update and its websites before it runs. On iPhone you can also use
+**Add → Import JavaScript**, paste code, or share a `.js` file to Orbit. File
+imports choose the right tab from the content. Tap an approved applet to open it.
 On Mac, **Applets → Make Standalone App** (or **Blank Host App**) creates a
 committed Xcode project with an icon selector. Add that project to Apps to build
 and install it with your own signing setup. MCP supports the same workflow.
 See [applets](docs/applets/README.md).
 
 **Widgets → Add → Copy AI Prompt** gives you a prompt for public ChatGPT or another
-assistant. Import/paste its `.js` file, review the allowed websites, preview it,
+assistant. Import its `.js` file using the same flows, review the allowed websites, preview it,
 and select it in an Orbit Home Screen or Lock Screen widget. The Mac and MCP can
 queue files too. Hooks render native layouts, fetch network data, store private
 JSON values, and supply future timeline entries. iOS controls actual refresh times;

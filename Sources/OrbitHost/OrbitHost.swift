@@ -9,6 +9,7 @@ public actor OrbitHost {
     private let stateLock: OrbitStateLock
     public let root: URL
     public private(set) var service: CodeService
+    private let scripts = OrbitScriptLibrary()
     private var targets: [OrbitTarget]
     private var iconLookups: [String: Date] = [:]
     public private(set) var configuration: OrbitConfiguration
@@ -21,6 +22,19 @@ public actor OrbitHost {
         configuration = FileManager.default.fileExists(atPath: configURL.path) ? try JSONDecoder().decode(OrbitConfiguration.self, from: Data(contentsOf: configURL)) : OrbitConfiguration()
         targets = FileManager.default.fileExists(atPath: targetsURL.path) ? try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: targetsURL)) : []
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+        if !configuration.allowedRoots.isEmpty || configuration.appletFolder != nil || configuration.widgetFolder != nil {
+            let base = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root
+            let folders: [OrbitJavaScriptFile.Kind: URL] = [
+                .applet: configuration.appletFolder.map { URL(fileURLWithPath: $0) } ?? base.appendingPathComponent("Applets"),
+                .widget: configuration.widgetFolder.map { URL(fileURLWithPath: $0) } ?? base.appendingPathComponent("Widgets")]
+            let marker = root.appendingPathComponent("script-folders-migrated")
+            if !FileManager.default.fileExists(atPath: marker.path) {
+                do {
+                    try scripts.migrate(from: [.applet: root.appendingPathComponent("Applets"), .widget: root.appendingPathComponent("Widgets")], to: folders)
+                    try Data().write(to: marker, options: .atomic)
+                } catch { /* Folder access failures appear in script_status; builds remain available. */ }
+            }
+        }
         service = try CodeService(root: root.appendingPathComponent("Builds"),
             installBundleID: configuration.phoneBundleID ?? Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String,
             installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"))
@@ -64,22 +78,39 @@ public actor OrbitHost {
             }
             return try object(targets)
         case "applet_prompt": return ["prompt": OrbitAppletPrompt.text, "blank": OrbitAppletExport.blank]
-        case "applets": return try appletDeployments()
-        case "applet_add":
-            guard peer == nil else { throw CodeFailure("Deploy applet files from the Mac.") }
-            let source = try appletSource(p)
-            let script = try OrbitAppletDefinition.widgetScript(source)
-            let directory = root.appendingPathComponent("Applets")
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let existing = try appletDeployments()
-            guard existing.count < 24 || existing.contains(where: { $0["id"] == script.id }) else { throw CodeFailure("Remove an applet before adding another.") }
-            try Data(source.utf8).write(to: directory.appendingPathComponent(script.id + ".js"), options: .atomic)
-            return ["id": script.id, "name": script.definition.name, "pendingPhoneApproval": true]
-        case "applet_remove":
-            guard peer == nil else { throw CodeFailure("Remove Mac applet deployments on the Mac.") }
+        case "applets": return scriptDeployments(.applet)
+        case "script_import", "applet_add", "widget_add":
+            guard peer == nil else { throw CodeFailure("Import JavaScript files on the Mac.") }
+            let path = try required(p, "path")
+            guard path.hasPrefix("/") else { throw CodeFailure("Choose an absolute file path.") }
+            let file = try OrbitJavaScriptFile(url: URL(fileURLWithPath: path))
+            if method == "applet_add", file.kind != .applet { throw CodeFailure("Choose JavaScript with an Orbit applet header.") }
+            if method == "widget_add", file.kind != .widget { throw CodeFailure("Choose JavaScript with an Orbit widget header.") }
+            return try scripts.add(file, folders: scriptFolders)
+        case "applet_remove", "widget_remove":
+            guard peer == nil else { throw CodeFailure("Remove Mac scripts on the Mac.") }
             let id = try required(p, "id")
-            guard try appletDeployments().contains(where: { $0["id"] == id }) else { throw CodeFailure("Applet not found.") }
-            try FileManager.default.removeItem(at: root.appendingPathComponent("Applets/" + id + ".js")); return ["removed": id]
+            try scripts.remove(id, kind: method == "applet_remove" ? .applet : .widget, folders: scriptFolders)
+            return ["removed": id]
+        case "script_status":
+            guard peer == nil else { throw CodeFailure("Choose folders on the Mac.") }
+            scanScripts()
+            return ["appletFolder": scriptFolders[.applet]!.path, "widgetFolder": scriptFolders[.widget]!.path, "issues": scripts.issues]
+        case "script_folder":
+            guard peer == nil else { throw CodeFailure("Choose folders on the Mac.") }
+            guard let kind = OrbitJavaScriptFile.Kind(rawValue: try required(p, "kind")) else { throw CodeFailure("Choose applet or widget.") }
+            let path = try required(p, "path")
+            guard path.hasPrefix("/") else { throw CodeFailure("Choose an absolute folder path.") }
+            let folder = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+            var directory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &directory), directory.boolValue else { throw CodeFailure("Choose an existing folder.") }
+            let old = scriptFolders
+            var new = old; new[kind] = folder
+            try scripts.migrate(from: old, to: new)
+            if kind == .applet { configuration.appletFolder = folder.path } else { configuration.widgetFolder = folder.path }
+            try saveConfiguration()
+            try Data().write(to: root.appendingPathComponent("script-folders-migrated"), options: .atomic)
+            return ["folder": folder.path]
         case "applet_export":
             guard peer == nil else { throw CodeFailure("Create standalone app projects on the Mac.") }
             let destination = try required(p, "destination")
@@ -87,22 +118,7 @@ public actor OrbitHost {
             return try await OrbitAppletExport.create(source: p["path"] == nil ? nil : appletSource(p),
                 destination: URL(fileURLWithPath: destination), bundleID: required(p, "bundleID"),
                 icon: (p["iconPath"] as? String).map { URL(fileURLWithPath: $0) })
-        case "widgets": return try widgetDeployments()
-        case "widget_add":
-            guard peer == nil else { throw CodeFailure("Deploy widget files from the Mac.") }
-            let path = try required(p, "path")
-            guard path.hasPrefix("/"), (try URL(fileURLWithPath: path).resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= OrbitWidgetDefinition.maximumSourceBytes else { throw CodeFailure("Choose a JavaScript file under 128 KB.") }
-            let script = try OrbitWidgetScript(source: String(contentsOfFile: path, encoding: .utf8))
-            let directory = root.appendingPathComponent("Widgets"); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let existing = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            guard existing.count < 24 || existing.contains(where: { $0.lastPathComponent == script.id + ".js" }) else { throw CodeFailure("Remove a widget before adding another.") }
-            try Data(script.source.utf8).write(to: directory.appendingPathComponent(script.id + ".js"), options: .atomic)
-            return ["id": script.id, "name": script.definition.name, "pendingPhoneApproval": true]
-        case "widget_remove":
-            guard peer == nil else { throw CodeFailure("Remove Mac widget deployments on the Mac.") }
-            let id = try required(p, "id")
-            guard try widgetDeployments().contains(where: { $0["id"] == id }) else { throw CodeFailure("Widget not found.") }
-            try FileManager.default.removeItem(at: root.appendingPathComponent("Widgets/" + id + ".js")); return ["removed": id]
+        case "widgets": return scriptDeployments(.widget)
         case "setup_folder":
             guard peer == nil else { throw CodeFailure("Choose folders on the Mac.") }
             let path = try required(p, "path")
@@ -110,7 +126,13 @@ public actor OrbitHost {
             let folder = URL(fileURLWithPath: path).resolvingSymlinksInPath()
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw CodeFailure("Choose an existing folder.") }
+            let old = scriptFolders
+            var new = old
+            if configuration.appletFolder == nil { new[.applet] = folder.appendingPathComponent("Applets") }
+            if configuration.widgetFolder == nil { new[.widget] = folder.appendingPathComponent("Widgets") }
+            try scripts.migrate(from: old, to: new)
             configuration.allowedRoots = [folder.path]; try saveConfiguration()
+            try Data().write(to: root.appendingPathComponent("script-folders-migrated"), options: .atomic)
             return ["folder": folder.path]
         case "setup_phone":
             guard peer == nil, targets.allSatisfy({ $0.jobID == nil && $0.pendingRequest == nil }) else { throw CodeFailure("Finish active builds before changing phone setup.") }
@@ -195,22 +217,15 @@ public actor OrbitHost {
         _ = try OrbitAppletDefinition.parse(source)
         return source
     }
-    private func appletDeployments() throws -> [[String: String]] {
-        let directory = root.appendingPathComponent("Applets")
-        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
-        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "js" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.prefix(24).map {
-                let source = try appletSource(["path": $0.path]), definition = try OrbitAppletDefinition.parse(source)
-                return ["id": definition.id, "name": definition.name, "source": source, "digest": OrbitWidgetDefinition.digest(source)]
-            }
+    private var scriptFolders: [OrbitJavaScriptFile.Kind: URL] {
+        let base = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root
+        return [.applet: configuration.appletFolder.map { URL(fileURLWithPath: $0) } ?? base.appendingPathComponent("Applets"),
+                .widget: configuration.widgetFolder.map { URL(fileURLWithPath: $0) } ?? base.appendingPathComponent("Widgets")]
     }
-    private func widgetDeployments() throws -> [[String: String]] {
-        let directory = root.appendingPathComponent("Widgets")
-        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
-        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.pathExtension == "js" }.prefix(24).map {
-            let source = try String(contentsOf: $0, encoding: .utf8), definition = try OrbitWidgetDefinition.parse(source)
-            return ["id": definition.id, "name": definition.name, "source": source, "digest": OrbitWidgetDefinition.digest(source)]
-        }
+    public func scanScripts() { scripts.scan(scriptFolders) }
+    private func scriptDeployments(_ kind: OrbitJavaScriptFile.Kind) -> [[String: String]] {
+        scanScripts()
+        return scripts.list(kind)
     }
     private func index(_ p: [String: Any]) throws -> Int {
         let id = try required(p, "id")

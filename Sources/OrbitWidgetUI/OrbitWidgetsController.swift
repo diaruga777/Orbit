@@ -10,6 +10,9 @@ import OrbitAppletUI
     private let store: OrbitWidgetStore
     private let applets: Bool
     private var scripts: [OrbitWidgetScript] = []
+    private var pending: [OrbitWidgetScript] = []
+    public var routeImport: ((OrbitJavaScriptFile) -> Void)?
+    public var pendingCountChanged: ((Int) -> Void)?
     private let deployments: (() async throws -> [String])?
     public init(deployments: (() async throws -> [String])? = nil, applets: Bool = false) {
         self.deployments = deployments; self.applets = applets; store = OrbitWidgetStore(applets: applets); super.init(style: .insetGrouped); title = applets ? "Applets" : "Widgets"
@@ -26,10 +29,32 @@ import OrbitAppletUI
         reload()
     }
     public override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reload() }
-    private func reload() { do { scripts = try store.scripts(); tableView.reloadData() } catch { show(error.localizedDescription) } }
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, scripts.count) }
+    public func receive(_ sources: [String], origin: String) throws {
+        try store.receive(sources, origin: origin)
+        reload()
+    }
+    public func refreshInbox() { reload() }
+    private func reload() {
+        do {
+            scripts = try store.scripts(); pending = try store.pendingScripts()
+            pendingCountChanged?(pending.count)
+            if isViewLoaded { tableView.reloadData() }
+        } catch { if isViewLoaded, view.window != nil { show(error.localizedDescription) } }
+    }
+    public override func numberOfSections(in tableView: UITableView) -> Int { 2 }
+    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        section == 0 ? (pending.isEmpty ? nil : "From Mac · Review to Add") : nil
+    }
+    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? pending.count : max(1, scripts.count) }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        if indexPath.section == 0 {
+            let script = pending[indexPath.row]
+            cell.textLabel?.text = script.definition.name
+            cell.detailTextLabel?.text = scripts.contains(where: { $0.id == script.id }) ? "Update ready · Tap to review" : "Tap to review"
+            cell.imageView?.image = UIImage(systemName: "arrow.down.circle"); cell.accessoryType = .disclosureIndicator
+            return cell
+        }
         guard !scripts.isEmpty else { cell.textLabel?.text = applets ? "Add Your First Applet" : "Add Your First Widget"; cell.detailTextLabel?.text = "Import a JavaScript file or copy a prompt to make one."; cell.detailTextLabel?.numberOfLines = 0; return cell }
         let script = scripts[indexPath.row]
         cell.textLabel?.text = script.definition.name
@@ -38,24 +63,36 @@ import OrbitAppletUI
     }
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        if indexPath.section == 0 { review(pending[indexPath.row].source, fromInbox: true); return }
         guard !scripts.isEmpty else { importFile(); return }
         launch(scripts[indexPath.row])
     }
     public override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        if indexPath.section == 0 {
+            do { try store.dismissPending(pending[indexPath.row].source); reload() } catch { show(error.localizedDescription) }
+            return
+        }
         guard !scripts.isEmpty else { return }
         do { try store.remove(scripts[indexPath.row].id); WidgetCenter.shared.reloadAllTimelines(); reload() } catch { show(error.localizedDescription) }
     }
     private func importFile() { let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.javaScript, .plainText]); picker.delegate = self; present(picker, animated: true) }
-    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { if let url = urls.first { open(url) } }
+    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        controller.dismiss(animated: true) { self.open(url) }
+    }
     public func open(_ url: URL) {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
-        do {
-            guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= OrbitWidgetDefinition.maximumSourceBytes else { throw OrbitWidgetError("Choose a JavaScript file under 128 KB.") }
-            review(try String(contentsOf: url, encoding: .utf8))
-        } catch { show(error.localizedDescription) }
+        do { importSource(try OrbitJavaScriptFile(url: url)) } catch { show(error.localizedDescription) }
     }
+    private func importSource(_ file: OrbitJavaScriptFile) {
+        if (file.kind == .applet) != applets, let routeImport { routeImport(file) }
+        else { review(file.script.source) }
+    }
+
     private func paste() {
-        let controller = OrbitWidgetPasteController { [weak self] source in self?.review(source) }
+        let controller = OrbitWidgetPasteController { [weak self] source in guard let self else { return }
+            do { self.importSource(try OrbitJavaScriptFile(source: source)) } catch { self.show(error.localizedDescription) }
+        }
         present(UINavigationController(rootViewController: controller), animated: true)
     }
     private func fromMac() {
@@ -72,7 +109,7 @@ import OrbitAppletUI
             picker.addAction(UIAlertAction(title: "Cancel", style: .cancel)); picker.popoverPresentationController?.sourceView = view; present(picker, animated: true)
         } catch { show(error.localizedDescription) } }
     }
-    public func review(_ source: String) {
+    public func review(_ source: String, fromInbox: Bool = false) {
         do {
             let definition = try definition(source)
             let replacing = try store.script(definition.id) != nil
@@ -81,7 +118,8 @@ import OrbitAppletUI
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: applets ? (replacing ? "Update Applet" : "Add Applet") : (replacing ? "Update Widget" : "Add Widget"), style: .default) { [weak self] _ in
                 guard let self else { return }; do {
-                    try store.install(source); WidgetCenter.shared.reloadAllTimelines(); reload()
+                    if fromInbox { try store.approvePending(source) } else { try store.install(source) }
+                    WidgetCenter.shared.reloadAllTimelines(); reload()
                     launch(try applets ? OrbitAppletDefinition.widgetScript(source) : OrbitWidgetScript(source: source))
                 } catch { show(error.localizedDescription) }
             }); present(alert, animated: true)

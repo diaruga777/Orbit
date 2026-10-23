@@ -38,7 +38,8 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UILaunchScreen: {}
         CFBundleDocumentTypes:
-          - CFBundleTypeName: Orbit Widget
+          - CFBundleTypeName: Orbit JavaScript
+            CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes: [com.netscape.javascript-source, public.plain-text]
     settings:
@@ -47,6 +48,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Apps/Orbit/Orbit.entitlements
         TARGETED_DEVICE_FAMILY: '1,2'
     dependencies:
+      - target: OrbitShareExtension
       - target: OrbitWidgetExtension
       - package: Orbit
         product: OrbitWidgetUI
@@ -56,6 +58,32 @@ targets:
         product: OrbitUI
       - package: Orbit
         product: OrbitTransport
+  OrbitShareExtension:
+    type: app-extension
+    platform: iOS
+    sources: [Apps/OrbitShare]
+    info:
+      path: Apps/OrbitShare/Info.plist
+      properties:
+        CFBundleDisplayName: Orbit
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        OrbitWidgetKeychainGroup: $(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).OrbitShareController
+          NSExtensionAttributes:
+            NSExtensionActivationRule: 'SUBQUERY(extensionItems, $item, SUBQUERY($item.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "com.netscape.javascript-source" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.file-url").@count == 1).@count == 1'
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).ios.share
+        CODE_SIGN_ENTITLEMENTS: Apps/OrbitShare/OrbitShare.entitlements
+        TARGETED_DEVICE_FAMILY: '1,2'
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    dependencies:
+      - package: Orbit
+        product: OrbitWidgets
   OrbitWidgetExtension:
     type: app-extension
     platform: iOS

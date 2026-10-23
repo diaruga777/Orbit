@@ -197,6 +197,21 @@ Keychain UI checks use local ad hoc signing, without Apple account sign-in.
 Physical phone installation, Personal Team lifetime renewal, public notarization
 and marketplace listing were not performed.
 
+## JavaScript file import and automatic delivery
+
+`OrbitScriptImportTests` covers content inference, selected-folder copies, catalog
+restart, direct folder additions/edits, malformed/oversized/symlink isolation,
+phone read-only access, folder changes and preservation of existing user files.
+`OrbitScriptInboxTests` covers durable unapproved receipt, unchanged-source
+deduplication, per-digest dismissal, peer changes, stale approval rejection and
+bounded file reads. Imported fixtures throw if evaluated.
+
+The iOS build includes the native Share extension and its containing-app Keychain
+group. Simulator acceptance should check sharing a .js file from Files, cold and
+warm Open in Orbit, file selection from either tab, automatic review badges while
+connected to a fixture Mac, offline/relaunch recovery, and approval before native
+rendering. Physical delivery/background reliability remains separate acceptance.
+
 ## Expiry setup reminder
 
 `CodeExpiryReminderTests` covers earliest expiry, exact 24-hour lead time, actual
@@ -221,3 +236,16 @@ was terminated, tapping it into Refresh setup, and navigation with a dismissed
 banner. Notification response completion stays on the main thread for UIKit’s
 cold-launch scene handling. No physical device, Apple sign-in, actual profile
 renewal, public notarization or marketplace acceptance was performed.
+
+JavaScript import verification (2026-10-23): 156 Swift tests passed with four
+optional fixtures skipped. The packaged phone-source/resume fixture passed
+separately, including Share extension source and entitlements. All 14 Python
+tests, both Go race suites and helper vet passed. Both clients built with the
+Share extension embedded in iOS; the Mac review bundle passed signature checks.
+Four Simulator UI tests passed: durable inbox receipt/relaunch/consent, content
+routing across tabs, applet consent/action and widget consent/preview. A disposable
+committed UIKit share-host fixture also exercised the real system Share sheet,
+Orbit’s extension consent, shared Keychain import and subsequent applet rendering.
+The Mac was locked, so Finder drag/drop and desktop visual acceptance were not
+performed. No physical phone, Apple sign-in, background-delivery guarantee, public
+notarization or marketplace acceptance is claimed.
