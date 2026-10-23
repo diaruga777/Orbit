@@ -52,6 +52,24 @@ final class OrbitScriptImportTests: XCTestCase {
         result = try await call(host, "widgets", peer: "phone")
         XCTAssertEqual((result["result"] as? [[String: String]])?.count, 0)
     }
+    func testLegacyQueueMigratesOnlyOnceAndRemovedFilesStayRemoved() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let state = root.appendingPathComponent("state"), selected = root.appendingPathComponent("selected")
+        try FileManager.default.createDirectory(at: state.appendingPathComponent("Applets"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: selected, withIntermediateDirectories: true)
+        try Data(OrbitAppletExport.blank.utf8).write(to: state.appendingPathComponent("Applets/old-name.js"))
+        var config = OrbitConfiguration(); config.allowedRoots = [selected.path]
+        try JSONEncoder().encode(config).write(to: state.appendingPathComponent("config.json"))
+        var host: OrbitHost? = try OrbitHost(root: state)
+        var listed = try await call(host!, "applets")
+        XCTAssertEqual((listed["result"] as? [[String: String]])?.count, 1)
+        _ = try await call(host!, "applet_remove", ["id": "my-applet"])
+        host = nil
+        let restarted = try OrbitHost(root: state)
+        listed = try await call(restarted, "applets")
+        XCTAssertEqual((listed["result"] as? [[String: String]])?.count, 0)
+    }
     func testFolderChangePreservesScriptsWithoutOverwritingUserFiles() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

@@ -14,6 +14,8 @@ final class OrbitSetupPayloadTests: XCTestCase {
         XCTAssertTrue(files.contains("Vendor/OrbitNet.xcframework/Info.plist"))
         XCTAssertTrue(files.contains("Vendor/DeviceGateway/IDevice.xcframework/Info.plist"))
         XCTAssertTrue(files.contains("Apps/OrbitWidgets/OrbitWidget.swift"))
+        XCTAssertTrue(files.contains("Apps/OrbitShare/OrbitShareController.swift"))
+        XCTAssertTrue(files.contains("Apps/OrbitShare/OrbitShare.entitlements"))
         XCTAssertTrue(files.contains("Tests/OrbitWidgetTests/OrbitWidgetTests.swift"))
         XCTAssertFalse(files.contains("Config/Local.xcconfig"))
         let description = try await OrbitCommand.run("/usr/bin/swift", ["package", "describe", "--type", "json"], directory: source)

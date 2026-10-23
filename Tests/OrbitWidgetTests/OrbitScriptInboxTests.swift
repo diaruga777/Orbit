@@ -15,6 +15,9 @@ final class OrbitScriptInboxTests: XCTestCase {
         XCTAssertEqual(try restarted.pendingScripts().map(\.source), [source()])
         try restarted.approvePending(source())
         XCTAssertEqual(try restarted.script("inbox")?.source, source())
+        let installed = try XCTUnwrap(restarted.script("inbox"))
+        let output = OrbitWidgetOutput(entries: [], storage: ["private": "kept"], updatedAt: Date())
+        try restarted.save(output, script: installed, family: "large")
         try restarted.receive([source()], origin: "mac")
         XCTAssertTrue(try restarted.pendingScripts().isEmpty)
         try restarted.receive([source("// update")], origin: "mac")
@@ -24,6 +27,7 @@ final class OrbitScriptInboxTests: XCTestCase {
         XCTAssertEqual(try restarted.script("inbox")?.source, source())
         try restarted.approvePending(source("// latest"))
         XCTAssertEqual(try restarted.script("inbox")?.source, source("// latest"))
+        XCTAssertEqual(try restarted.storage("inbox"), ["private": "kept"])
     }
     func testDismissalNewDigestInvalidSnapshotAndPeerChanges() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
