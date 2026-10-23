@@ -17,6 +17,35 @@ final class OrbitAppletsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Count 1"].waitForExistence(timeout: 10))
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "JavaScript Applet"; attachment.lifetime = .keepAlways; add(attachment)
     }
+    func testReceivedFileWaitsForReviewAndSurvivesRelaunch() throws {
+        let app = XCUIApplication()
+        let id = "inbox-" + UUID().uuidString.lowercased()
+        app.launchArguments = ["--reset-connection", "--script-inbox-fixture", id]; app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Applets"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Applets"].tap()
+        XCTAssertTrue(app.staticTexts["Received Applet"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Approved received applet"].exists)
+        app.terminate(); app.launchArguments = ["--reset-connection"]; app.launch()
+        app.tabBars.buttons["Applets"].tap()
+        let pending = app.cells.containing(.staticText, identifier: "Tap to review").firstMatch
+        XCTAssertTrue(pending.waitForExistence(timeout: 5)); pending.tap()
+        XCTAssertTrue(app.alerts.buttons["Add Applet"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Approved received applet"].exists)
+        app.alerts.buttons["Add Applet"].tap()
+        XCTAssertTrue(app.staticTexts["Approved received applet"].waitForExistence(timeout: 10))
+    }
+    func testWidgetPastedInAppletsRoutesToWidgetsBeforeConsent() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--reset-connection"]; app.launch()
+        app.tabBars.buttons["Applets"].tap()
+        app.navigationBars["Applets"].buttons["Add"].tap(); app.buttons["Paste JavaScript"].tap()
+        let editor = app.textViews.firstMatch; XCTAssertTrue(editor.waitForExistence(timeout: 5)); editor.tap()
+        editor.typeText("/* orbit-widget\n{\"id\":\"inferred-ui\",\"name\":\"Inferred Widget\",\"domains\":[],\"refreshMinutes\":30}\n*/\nmodule.exports.render=()=>({type:'text',text:'Inferred preview'});")
+        app.navigationBars["JavaScript"].buttons["Review"].tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Widgets"].isSelected)
+        XCTAssertFalse(app.staticTexts["Inferred preview"].exists)
+        app.alerts.buttons["Cancel"].tap()
+    }
     func testStandaloneConsentActionAndRelaunch() throws {
         guard let bundleID = ProcessInfo.processInfo.environment["ORBIT_TEST_STANDALONE_APPLET"] else { throw XCTSkip("Install an exported blank host and set ORBIT_TEST_STANDALONE_APPLET.") }
         let app = XCUIApplication(bundleIdentifier: bundleID); app.launch()

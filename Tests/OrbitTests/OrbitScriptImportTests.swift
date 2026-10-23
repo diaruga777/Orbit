@@ -6,7 +6,8 @@ final class OrbitScriptImportTests: XCTestCase {
     private let widget = "/* orbit-widget\n{\"id\":\"weather\",\"name\":\"Weather\",\"domains\":[],\"refreshMinutes\":30}\n*/\nthrow new Error('never evaluate imports');"
     private func call(_ host: OrbitHost, _ method: String, _ params: [String: Any] = [:], peer: String? = nil) async throws -> [String: Any] {
         let data = try JSONSerialization.data(withJSONObject: ["method": method, "params": params])
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: await host.handle(data, peer: peer)) as? [String: Any])
+        let response = await host.handle(data, peer: peer)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: response) as? [String: Any])
     }
     func testInferredImportCopiesToSelectedFoldersAndSurvivesRestart() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

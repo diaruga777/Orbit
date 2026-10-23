@@ -59,6 +59,7 @@ public final class OrbitWidgetStore: @unchecked Sendable {
         for family in Self.families { try write(nil, key: "output-" + script.id + "-" + family) }
         if !ids.contains(script.id) { ids.append(script.id) }
         try write(JSONEncoder().encode(ids), key: "index")
+        try clearPending(source)
     }
     public func remove(_ id: String) throws {
         lock.lock(); defer { lock.unlock() }

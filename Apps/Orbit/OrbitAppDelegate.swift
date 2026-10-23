@@ -117,6 +117,13 @@ import OrbitWire
         }
         window.makeKeyAndVisible()
         if let url = options.urlContexts.first?.url { openWidget(url) }
+        #if DEBUG && targetEnvironment(simulator)
+        if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--script-inbox-fixture"), ProcessInfo.processInfo.arguments.count > index + 1 {
+            let id = ProcessInfo.processInfo.arguments[index + 1]
+            let source = "/* orbit-applet\n{\"id\":\"" + id + "\",\"name\":\"Received Applet\",\"domains\":[]}\n*/\nmodule.exports.render=()=>({type:'text',text:'Approved received applet'});"
+            try? applets?.receive([source], origin: "simulator-fixture")
+        }
+        #endif
     }
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         if let url = URLContexts.first?.url { openWidget(url) }
@@ -145,6 +152,7 @@ import OrbitWire
     private var readiness: Task<Void, Never>?
     private var scriptSync: Task<Void, Never>?
     func sceneDidBecomeActive(_ scene: UIScene) {
+        widgets?.refreshInbox(); applets?.refreshInbox()
         scriptSync?.cancel()
         scriptSync = Task { [weak self] in
             while !Task.isCancelled {
