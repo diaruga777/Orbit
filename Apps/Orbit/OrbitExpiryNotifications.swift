@@ -56,12 +56,17 @@ import OrbitRefresh
         let complete = (try? await engine.setupComplete()) ?? false
         let id = deviceID ?? "this-phone"
         var apps = ((try? CodeInstalledAppStore(root: OrbitPhoneConnection.root.appendingPathComponent("Expiry")).apps()) ?? []).filter { $0.deviceID == id }
-        if let own = try? await engine.installedSelf(deviceID: id, receipt: receipt) { apps.append(own) }
         for app in (try? await engine.apps()) ?? [] {
             guard let date = app.lastConfirmed else { continue } // Importing an IPA is not an install.
             apps.append(CodeInstalledApp(deviceID: id, bundleID: app.bundleID, name: app.name,
                 version: app.version, build: app.build, installedAt: date, profileExpiresAt: app.expiresAt))
         }
+        if let own = try? await engine.installedSelf(deviceID: id, receipt: receipt), own.profileExpiresAt != nil {
+            // The running bundle's profile is authoritative even if an external
+            // reinstall reused the same version/build as an older Mac receipt.
+            apps.removeAll { $0.bundleID == own.bundleID }
+            apps.append(own)
+        } else if let receipt { apps.append(receipt) }
         #if DEBUG && targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("--expiry-reminder-fixture") {
             apps = [CodeInstalledApp(deviceID: id, bundleID: "example.fixture", name: "Fixture App",
