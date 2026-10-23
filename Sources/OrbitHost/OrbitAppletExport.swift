@@ -1,5 +1,7 @@
 import Foundation
 import AppKit
+import ImageIO
+import UniformTypeIdentifiers
 import OrbitWidgets
 import OrbitCore
 
@@ -66,15 +68,18 @@ public enum OrbitAppletExport {
                 text.draw(at: NSPoint(x: 260, y: 300), withAttributes: [.font: NSFont.boldSystemFont(ofSize: 340), .foregroundColor: NSColor.white]); return true
             }
         }
-        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-              let context = NSGraphicsContext(bitmapImageRep: bitmap) else { throw CodeFailure("Couldn’t prepare the icon.") }
-        NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
+        guard let context = CGContext(data: nil, width: 1024, height: 1024, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+            throw CodeFailure("Couldn’t prepare the icon.")
+        }
+        NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
         NSColor.white.setFill(); NSRect(x: 0, y: 0, width: 1024, height: 1024).fill()
         image.draw(in: NSRect(x: 0, y: 0, width: 1024, height: 1024)); NSGraphicsContext.restoreGraphicsState()
-        guard let png = bitmap.representation(using: .png, properties: [:]) else { throw CodeFailure("Couldn’t save the icon.") }
         let assets = root.appendingPathComponent("Assets.xcassets/AppIcon.appiconset")
         try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
-        try png.write(to: assets.appendingPathComponent("Icon.png"))
+        guard let rendered = context.makeImage(), let output = CGImageDestinationCreateWithURL(assets.appendingPathComponent("Icon.png") as CFURL, UTType.png.identifier as CFString, 1, nil) else { throw CodeFailure("Couldn’t save the icon.") }
+        CGImageDestinationAddImage(output, rendered, nil)
+        guard CGImageDestinationFinalize(output) else { throw CodeFailure("Couldn’t save the icon.") }
         let manifest: [String: Any] = ["images": [["filename": "Icon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024"]], "info": ["author": "xcode", "version": 1]]
         try JSONSerialization.data(withJSONObject: manifest).write(to: assets.appendingPathComponent("Contents.json"))
     }
