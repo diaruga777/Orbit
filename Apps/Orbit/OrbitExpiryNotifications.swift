@@ -7,6 +7,9 @@ import OrbitRefresh
 @MainActor final class OrbitExpiryNotifications: NSObject, UNUserNotificationCenterDelegate {
     static let shared = OrbitExpiryNotifications()
     private let center = UNUserNotificationCenter.current()
+    #if DEBUG && targetEnvironment(simulator)
+    private let fixtureExpiry = Date().addingTimeInterval(86400 + 20)
+    #endif
     private var updating = false
     private var updateAgain = false
     private var receipt: CodeInstalledApp? {
@@ -59,6 +62,12 @@ import OrbitRefresh
             apps.append(CodeInstalledApp(deviceID: id, bundleID: app.bundleID, name: app.name,
                 version: app.version, build: app.build, installedAt: date, profileExpiresAt: app.expiresAt))
         }
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--expiry-reminder-fixture") {
+            apps = [CodeInstalledApp(deviceID: id, bundleID: "example.fixture", name: "Fixture App",
+                version: "1", build: "1", installedAt: Date(), profileExpiresAt: fixtureExpiry)]
+        }
+        #endif
         let now = Date()
         let plan = CodeExpiryReminder.next(apps: CodeExpiryReminder.latest(apps), setupComplete: complete, at: now)
         let pending = await center.pendingNotificationRequests()
