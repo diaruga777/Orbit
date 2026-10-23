@@ -211,3 +211,13 @@ background delivery before real Personal Team and paid-profile expiry, tapping
 from a terminated app, receipt delivery through CoreDevice, multiple phones,
 app removal, and cancellation after setup/confirmed renewal. Simulator and unit
 checks do not establish physical delivery, Apple account status or renewal.
+
+Expiry reminder verification (2026-10-23): 149 Swift tests passed with four
+optional fixtures skipped; the packaged phone-source fixture passed separately.
+All 14 Python tests, both Go race suites and helper vet passed. The iOS Simulator
+client and ad hoc Mac review bundle built and the bundle passed signature checks.
+Three Simulator UI tests passed, including OS notification delivery while Orbit
+was terminated, tapping it into Refresh setup, and navigation with a dismissed
+banner. Notification response completion stays on the main thread for UIKit’s
+cold-launch scene handling. No physical device, Apple sign-in, actual profile
+renewal, public notarization or marketplace acceptance was performed.

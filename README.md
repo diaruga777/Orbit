@@ -61,6 +61,15 @@ Refresh tab. Set up your phone’s Apple Account/team, certificate, pairing file
 LocalDevVPN once; then renew cached installed revisions without the Mac. New code
 still needs a Mac build. See [phone refresh](docs/local-refresh.md).
 
+While phone-only refresh setup is unfinished, Orbit asks to allow notifications
+and keeps one reminder for 24 hours before the earliest known installed app
+expires. Tapping it opens Refresh setup, even if the setup banner was dismissed.
+Orbit uses the signed app/extension profiles’ actual expiry (including paid-team
+builds); without that metadata it assumes seven days after confirmed installation.
+Open Orbit after Mac installs so it can sync the latest dates. The scheduled
+notification then works without the Mac or Orbit running. Notification permission
+and iOS delivery settings still apply.
+
 ## Quick path with an agent
 
 Clone this repository and ask your agent:
@@ -274,12 +283,3 @@ fictional data and inert actions. See [mock screenshots](docs/testing.md#mock-ma
 [Architecture and limits](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Orbit was extracted from Luna Code. It has independent app identities and storage; it does not read Luna's App Group or migrate Luna's Apple credentials. MIT licensed; third-party components retain their own licenses.
-
-While phone-only refresh setup is unfinished, Orbit asks to allow notifications
-and keeps one reminder for 24 hours before the earliest known installed app
-expires. Tapping it opens Refresh setup, even if the setup banner was dismissed.
-Orbit uses the signed app/extension profiles’ actual expiry (including paid-team
-builds); without that metadata it assumes seven days after confirmed installation.
-Open Orbit after Mac installs so it can sync the latest dates. The scheduled
-notification then works without the Mac or Orbit running. Notification permission
-and iOS delivery settings still apply.
