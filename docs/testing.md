@@ -236,3 +236,16 @@ was terminated, tapping it into Refresh setup, and navigation with a dismissed
 banner. Notification response completion stays on the main thread for UIKit’s
 cold-launch scene handling. No physical device, Apple sign-in, actual profile
 renewal, public notarization or marketplace acceptance was performed.
+
+JavaScript import verification (2026-10-23): 156 Swift tests passed with four
+optional fixtures skipped. The packaged phone-source/resume fixture passed
+separately, including Share extension source and entitlements. All 14 Python
+tests, both Go race suites and helper vet passed. Both clients built with the
+Share extension embedded in iOS; the Mac review bundle passed signature checks.
+Four Simulator UI tests passed: durable inbox receipt/relaunch/consent, content
+routing across tabs, applet consent/action and widget consent/preview. A disposable
+committed UIKit share-host fixture also exercised the real system Share sheet,
+Orbit’s extension consent, shared Keychain import and subsequent applet rendering.
+The Mac was locked, so Finder drag/drop and desktop visual acceptance were not
+performed. No physical phone, Apple sign-in, background-delivery guarantee, public
+notarization or marketplace acceptance is claimed.
