@@ -115,6 +115,9 @@ import OrbitWire
             window.rootViewController = controller
         }
         window.makeKeyAndVisible()
+        if options.notificationResponse?.notification.request.identifier == CodeExpiryReminder.notificationID {
+            OrbitExpiryNotifications.shared.openSetup()
+        }
         openRefreshSetupIfNeeded()
         if let url = options.urlContexts.first?.url { openWidget(url) }
     }
