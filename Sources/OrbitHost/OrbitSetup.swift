@@ -4,11 +4,20 @@ import OrbitCore
 import OrbitMac
 
 public enum OrbitSetupStep: String, CaseIterable, Codable, Sendable {
+    // Old raw values remain decodable so interrupted setup can migrate.
+    public static let allCases: [Self] = [.welcome, .tools, .access, .account, .phone, .complete]
+    public var current: Self {
+        switch self {
+        case .agents: return .access
+        case .install, .connect, .refresh: return .phone
+        default: return self
+        }
+    }
     case welcome, tools, access, account, phone, agents, install, connect, refresh, complete
     public var title: String {
         switch self {
         case .welcome: return "Welcome"
-        case .tools: return "Developer Tools"
+        case .tools: return "Mac Tools"
         case .access: return "Mac Access"
         case .account: return "Apple Account"
         case .phone: return "Your iPhone"
@@ -44,10 +53,15 @@ public struct OrbitSetupState: Codable, Sendable {
     public var installTargetID: String?
     public var installJobID: String?
     public var installed = false
-    public var agentChoice = "codex"
-    public var agentConfigured = false
+    public var folderApproved: Bool?
     public var finished = false
-    public init() {}
+    public init() {
+        folder = Self.defaultFolder.path
+        bundlePrefix = "dev.orbit.u" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+    }
+    public static var defaultFolder: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/Orbit", isDirectory: true)
+    }
     public static func validTeam(_ value: String) -> Bool { value.count == 10 && value.unicodeScalars.allSatisfy { CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789").contains($0) } }
     public static func validPrefix(_ value: String) -> Bool {
         let parts = value.split(separator: ".", omittingEmptySubsequences: false)
@@ -73,11 +87,18 @@ public actor OrbitSetup {
     public func load() throws -> OrbitSetupState {
         let url = root.appendingPathComponent("setup.json")
         guard FileManager.default.fileExists(atPath: url.path) else { return .init() }
-        return try JSONDecoder().decode(OrbitSetupState.self, from: Data(contentsOf: url))
+        var state = try JSONDecoder().decode(OrbitSetupState.self, from: Data(contentsOf: url))
+        state.step = state.step.current
+        if state.folder == nil { state.folder = OrbitSetupState.defaultFolder.path }
+        if state.bundlePrefix.isEmpty { state.bundlePrefix = OrbitSetupState().bundlePrefix }
+        return state
     }
     public func save(_ state: OrbitSetupState) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try JSONEncoder().encode(state).write(to: root.appendingPathComponent("setup.json"), options: .atomic)
+    }
+    public nonisolated static var pythonExecutable: String {
+        ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"].first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/python3"
     }
     public func checkTools() async -> OrbitToolReadiness {
         var result = OrbitToolReadiness()
@@ -88,10 +109,41 @@ public actor OrbitSetup {
             _ = try await OrbitCommand.run("/usr/bin/xcodebuild", ["-checkFirstLaunchStatus"]); result.firstLaunch = true
             let sdk = String(decoding: try await OrbitCommand.run("/usr/bin/xcrun", ["--sdk", "iphoneos", "--show-sdk-version"]), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             result.iOSSDK = (Int(sdk.split(separator: ".").first ?? "") ?? 0) >= 26
-            _ = try await OrbitCommand.run("/usr/bin/python3", ["--version"]); result.python = true
+            _ = try await OrbitCommand.run(Self.pythonExecutable, ["--version"]); result.python = true
             result.detail = result.ready ? "Xcode and iOS \(sdk) tools are ready." : "Install iOS 26 or later in Xcode → Settings → Components."
         } catch { result.detail = error.localizedDescription }
         return result
+    }
+    public func recommendedXcode() async throws -> String {
+        let request = URLRequest(url: URL(string: "https://xcodereleases.com/data.json")!, timeoutInterval: 30)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200, data.count <= 1024 * 1024 else {
+            throw CodeFailure("Couldn’t check Xcode downloads. Try again in a moment.")
+        }
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        return try Self.recommendedXcode(in: data, macOSVersion: "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)")
+    }
+    /// Uses the same public release metadata as xcodes; all remote version text
+    /// is validated before becoming an installer argument. Betas are excluded.
+    public nonisolated static func recommendedXcode(in data: Data, macOSVersion: String) throws -> String {
+        func numericVersion(_ value: String) -> Bool {
+            let parts = value.split(separator: ".", omittingEmptySubsequences: false)
+            return (2...3).contains(parts.count) && parts.allSatisfy { !$0.isEmpty && $0.count <= 3 && $0.allSatisfy { $0.isASCII && $0.isNumber } }
+        }
+        let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
+        let versions = rows.compactMap { row -> String? in
+            guard let version = row["version"] as? [String: Any],
+                  let release = version["release"] as? [String: Any], release["release"] as? Bool == true,
+                  let number = version["number"] as? String, numericVersion(number),
+                  let minimum = row["requires"] as? String, numericVersion(minimum),
+                  number.compare("26.2", options: .numeric) != .orderedAscending,
+                  minimum.compare(macOSVersion, options: .numeric) != .orderedDescending else { return nil }
+            return number
+        }
+        guard let version = versions.max(by: { $0.compare($1, options: .numeric) == .orderedAscending }) else {
+            throw CodeFailure("Update macOS to install the Xcode version Orbit needs, then try again.")
+        }
+        return version
     }
     public func phoneReady(_ device: String) async throws -> Bool {
         guard !device.isEmpty, device.count <= 128 else { return false }
@@ -140,7 +192,7 @@ public actor OrbitSetup {
         let directory = root.appendingPathComponent("AgentSetup"); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent("orbit-mcp.json")
         let cli = app.appendingPathComponent("Contents/Resources/AgentTools/bin/orbit").path
-        let object: [String: Any] = ["mcpServers": ["orbit": ["command": "/usr/bin/python3", "args": [cli, "mcp"], "env": ["ORBIT_HOME": root.path]]]]
+        let object: [String: Any] = ["mcpServers": ["orbit": ["command": Self.pythonExecutable, "args": [cli, "mcp"], "env": ["ORBIT_HOME": root.path]]]]
         try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]).write(to: file, options: .atomic)
         return file
     }

@@ -50,10 +50,10 @@ fixture models into a separate accessory utility. The only view substitution is
 the disk-image path check, so the initial Install Orbit Mac screen can be shown
 without mounting a DMG. Continue enablement is extracted from the actual model.
 
-The 17 PNGs, browsable `index.html` and `manifest.json` go to `dist/setup-screenshots` (or the directory
-passed as the first argument). They cover the ten steps, DMG installation, missing
-tools and first launch, alternate AI integrations, and mock installation progress
-and success. All account/device/pairing values are fictional. Captures show the
+The 13 PNGs, browsable `index.html` and `manifest.json` go to `dist/setup-screenshots` (or the directory
+passed as the first argument). They cover the six steps, DMG installation, missing
+tools, first launch, private installer sign-in, detected accounts, and mock
+installation progress and success. All account/device/pairing values are fictional. Captures show the
 wizard content at 1000 × 740 points in light appearance, without window chrome.
 They are visual fixtures, not physical acceptance or proof of installation.
 
@@ -136,7 +136,51 @@ retain a blank exported host. Create a detached worktree from that repository,
 then build its `AppletHost` scheme for Simulator.
 `OrbitAppletsUITests` imports a file through Paste, checks consent before render,
 launches the native applet and taps its action. Run it alongside
-`OrbitWidgetsUITests` on Simulator. These checks do not establish physical
+`OrbitWidgetsUITests` on Simulator. Use normal Simulator ad hoc signing
+(`CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=''`), since unsigned app bundles cannot
+exercise the Keychain-backed store. To also test the installed standalone host,
+set `TEST_RUNNER_ORBIT_TEST_STANDALONE_APPLET` to its bundle ID before running
+`OrbitAppletsUITests`. These checks do not establish physical
 installation, Personal Team renewal, widget sharing, or marketplace acceptance.
 Standalone apps consume a separate development app slot; physical acceptance
 must verify the selected icon and dedicated launch on the intended phone.
+
+## Simplified onboarding checks
+
+`OrbitSetupTests` covers migration from the retired steps, stable generated app
+identity, Desktop folder defaults/consent, local-only folder configuration, Xcode
+team metadata parsing and physical-phone readiness evidence. Python MCP tests run
+the real loopback HTTP adapter with a synthetic Host RPC and check initialization,
+notifications, tools, token/Origin/Host rejection and payload limits.
+`OrbitSetupBannerUITests` checks both optional setup destinations and persistent
+dismissal in Simulator. The banners do not initiate remote configuration or Apple
+sign-in merely by appearing.
+
+`scripts/test_setup_installer.sh` drives a synthetic `/dev/tty` challenge through
+the production terminal adapter, checking secure reply forwarding and redaction
+without running the real installer.
+
+Installer execution, fresh-Mac Homebrew/Xcode download, Apple sign-in/2FA/security
+keys and sudo prompts require separate interactive acceptance; automated checks
+never execute those commands. Physical phone/Personal Team install and renewal,
+remote installation away from home, public notarization and marketplace listing
+remain separate acceptance work.
+
+## Onboarding verification (2026-10-23)
+
+- Bootstrap generated the source-built transport and current Xcode project in a
+  detached checkout.
+- 136 Swift tests passed with four optional fixture checks skipped. The packaged
+  phone-source/resume check passed separately against the newly built Mac bundle.
+- Python stdio/HTTP MCP tests, both Go race suites and Apple helper vet passed.
+- The iOS Simulator client and complete ad-hoc Mac review bundle built. The
+  packaged Mac app automatically started MCP and answered `orbit_status` using an
+  isolated empty catalog. No device-discovery command or installer was invoked by
+  this runtime check.
+- Two Simulator UI tests passed: optional banner destinations/dismissal and the
+  existing JavaScript consent/native preview flow. The 13 inert wizard screenshots
+  and synthetic interactive terminal probe passed.
+
+Fresh-Mac Homebrew/Xcode installation, Apple authentication, physical installation
+and renewal, remote-network installation, public notarization and marketplace
+listing were not performed.

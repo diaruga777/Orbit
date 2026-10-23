@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Orbit CLI and stdio MCP. Python standard library only; no agent SDK required."""
 import argparse
+import errno
+import hmac
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import secrets
+import threading
+import time
 import json
 import os
 from pathlib import Path
@@ -76,12 +82,14 @@ def tool_specs():
 def handle_mcp(message):
     if not isinstance(message, dict) or message.get('jsonrpc') != '2.0':
         return {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Invalid JSON-RPC request'}}
-    method = message.get('method'); params = message.get('params') or {}
+    method = message.get('method'); params = message.get('params', {})
+    if not isinstance(params, dict):
+        return {'jsonrpc':'2.0','id':message.get('id'),'error':{'code':-32602,'message':'Invalid parameters'}}
     if 'id' not in message:
         return None
     reply = {'jsonrpc':'2.0','id':message['id']}
     if method == 'initialize':
-        reply['result'] = {'protocolVersion':'2024-11-05','capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'orbit','version':'0.1.0'},'instructions':'Orbit runs locally on the user’s Mac. Use orbit_devices and orbit_inspect_github before adding. Keep Apple account credentials in Xcode and never include them in tool arguments.'}
+        reply['result'] = {'protocolVersion':params.get('protocolVersion') if params.get('protocolVersion') in {'2024-11-05','2025-03-26','2025-06-18'} else '2025-03-26','capabilities':{'tools':{'listChanged':False}},'serverInfo':{'name':'orbit','version':'0.1.0'},'instructions':'Orbit runs locally on the user’s Mac. Use orbit_devices and orbit_inspect_github before adding. Keep Apple account credentials in Xcode and never include them in tool arguments.'}
     elif method == 'ping':
         reply['result'] = {}
     elif method == 'tools/list':
@@ -118,9 +126,110 @@ def mcp():
         if reply is not None:
             print(json.dumps(reply,separators=(',', ':')),flush=True)
 
+class MCPHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+    # Keep concurrent, slow local connections bounded.
+    slots = threading.BoundedSemaphore(16)
+    def process_request(self, request, client_address):
+        if not self.slots.acquire(blocking=False):
+            request.close(); return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self.slots.release(); raise
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+class MCPHTTPHandler(BaseHTTPRequestHandler):
+    # No access logs: authentication and tool arguments remain private.
+    def log_message(self, *_):
+        pass
+    def setup(self):
+        super().setup(); self.connection.settimeout(190)
+    def respond(self, status, value=None):
+        body = b'' if value is None else json.dumps(value, separators=(',', ':')).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+    def authorized(self):
+        if self.path != '/mcp':
+            self.respond(404); return False
+        host = f'127.0.0.1:{self.server.server_port}'
+        if self.headers.get('Host') != host or self.headers.get('Origin') not in (None, 'http://' + host):
+            self.respond(403); return False
+        if not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + self.server.token):
+            self.respond(401); return False
+        return True
+    def do_GET(self):
+        if self.authorized():
+            self.respond(405)
+    do_DELETE = do_GET
+    def do_POST(self):
+        if not self.authorized():
+            return
+        if self.headers.get('Transfer-Encoding') or self.headers.get_content_type() != 'application/json':
+            self.respond(415); return
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= MAX_BYTES:
+                self.respond(413); return
+            raw = self.rfile.read(length)
+            if len(raw) != length:
+                self.respond(400); return
+            message = json.loads(raw)
+            if isinstance(message, list):
+                if not message or len(message) > 128:
+                    self.respond(400); return
+                replies = [handle_mcp(item) for item in message]
+                reply = [item for item in replies if item is not None] or None
+            else:
+                reply = handle_mcp(message)
+            self.respond(202 if reply is None else 200, reply)
+        except (ValueError, TypeError):
+            self.respond(400)
+
+def mcp_http(parent_pid, port=49211):
+    root = Path(os.environ.get('ORBIT_HOME', str(Path.home() / '.orbit')))
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Bind before publishing credentials: another running instance owns its port.
+    try:
+        server = MCPHTTPServer(('127.0.0.1', port), MCPHTTPHandler)
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        server = MCPHTTPServer(('127.0.0.1', 0), MCPHTTPHandler)
+    server.token = secrets.token_urlsafe(32)
+    config = {'mcpServers': {'orbit': {'url': f'http://127.0.0.1:{server.server_port}/mcp',
+                                     'headers': {'Authorization': 'Bearer ' + server.token}}}}
+    path = root / 'mcp-http.json'
+    temporary = root / ('.mcp-http-' + uuid.uuid4().hex)
+    try:
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w') as file:
+            json.dump(config, file)
+        os.replace(temporary, path)
+        def watch_parent():
+            while os.getppid() == parent_pid:
+                time.sleep(1)
+            server.shutdown()
+        threading.Thread(target=watch_parent, daemon=True).start()
+        server.serve_forever(poll_interval=0.5)
+    finally:
+        server.server_close()
+        temporary.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['mcp','status','devices','targets','add','build','schedule','remove','job','cancel','github-search','github-inspect','github-add','widget-add','widget-remove','widgets','applets','applet-add','applet-remove','applet-prompt','applet-export','configure','pair','forget','code'])
+    parser.add_argument('command', choices=['mcp-http','mcp','status','devices','targets','add','build','schedule','remove','job','cancel','github-search','github-inspect','github-add','widget-add','widget-remove','widgets','applets','applet-add','applet-remove','applet-prompt','applet-export','configure','pair','forget','code'])
     parser.add_argument('value', nargs='?')
     parser.add_argument('--destination'); parser.add_argument('--bundle-id',dest='bundleID'); parser.add_argument('--icon',dest='iconPath')
     parser.add_argument('--project'); parser.add_argument('--scheme'); parser.add_argument('--device',dest='deviceID')
@@ -133,6 +242,8 @@ def main():
     parser.add_argument('--provider',choices=['local','tailscale','syncthing','dumbpipe'])
     parser.add_argument('--address'); parser.add_argument('--relay')
     args = vars(parser.parse_args()); command = args.pop('command'); value = args.pop('value')
+    if command == 'mcp-http':
+        mcp_http(int(value or os.getppid())); return
     if command == 'mcp':
         mcp(); return
     params = {k:v for k,v in args.items() if v is not None}

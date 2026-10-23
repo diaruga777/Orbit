@@ -11,11 +11,27 @@ You need a Mac, an iPhone, and either a coding agent subscription/credits or eno
 ## Install from a DMG
 
 Open **Orbit Mac** from the DMG to launch the resumable setup wizard. It installs
-itself, checks full Xcode and iOS tools, guides permissions and your Apple account,
-selects an iPhone and checks Developer Mode, provides Codex/MCP integration,
-builds/installs the phone app, pairs it and checks phone refresh setup. Apple’s
-App Store, account, license, device trust and permission prompts require your
-interaction; the wizard links to them and checks again when you return.
+itself, installs Xcode and missing dependencies, asks for a projects folder
+(default **~/Desktop/Orbit**), detects your Xcode signing account, and installs
+Orbit on your selected iPhone. Keep both devices on the same Wi-Fi for setup.
+There is no AI integrations step, Team ID field or bundle ID field.
+
+The tools page uses [xcodes](https://github.com/XcodesOrg/xcodes), installed via
+Homebrew (which Orbit installs if needed). Orbit selects the newest stable Xcode
+compatible with your macOS from the same release feed used by xcodes. Apple sign-in, verification and Mac
+password prompts appear in a private interactive installer inside Orbit; replies
+and transcripts are never saved in setup/build logs. Xcodes owns its download
+credentials in Keychain. Add your signing account in Xcode’s own Accounts screen;
+Orbit detects it when you return. If more than one team is available, choose its
+name. Orbit generates and saves its phone app identifiers once, preserving them
+on resume and updates. Apple trust, Developer Mode, account and license prompts
+still need your attention.
+
+Phone selection, Developer Mode guidance, build/install and connection code share
+one page. Installation is complete only after installed-revision readback;
+pairing can also be finished later. Phone-only refresh and remote-network setup
+are deferred to a **Take Orbit with you** banner in both clients. Local Wi-Fi is
+the default; enabling remote connections is an explicit later choice.
 
 The DMG contains the committed phone project, native archives and local agent
 launcher. End users do not need to clone this repository or install Go/XcodeGen.
@@ -202,7 +218,16 @@ Removing a target keeps its source repository and the app already installed on y
 
 ## Connect your agent
 
-The MCP uses standard JSON-RPC over stdio and Python's standard library. It talks to the running Mac app through an owner-only Unix socket. It requires no agent SDK or AI API key. Agent subscriptions/credits are your choice and separate from Orbit.
+Orbit starts its MCP service whenever the Mac client is running. Its authenticated
+Streamable HTTP endpoint listens only on loopback (normally `127.0.0.1:49211/mcp`); the owner-only
+`~/.orbit/mcp-http.json` contains the connection settings and a token rotated each
+launch. No separate macOS MCP permission is needed. Folder and Local Network
+consent live together in setup. External MCP hosts still need their own server
+entry; Orbit does not modify other apps’ settings.
+
+The existing stdio MCP remains available for hosts that launch their own adapter.
+Both transports use Python’s standard library and the running Mac app’s owner-only
+Unix socket. No agent SDK or AI API key is required.
 
 ```sh
 mkdir -p ~/.local/bin

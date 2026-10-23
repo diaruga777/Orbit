@@ -54,6 +54,7 @@ import OrbitWire
             window.rootViewController = UINavigationController(rootViewController: controller)
             window.makeKeyAndVisible(); return
         }
+        if ProcessInfo.processInfo.arguments.contains("--reset-extra-setup") { UserDefaults.standard.removeObject(forKey: "Orbit.dismissedExtraSetup") }
         if ProcessInfo.processInfo.arguments.contains("--reset-connection") { connection.pairingCode = "" }
         if ProcessInfo.processInfo.arguments.contains("--editor-preview") {
             window.rootViewController = try? CodeEditorPreview.make(reset: ProcessInfo.processInfo.arguments.contains("--reset-preview"), workspace: ProcessInfo.processInfo.arguments.contains("--workspace-preview"))
@@ -101,7 +102,7 @@ import OrbitWire
             appletNavigation.tabBarItem = UITabBarItem(title: "Applets", image: UIImage(systemName: "curlybraces.square"), tag: 6)
             tabs.viewControllers = [project, apps, appletNavigation, widgetNavigation, refresh, settings]
             tabs.selectedIndex = connection.pairingCode.isEmpty ? 5 : min(5, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
-            window.rootViewController = tabs
+            window.rootViewController = OrbitSetupBannerController(tabs: tabs)
         } catch {
             let controller = UIViewController(); controller.view.backgroundColor = .systemBackground
             let label = UILabel(); label.text = error.localizedDescription; label.numberOfLines = 0
@@ -115,12 +116,12 @@ import OrbitWire
         if let url = URLContexts.first?.url { openWidget(url) }
     }
     private func openWidget(_ url: URL) {
-        guard url.isFileURL, let widgets, let tabs = window?.rootViewController as? UITabBarController else { return }
+        guard url.isFileURL, let widgets, let root = window?.rootViewController as? OrbitSetupBannerController else { return }
         let access = url.startAccessingSecurityScopedResource()
         let isApplet = ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max) <= 128 * 1024 &&
             ((try? String(contentsOf: url, encoding: .utf8).hasPrefix("/* orbit-applet\n")) ?? false)
         if access { url.stopAccessingSecurityScopedResource() }
-        tabs.selectedIndex = isApplet ? 2 : 3
+        root.tabs.selectedIndex = isApplet ? 2 : 3
         DispatchQueue.main.async { (isApplet ? self.applets : widgets)?.open(url) }
     }
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
