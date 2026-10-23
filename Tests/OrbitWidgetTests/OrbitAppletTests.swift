@@ -37,6 +37,7 @@ final class OrbitAppletTests: XCTestCase {
             "module.exports.render=()=>({type:'button',text:'Missing action'});",
             "module.exports.render=()=>({type:'textfield',action:'save'});",
             "module.exports.render=()=>({type:'webview'});",
+            "module.exports.render=()=>({type:'vstack',children:[{type:'textfield',key:'same',action:'a'},{type:'toggle',key:'same',action:'b'}]});",
             "module.exports.update=async()=>{await fetch('https://not-approved.example')}; module.exports.render=()=>({type:'text'});",
             "module.exports.action=ctx=>{ctx.storage.set('bad',true);throw new Error('failed')}; module.exports.render=()=>({type:'text'});"
         ] {
@@ -59,7 +60,12 @@ final class OrbitAppletTests: XCTestCase {
         XCTAssertThrowsError(try store.save(output, script: script, family: "large"))
         XCTAssertEqual(try store.storage(script.id)["count"], "3")
         XCTAssertNil(try store.output(script.id, family: "large"))
+        let widgets = OrbitWidgetStore(directory: directory)
+        try widgets.install("/* orbit-widget\n{\"id\":\"counter\",\"name\":\"Widget\",\"domains\":[],\"refreshMinutes\":30}\n*/\nmodule.exports.render=()=>({type:'text'});")
+        XCTAssertEqual(try store.script(script.id)?.definition.name, "Counter")
+        XCTAssertEqual(try widgets.script(script.id)?.definition.name, "Widget")
         try store.remove(script.id)
+        XCTAssertNotNil(try widgets.script(script.id))
         XCTAssertTrue(try store.storage(script.id).isEmpty)
     }
 }

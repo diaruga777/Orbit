@@ -2,7 +2,7 @@ import XCTest
 
 final class OrbitAppletsUITests: XCTestCase {
     func testImportConsentLaunchActionAndPersistence() throws {
-        let app = XCUIApplication(); app.launch()
+        let app = XCUIApplication(); app.launchArguments = ["--reset-connection"]; app.launch()
         XCTAssertTrue(app.tabBars.buttons["Applets"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Applets"].tap()
         app.navigationBars["Applets"].buttons["Add"].tap(); app.buttons["Paste JavaScript"].tap()
@@ -16,5 +16,20 @@ final class OrbitAppletsUITests: XCTestCase {
         app.buttons["Add one"].tap()
         XCTAssertTrue(app.staticTexts["Count 1"].waitForExistence(timeout: 10))
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "JavaScript Applet"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    func testStandaloneConsentActionAndRelaunch() throws {
+        guard let bundleID = ProcessInfo.processInfo.environment["ORBIT_TEST_STANDALONE_APPLET"] else { throw XCTSkip("Install an exported blank host and set ORBIT_TEST_STANDALONE_APPLET.") }
+        let app = XCUIApplication(bundleIdentifier: bundleID); app.launch()
+        let open = app.buttons["Open Applet"]
+        if open.waitForExistence(timeout: 5) { open.tap() }
+        XCTAssertTrue(app.buttons["Tap me"].waitForExistence(timeout: 10))
+        app.buttons["Tap me"].tap()
+        let count = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Taps: '")).firstMatch
+        XCTAssertTrue(count.waitForExistence(timeout: 10))
+        let label = count.label
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts[label].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Open Applet"].exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "Standalone JavaScript Applet"; attachment.lifetime = .keepAlways; add(attachment)
     }
 }

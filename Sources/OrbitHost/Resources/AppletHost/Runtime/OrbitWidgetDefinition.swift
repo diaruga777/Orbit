@@ -86,9 +86,16 @@ public struct OrbitWidgetNode: Codable, Equatable, Sendable {
         if ["button", "textfield", "toggle"].contains(type) {
             guard let action, !action.isEmpty, action.count <= 128,
                   type == "button" || (key.map { !$0.isEmpty && $0.count <= 128 } ?? false),
-                  (value?.count ?? 0) <= 2000 else { throw OrbitWidgetError("Controls need a short action and input key.") }
+                  (value?.count ?? 0) <= 2000, (children?.isEmpty ?? true) else { throw OrbitWidgetError("Controls need a short action and input key.") }
         }
         for child in children ?? [] { try child.validate(depth: depth + 1, count: &count, interactive: interactive) }
+        if interactive && depth == 0 { var keys = Set<String>(); try validateInputKeys(&keys) }
+    }
+    private func validateInputKeys(_ keys: inout Set<String>) throws {
+        if ["textfield", "toggle"].contains(type), let key {
+            guard keys.insert(key).inserted else { throw OrbitWidgetError("Each applet input needs a unique key.") }
+        }
+        for child in children ?? [] { try child.validateInputKeys(&keys) }
     }
 }
 

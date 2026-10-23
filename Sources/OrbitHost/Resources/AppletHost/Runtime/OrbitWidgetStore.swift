@@ -11,7 +11,7 @@ public final class OrbitWidgetStore: @unchecked Sendable {
     private var service: String { applets ? "Orbit.Applets.v1" : "Orbit.Widgets.v1" }
     private let lock = NSRecursiveLock()
     public init(directory: URL? = nil, accessGroup: String? = nil, applets: Bool = false) {
-        self.directory = directory; self.applets = applets
+        self.directory = applets ? directory?.appendingPathComponent("Applets") : directory; self.applets = applets
         group = accessGroup ?? Bundle.main.object(forInfoDictionaryKey: "OrbitWidgetKeychainGroup") as? String
     }
     private func read(_ key: String) throws -> Data? {
