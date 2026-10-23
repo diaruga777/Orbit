@@ -69,3 +69,9 @@ Signing and notary credentials never enter the repository or DMG.
 
 The Xcode OrbitMac scheme remains useful for development compilation; use the
 packaging/build script for the complete setup/source/helper/plugin resources.
+
+The bundled wizard uses Homebrew’s upstream `xcodesorg/made/xcodes` package for
+Xcode installation. It exposes the upstream interactive prompts in Orbit, and
+retains no installer transcript. Signing login stays in Xcode; download login in
+xcodes does not sign the user into Xcode Accounts. Phone-only refresh and remote
+setup are post-onboarding options in both clients, with local Wi-Fi as default.

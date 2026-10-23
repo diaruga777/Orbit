@@ -1,6 +1,7 @@
 import importlib.machinery
 import importlib.util
 import json
+import http.client
 from pathlib import Path
 import socket
 import struct
@@ -62,4 +63,44 @@ class MCPTests(unittest.TestCase):
             try:
                 with patch.dict('os.environ',{'ORBIT_HOME':folder}): self.assertEqual(orbit.rpc('targets'),[{'id':'app'}])
             finally: thread.join(timeout=5); sock.close()
+class MCPHTTPTests(unittest.TestCase):
+    def setUp(self):
+        self.server = orbit.MCPHTTPServer(('127.0.0.1', 0), orbit.MCPHTTPHandler)
+        self.server.token = 'test-only-secret'
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+    def tearDown(self):
+        self.server.shutdown(); self.server.server_close(); self.thread.join(timeout=5)
+    def request(self, value, extra=None, method='POST'):
+        conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
+        headers = {'Authorization': 'Bearer test-only-secret', 'Content-Type': 'application/json',
+                   'Accept': 'application/json, text/event-stream'}
+        headers.update(extra or {})
+        try:
+            conn.request(method, '/mcp', json.dumps(value), headers)
+            response = conn.getresponse(); data = response.read()
+            return response.status, json.loads(data) if data else None
+        finally:
+            conn.close()
+    def test_initialize_inventory_notifications_and_calls(self):
+        code, reply = self.request({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-03-26'}})
+        self.assertEqual(code, 200); self.assertEqual(reply['result']['protocolVersion'], '2025-03-26')
+        code, reply = self.request({'jsonrpc':'2.0','id':2,'method':'tools/list'})
+        self.assertEqual(code, 200); self.assertTrue(reply['result']['tools'])
+        self.assertEqual(self.request({'jsonrpc':'2.0','method':'notifications/initialized'}), (202, None))
+        with patch.object(orbit, 'rpc', return_value={'product':'Orbit'}) as rpc:
+            code, reply = self.request({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'orbit_status'}})
+            self.assertEqual(code, 200); self.assertFalse(reply['result']['isError'])
+            rpc.assert_called_once_with('status', {})
+    def test_auth_origin_host_limits_and_no_event_stream(self):
+        message = {'jsonrpc':'2.0','id':1,'method':'tools/list'}
+        with patch.object(orbit, 'handle_mcp') as handler:
+            self.assertEqual(self.request(message, {'Authorization':''})[0], 401)
+            self.assertEqual(self.request(message, {'Origin':'https://untrusted.example'})[0], 403)
+            self.assertEqual(self.request(message, {'Host':'untrusted.example'})[0], 403)
+            self.assertEqual(self.request(message, {'Content-Length':str(orbit.MAX_BYTES + 1)})[0], 413)
+            handler.assert_not_called()
+        self.assertEqual(self.request(message, method='GET')[0], 405)
+        self.assertEqual(self.request(message, method='DELETE')[0], 405)
+
 if __name__=='__main__': unittest.main()

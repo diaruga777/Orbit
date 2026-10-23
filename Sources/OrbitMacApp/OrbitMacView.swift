@@ -4,8 +4,24 @@ import OrbitHost
 
 struct OrbitMacView: View {
     @ObservedObject var model: OrbitMacModel
+    @ObservedObject var setup: OrbitSetupModel
+    @AppStorage("Orbit.dismissedExtraSetup") private var dismissedExtraSetup = false
+    @State private var showExtraSetup = false
     var body: some View {
-        TabView {
+        VStack(spacing: 0) {
+            if !dismissedExtraSetup {
+                HStack(spacing: 14) {
+                    Image(systemName: "iphone.radiowaves.left.and.right").font(.title2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Take Orbit with you").font(.headline)
+                        Text("Refresh without your Mac, or build away from home.").font(.callout).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Set Up") { showExtraSetup = true }.buttonStyle(.borderedProminent)
+                    Button { dismissedExtraSetup = true } label: { Image(systemName: "xmark") }.buttonStyle(.plain).help("Dismiss")
+                }.padding().background(.thinMaterial)
+            }
+            TabView {
             OrbitMacWidgetsView(model: model).tabItem { Label("Widgets", systemImage: "square.grid.2x2") }
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -59,7 +75,10 @@ struct OrbitMacView: View {
                     Button("Clone and Add App") { model.add(repository: info["repository"] as? String) }.disabled(info["compatible"] as? Bool != true)
                 }
             }.padding().tabItem { Label("Add App", systemImage: "plus") }
+            }
         }
+        .toolbar { Button("Phone & Remote Setup") { showExtraSetup = true } }
+        .sheet(isPresented: $showExtraSetup) { OrbitExtraSetupView(setup: setup, model: model) }
     }
     private func appIcon(_ app: [String: Any]) -> some View {
         Group {

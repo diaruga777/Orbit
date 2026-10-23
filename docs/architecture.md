@@ -17,6 +17,42 @@ Orbit is independent of Luna. It contains a source editor, a Mac executor and tr
 
 Data lives under `~/.orbit` on Mac (override with absolute `ORBIT_HOME`) and private Application Support on iOS. Pairing certificates and iroh keys are independent of signing certificates. The phone's installation authorization key is non-synchronizing and stays in Keychain. Removing an app or its state requires pairing again; no Luna identity is silently adopted.
 
+## Mac setup and optional setup
+
+The active wizard has six steps: welcome, tools, folder access, Apple account,
+iPhone, ready. Legacy agent/install/connect/refresh step values migrate without
+changing existing source, signing identifiers or durable installation job IDs.
+Phone-only refresh is not required by the wizard. A dismissible banner in both
+clients links to phone refresh and remote building after setup. Local Wi-Fi stays
+the default; the Mac’s Phone & Remote Setup sheet explicitly enables the existing
+iroh transport and explains native installation authorization and restart/re-pair.
+
+`OrbitToolInstaller` runs the upstream Homebrew/xcodes installer through a private
+pseudo-terminal inside the wizard. It installs missing full Xcode and Python,
+finishes Xcode’s first launch and downloads the iOS platform. Homebrew is installed
+only if needed; shipped phone source/native archives avoid end-user Go/XcodeGen.
+Terminal output is bounded, transient and excluded from diagnostics and setup
+state; input uses a secure field with terminal echo disabled. Xcodes owns Apple
+download credentials in Keychain. Signing remains Xcode-owned: the wizard reads
+public Xcode team metadata and development certificate subjects, never account
+sessions or signing keys. Xcode’s native Accounts screen handles signing login.
+The wizard auto-selects a sole team, otherwise shows names, and generates a stable
+random bundle namespace in user state. Existing registered/installed identities
+are preserved, and a phone is rechecked natively before installation.
+
+Folder consent defaults to `~/Desktop/Orbit`, creates/tests the folder after an
+explicit action, and updates the Host’s project-root preference. GitHub imports
+use that selected folder. Existing target source paths remain durable.
+
+The Mac starts a separate Python MCP HTTP adapter after its local service starts,
+retries startup as tools become available, and owns its lifetime. The adapter
+binds only `127.0.0.1:49211`, validates Host/Origin, requires a random bearer token,
+bounds requests/connections, and uses the same CLI tool inventory and Host socket
+as stdio. `mcp-http.json` is owner-only secret state, never a public progress file.
+Tokens rotate on adapter startup; clients must reload connection settings after a
+restart. External hosts may continue using stdio without token management. There
+is no OS-level MCP entitlement or automatic edit of another app’s configuration.
+
 ## Requests and jobs
 
 The local CLI uses a Unix socket inside the owner-only state directory. Remote peers use mutually authenticated TLS or pinned iroh endpoint keys and must be explicitly trusted by the Mac. Control frames begin with `ORBT`, followed by a four-byte big-endian JSON length; the 12 MiB cap is checked before payload allocation. Each RPC uses a fresh bounded exchange. Installation streams use their separate LCDF protocol and phone-key proof.

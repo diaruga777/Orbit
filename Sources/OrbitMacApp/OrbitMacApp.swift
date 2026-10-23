@@ -9,7 +9,7 @@ import AppKit
         WindowGroup("Orbit Mac") {
             Group {
                 if !setup.loaded { ProgressView().frame(width: 850, height: 660) }
-                else if setup.state.finished { OrbitMacView(model: model).frame(minWidth: 760, minHeight: 540) }
+                else if setup.state.finished { OrbitMacView(model: model, setup: setup).frame(minWidth: 760, minHeight: 540) }
                 else { OrbitSetupView(setup: setup, model: model) }
             }
         }.commands {

@@ -7,6 +7,8 @@ import OrbitCore
 @MainActor final class OrbitSetupModel: ObservableObject {
     @Published var state = OrbitSetupState()
     @Published var tools = OrbitToolReadiness()
+    let installer = OrbitToolInstaller()
+    @Published var teams: [OrbitSigningTeam] = []
     @Published var devices: [CodeDevice] = []
     @Published var phoneReady = false
     @Published var busy = false
@@ -22,19 +24,19 @@ import OrbitCore
         Task {
             do { state = try await setup.load() } catch { message = error.localizedDescription }
             loaded = true
+            tools = await setup.checkTools()
+            teams = await setup.signingTeams()
+            selectDetectedTeam()
         }
     }
     var canContinue: Bool {
         switch state.step {
         case .welcome: return !Bundle.main.bundleURL.path.hasPrefix("/Volumes/")
         case .tools: return tools.ready
-        case .access: return state.folder != nil
+        case .access: return state.folderApproved == true
         case .account: return OrbitSetupState.validTeam(state.teamID) && OrbitSetupState.validPrefix(state.bundlePrefix)
-        case .phone: return phoneReady
-        case .agents: return state.agentConfigured
-        case .install: return state.installed
-        case .connect: return paired
-        case .refresh: return phoneRefreshReady
+        case .phone: return state.installed
+        case .agents, .install, .connect, .refresh: return false
         case .complete: return true
         }
     }
@@ -57,12 +59,37 @@ import OrbitCore
         }
     }
     func checkTools() { perform { self.tools = await self.setup.checkTools(); self.message = self.tools.detail } }
-    func installTools() { perform { _ = try await OrbitCommand.run("/usr/bin/xcode-select", ["--install"]); self.message = "Finish Apple’s installer, then check again." } }
-    func finishXcode() { perform { _ = try await OrbitCommand.run("/usr/bin/xcodebuild", ["-runFirstLaunch"]); self.tools = await self.setup.checkTools(); self.message = self.tools.detail } }
-    func chooseFolder() {
-        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.prompt = "Allow Folder"
+    func selectDetectedTeam() {
+        if state.teamID.isEmpty, teams.count == 1 { state.teamID = teams[0].id; persist() }
+    }
+    func checkAccounts() {
+        perform {
+            self.teams = await self.setup.signingTeams()
+            self.selectDetectedTeam()
+            self.message = self.teams.isEmpty ? "Add your Apple Account in Xcode → Settings → Accounts, then check again." : "Your Apple Account is ready."
+        }
+    }
+    func openXcode() {
+        let url = URL(fileURLWithPath: tools.developerDirectory).deletingLastPathComponent().deletingLastPathComponent()
+        NSWorkspace.shared.openApplication(at: url, configuration: .init()) { _, _ in }
+    }
+    func chooseFolder(_ model: OrbitMacModel) {
+        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.prompt = "Use Folder"
+        panel.directoryURL = URL(fileURLWithPath: state.folder ?? OrbitSetupState.defaultFolder.path)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        state.folder = url.path; persist()
+        state.folder = url.path; state.folderApproved = false
+        allowFolder(model)
+    }
+    func allowFolder(_ model: OrbitMacModel) {
+        perform {
+            let url = URL(fileURLWithPath: self.state.folder ?? OrbitSetupState.defaultFolder.path)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            // Exercise access now so macOS can request Desktop/folder consent.
+            _ = try FileManager.default.contentsOfDirectory(atPath: url.path)
+            _ = try await model.rpc("setup_folder", ["path": url.path])
+            self.state.folder = url.path; self.state.folderApproved = true; self.persist()
+            self.message = "Projects folder is ready. Orbit’s local tools run while Orbit is open."
+        }
     }
     func changeLoginItem(_ enabled: Bool) {
         do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; loginItem = enabled }
@@ -74,35 +101,29 @@ import OrbitCore
             self.devices = try JSONDecoder().decode([CodeDevice].self, from: JSONSerialization.data(withJSONObject: rows))
             if self.state.deviceID.isEmpty, let first = self.devices.first { self.state.deviceID = first.id }
             self.phoneReady = false; self.persist()
+            if !self.state.deviceID.isEmpty { self.phoneReady = try await self.setup.phoneReady(self.state.deviceID) }
             if self.devices.isEmpty { self.message = "Unlock your iPhone, connect it by cable, and tap Trust. Open Xcode’s Devices and Simulators if it still doesn’t appear." }
         }
     }
     func checkPhone() { perform { self.phoneReady = try await self.setup.phoneReady(self.state.deviceID); self.message = self.phoneReady ? "Developer Mode is on. Your iPhone is ready." : "Turn on Developer Mode, restart your phone, and confirm Turn On. Then check again." } }
-    func prepareAgents() {
-        perform {
-            let app = Bundle.main.bundleURL
-            let source = app.appendingPathComponent("Contents/Resources/AgentTools")
-            guard FileManager.default.fileExists(atPath: source.appendingPathComponent("bin/orbit").path) else { throw CodeFailure("This copy of Orbit is missing its agent tools. Use a complete Orbit DMG.") }
-            let installation = OrbitPaths.root.appendingPathComponent("installation.json")
-            try JSONSerialization.data(withJSONObject: ["checkout": source.path]).write(to: installation, options: .atomic)
-            let file = try await self.setup.exportMCP(app: app)
-            if self.state.agentChoice == "codex" {
-                let plugin = source.appendingPathComponent("plugins/orbit")
-                NSWorkspace.shared.activateFileViewerSelecting([plugin])
-                self.message = "Orbit’s plugin folder is ready. Add it through Codex’s Plugins settings, then test orbit_status in a new chat."
-            } else {
-                NSWorkspace.shared.activateFileViewerSelecting([file])
-                self.message = "Add orbit-mcp.json to your AI app’s MCP settings, then test orbit_status."
-            }
-        }
-    }
     func install(_ model: OrbitMacModel) {
         perform {
-            guard OrbitSetupState.validTeam(self.state.teamID), OrbitSetupState.validPrefix(self.state.bundlePrefix), self.phoneReady || !self.state.deviceID.isEmpty else { throw CodeFailure("Choose your team and iPhone first.") }
+            guard OrbitSetupState.validTeam(self.state.teamID), OrbitSetupState.validPrefix(self.state.bundlePrefix), !self.state.deviceID.isEmpty else { throw CodeFailure("Choose your Apple Account and iPhone first.") }
+            self.phoneReady = try await self.setup.phoneReady(self.state.deviceID)
+            guard self.phoneReady else { throw CodeFailure("Unlock your iPhone and turn on Developer Mode, then try again.") }
             let source = try await self.setup.prepareSource(); self.state.source = source.path
             _ = try await model.rpc("setup_phone", ["bundlePrefix": self.state.bundlePrefix])
             // Setup installs a source snapshot committed in its own private
             // repository. User namespaces stay build arguments, never source edits.
+            if let old = self.state.installTargetID, self.state.installJobID == nil {
+                let rows = try await model.rpc("targets") as? [[String: Any]] ?? []
+                let target = rows.first { $0["id"] as? String == old }
+                let project = target?["project"] as? [String: Any] ?? [:]
+                if target?["deviceID"] as? String != self.state.deviceID || project["developmentTeam"] as? String != self.state.teamID {
+                    if target != nil { _ = try await model.rpc("target_remove", ["id": old]) }
+                    self.state.installTargetID = nil; self.persist()
+                }
+            }
             if self.state.installTargetID == nil {
                 let target = try await model.rpc("target_add", ["project": source.appendingPathComponent("Orbit.xcodeproj").path,
                     "scheme": "Orbit", "deviceID": self.state.deviceID, "teamID": self.state.teamID,
@@ -121,7 +142,7 @@ import OrbitCore
                 self.log = job["log"] as? String ?? ""
                 let status = job["state"] as? String ?? "building"
                 self.message = ["waitingForPhone": "Waiting for your iPhone. Keep it unlocked and connected.", "installing": "Installing Orbit…", "building": "Building Orbit for your iPhone…"][status] ?? status
-                if status == "succeeded" { self.state.installed = true; self.persist(); self.message = "Orbit is installed and its revision was verified."; return }
+                if status == "succeeded" { self.state.installed = true; self.persist(); self.message = "Orbit is installed. Open it on your iPhone to connect."; model.pair(); return }
                 if ["failed", "cancelled"].contains(status) {
                     self.state.installJobID = nil; self.persist()
                     throw CodeFailure((job["error"] as? [String: Any])?["recovery"] as? String ?? "Installation stopped. Check the log, fix the issue, then try again.")

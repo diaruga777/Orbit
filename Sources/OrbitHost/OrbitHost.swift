@@ -78,6 +78,15 @@ public actor OrbitHost {
             let id = try required(p, "id")
             guard try widgetDeployments().contains(where: { $0["id"] == id }) else { throw CodeFailure("Widget not found.") }
             try FileManager.default.removeItem(at: root.appendingPathComponent("Widgets/" + id + ".js")); return ["removed": id]
+        case "setup_folder":
+            guard peer == nil else { throw CodeFailure("Choose folders on the Mac.") }
+            let path = try required(p, "path")
+            guard path.hasPrefix("/") else { throw CodeFailure("Choose an absolute folder path.") }
+            let folder = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw CodeFailure("Choose an existing folder.") }
+            configuration.allowedRoots = [folder.path]; try saveConfiguration()
+            return ["folder": folder.path]
         case "setup_phone":
             guard peer == nil, targets.allSatisfy({ $0.jobID == nil && $0.pendingRequest == nil }) else { throw CodeFailure("Finish active builds before changing phone setup.") }
             let prefix = try required(p, "bundlePrefix")
@@ -306,7 +315,8 @@ public actor OrbitHost {
         let name = try OrbitGitHub.repository(required(p, "repository"))
         let inspection = try await OrbitGitHub.inspect(name)
         guard inspection["compatible"] as? Bool == true else { throw CodeFailure("No Xcode project was found in this repository.") }
-        let folder = root.appendingPathComponent("Repositories/" + name.replacingOccurrences(of: "/", with: "--"))
+        let projects = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("Repositories")
+        let folder = projects.appendingPathComponent(name.replacingOccurrences(of: "/", with: "--"))
         guard !FileManager.default.fileExists(atPath: folder.path) else { throw CodeFailure("This repository is already cloned. Add a local target from \(folder.path).") }
         try FileManager.default.createDirectory(at: folder.deletingLastPathComponent(), withIntermediateDirectories: true)
         let branch = p["branch"] as? String ?? inspection["defaultBranch"] as? String ?? "main"

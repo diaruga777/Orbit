@@ -50,10 +50,10 @@ fixture models into a separate accessory utility. The only view substitution is
 the disk-image path check, so the initial Install Orbit Mac screen can be shown
 without mounting a DMG. Continue enablement is extracted from the actual model.
 
-The 17 PNGs, browsable `index.html` and `manifest.json` go to `dist/setup-screenshots` (or the directory
-passed as the first argument). They cover the ten steps, DMG installation, missing
-tools and first launch, alternate AI integrations, and mock installation progress
-and success. All account/device/pairing values are fictional. Captures show the
+The 13 PNGs, browsable `index.html` and `manifest.json` go to `dist/setup-screenshots` (or the directory
+passed as the first argument). They cover the six steps, DMG installation, missing
+tools, first launch, private installer sign-in, detected accounts, and mock
+installation progress and success. All account/device/pairing values are fictional. Captures show the
 wizard content at 1000 × 740 points in light appearance, without window chrome.
 They are visual fixtures, not physical acceptance or proof of installation.
 
@@ -121,3 +121,20 @@ by the locked Mac. No Apple account sign-in, physical device access, actual
 seven-day/self/extension renewal, installed SpringBoard widget refresh cycle,
 background reliability, public notarization or marketplace acceptance is claimed.
 The review DMG is development signed; release packaging requires Developer ID.
+
+## Simplified onboarding checks
+
+`OrbitSetupTests` covers migration from the retired steps, stable generated app
+identity, Desktop folder defaults/consent, local-only folder configuration, Xcode
+team metadata parsing and physical-phone readiness evidence. Python MCP tests run
+the real loopback HTTP adapter with a synthetic Host RPC and check initialization,
+notifications, tools, token/Origin/Host rejection and payload limits.
+`OrbitSetupBannerUITests` checks both optional setup destinations and persistent
+dismissal in Simulator. The banners do not initiate remote configuration or Apple
+sign-in merely by appearing.
+
+Installer execution, fresh-Mac Homebrew/Xcode download, Apple sign-in/2FA/security
+keys and sudo prompts require separate interactive acceptance; automated checks
+never execute those commands. Physical phone/Personal Team install and renewal,
+remote installation away from home, public notarization and marketplace listing
+remain separate acceptance work.

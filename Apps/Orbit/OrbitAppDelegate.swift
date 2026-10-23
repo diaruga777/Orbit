@@ -53,6 +53,7 @@ import OrbitWire
             window.rootViewController = UINavigationController(rootViewController: controller)
             window.makeKeyAndVisible(); return
         }
+        if ProcessInfo.processInfo.arguments.contains("--reset-extra-setup") { UserDefaults.standard.removeObject(forKey: "Orbit.dismissedExtraSetup") }
         if ProcessInfo.processInfo.arguments.contains("--reset-connection") { connection.pairingCode = "" }
         if ProcessInfo.processInfo.arguments.contains("--editor-preview") {
             window.rootViewController = try? CodeEditorPreview.make(reset: ProcessInfo.processInfo.arguments.contains("--reset-preview"), workspace: ProcessInfo.processInfo.arguments.contains("--workspace-preview"))
@@ -93,7 +94,7 @@ import OrbitWire
             widgetNavigation.tabBarItem = UITabBarItem(title: "Widgets", image: UIImage(systemName: "square.grid.2x2"), tag: 5)
             tabs.viewControllers = [project, apps, widgetNavigation, refresh, settings]
             tabs.selectedIndex = connection.pairingCode.isEmpty ? 4 : min(4, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
-            window.rootViewController = tabs
+            window.rootViewController = OrbitSetupBannerController(tabs: tabs)
         } catch {
             let controller = UIViewController(); controller.view.backgroundColor = .systemBackground
             let label = UILabel(); label.text = error.localizedDescription; label.numberOfLines = 0
@@ -107,8 +108,8 @@ import OrbitWire
         if let url = URLContexts.first?.url { openWidget(url) }
     }
     private func openWidget(_ url: URL) {
-        guard url.isFileURL, let widgets, let tabs = window?.rootViewController as? UITabBarController else { return }
-        tabs.selectedIndex = 2
+        guard url.isFileURL, let widgets, let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+        root.tabs.selectedIndex = 2
         DispatchQueue.main.async { widgets.open(url) }
     }
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {

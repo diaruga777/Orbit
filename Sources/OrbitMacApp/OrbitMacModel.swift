@@ -17,6 +17,7 @@ import OrbitHost
     @Published var scheduled = true
     @Published var hours = "144"
     @Published var personal = true
+    let mcp = OrbitMCPService()
     var host: OrbitHost?
     var server: OrbitServer?
     init() {
@@ -32,7 +33,7 @@ import OrbitHost
                     return alert.runModal() == .alertFirstButtonReturn
                 } }
                 try await server.start(); status = "Ready"
-                while !Task.isCancelled { await refresh(); try? await Task.sleep(for: .seconds(5)) }
+                while !Task.isCancelled { mcp.startIfNeeded(); await refresh(); try? await Task.sleep(for: .seconds(5)) }
             } catch { status = error.localizedDescription }
         }
     }
