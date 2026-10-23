@@ -6,6 +6,7 @@ import OrbitCore
 actor CodeRefreshDevice {
     private var checkedUntil = Date.distantPast
     func recentlyChecked() -> Bool { Date() < checkedUntil }
+    func hasVerifiedConnection() throws -> Bool { try secrets.read("verified-connection") != nil }
     private let gateway = IdeviceGateway()
     private let secrets = CodeRefreshSecrets()
     func importPairing(_ data: Data) throws {
@@ -17,6 +18,7 @@ actor CodeRefreshDevice {
         let xml = try PropertyListSerialization.data(fromPropertyList: object, format: .xml, options: 0)
         try IdeviceGateway.validatePairingForRefresh(String(decoding: xml, as: UTF8.self))
         try secrets.write(xml, account: "pairing")
+        try secrets.remove("verified-connection")
     }
     func hasPairing() throws -> Bool { try secrets.read("pairing") != nil }
     func connect() async throws -> String {
@@ -35,6 +37,7 @@ actor CodeRefreshDevice {
             throw CodeFailure("This pairing file connects to a different phone.")
         }
         try secrets.write(Data(udid.utf8), account: "paired-udid")
+        try secrets.write(Data(udid.utf8), account: "verified-connection")
         checkedUntil = Date().addingTimeInterval(180)
         return udid
         #endif

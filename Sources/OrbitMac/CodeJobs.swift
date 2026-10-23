@@ -5,13 +5,14 @@ import OrbitCore
 public actor CodeJobs {
     public let root: URL
     private var jobs: [String: CodeJob] = [:]
+    private let phoneBundleID: String?
     private var processes: [String: CodeProcess] = [:]
     private var waiting: [(CodeRequest, CodeProject, CodeJob, CodeProcess)] = []
     private let installGate = CodeInstallHandoffGate()
     private var workloads: [String: Int] = [:]
     private var requests: [String: String] = [:]
-    public init(root: URL) throws {
-        self.root = root
+    public init(root: URL, phoneBundleID: String? = nil) throws {
+        self.root = root; self.phoneBundleID = phoneBundleID
         workloads = (try? JSONDecoder().decode([String: Int].self, from: Data(contentsOf: root.appendingPathComponent("BuildWorkloads.json")))) ?? [:]
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         CodeProfileRefresh.recover(root: root)
@@ -21,6 +22,7 @@ public actor CodeJobs {
                 if job.state == .running { job.progress?.stoppedAt = Date(); job.state = .failed; job.failureMessage = "Mac companion restarted before this job completed."; job.log += "\n" + job.failureMessage! }
                 try JSONEncoder().encode(job).write(to: url, options: .atomic)
                 jobs[job.id] = job
+                if let app = job.installation { try CodeInstalledAppStore(root: root.deletingLastPathComponent()).record(app) }
                 if let request = job.requestID { requests[request] = job.id }
             }
         }
@@ -88,6 +90,12 @@ public actor CodeJobs {
     func recordCompilation(_ id: String, revision: String?) {
         guard var job = jobs[id] else { return }
         job.builtAt = Date(); job.commitHash = revision; jobs[id] = job; persist(job)
+    }
+    func recordInstallation(_ id: String, app: CodeInstalledApp) throws {
+        guard var job = jobs[id] else { throw CodeFailure("Unknown build job.") }
+        job.installation = app
+        try persistRequired(job); jobs[id] = job
+        try CodeInstalledAppStore(root: root.deletingLastPathComponent()).record(app)
     }
     public func status(_ id: String) throws -> CodeJob {
         guard var job = jobs[id] else { throw CodeFailure("This build job is no longer available.") }
@@ -220,6 +228,10 @@ public actor CodeJobs {
         } catch is CancellationError { completed.state = .cancelled }
         catch { completed.state = .failed; completed.failureMessage = error.localizedDescription; completed.log = "\n" + error.localizedDescription }
         if jobs[job.id]?.state == .cancelled { completed.state = .cancelled }
+        if let app = jobs[job.id]?.installation, app.bundleID == phoneBundleID {
+            try? await CodeAppleEndpointContainer(root: root.appendingPathComponent("Receipts"), bundleID: app.bundleID).writeInstallation(app)
+        }
+        completed.installation = jobs[job.id]?.installation
         completed.artifact = jobs[job.id]?.artifact
         completed.builtAt = jobs[job.id]?.builtAt
         completed.commitHash = jobs[job.id]?.commitHash

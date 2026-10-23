@@ -4,6 +4,9 @@ import OrbitCore
 /// Durable compilation/artifact/install dimensions, independent of the lifetime
 /// of a control connection. A single executor serializes installs on this Mac.
 public actor CodeOvernightService {
+    private let installedAppsRoot: URL
+    private let phoneBundleID: String?
+    private let installedApps: CodeInstalledAppStore
     private let store: CodeOvernightStore
     private let builds: CodeJobs
     private let artifacts: CodeArtifactStore
@@ -13,8 +16,10 @@ public actor CodeOvernightService {
     private var installBusy = false
     private var recovered = false
     private let proxyAvailable: Bool
-    public init(root: URL, builds: CodeJobs, installer: (any CodeArtifactInstalling)? = nil, remote: CodeReverseInstallerConfiguration? = nil, journal: CodeOvernightStore? = nil) throws {
-        self.builds = builds
+    public init(root: URL, builds: CodeJobs, installer: (any CodeArtifactInstalling)? = nil, remote: CodeReverseInstallerConfiguration? = nil, journal: CodeOvernightStore? = nil, phoneBundleID: String? = nil) throws {
+        self.builds = builds; self.phoneBundleID = phoneBundleID
+        installedApps = try CodeInstalledAppStore(root: root)
+        installedAppsRoot = root.appendingPathComponent("Receipts")
         let journal = try journal ?? CodeOvernightStore(root: root.appendingPathComponent("Overnight")); store = journal
         artifacts = try CodeArtifactStore(root: root.appendingPathComponent("Jobs/Artifacts"))
         let native = CodeNativeInstaller(logs: root.appendingPathComponent("Overnight"), record: { try? journal.event($0) })
@@ -172,6 +177,15 @@ public actor CodeOvernightService {
             case .cancelled: current.state = .cancelled
             }
             current.revision += 1; try store.save(current)
+            if let date = current.installedAt {
+                let installed = CodeInstalledApp(deviceID: artifact.target.deviceID, bundleID: artifact.bundleID,
+                    name: artifact.target.project.scheme, version: artifact.version, build: artifact.build,
+                    installedAt: date, profileExpiresAt: artifact.profileExpiresAt)
+                try installedApps.record(installed)
+                if installed.bundleID == phoneBundleID {
+                    try? await CodeAppleEndpointContainer(root: installedAppsRoot, bundleID: installed.bundleID).writeInstallation(installed)
+                }
+            }
         } catch {
             try? store.event(CodeOvernightDiagnosticEvent(stage: "installPersistence", correlationID: id, outcome: "failed"))
         }

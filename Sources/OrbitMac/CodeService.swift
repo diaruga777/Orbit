@@ -16,7 +16,7 @@ public actor CodeService {
     private var savedReplies: [String: (Data, Data)] = [:]
     public init(root: URL, installBundleID: String? = nil, installHelper: URL? = nil, checkAccess: @escaping @Sendable (String) async throws -> Void = { _ in }) throws {
         self.root = root; self.checkAccess = checkAccess
-        let builds = try CodeJobs(root: root.appendingPathComponent("Jobs")); jobs = builds
+        let builds = try CodeJobs(root: root.appendingPathComponent("Jobs"), phoneBundleID: installBundleID); jobs = builds
         let journal = try CodeOvernightStore(root: root.appendingPathComponent("Overnight"))
         if let installBundleID {
             let directory = root.appendingPathComponent("Endpoints", isDirectory: true)
@@ -31,7 +31,42 @@ public actor CodeService {
         let remote: CodeReverseInstallerConfiguration?
         if let reverseFlows, let installHelper, let installBundleID { remote = CodeReverseInstallerConfiguration(hub: reverseFlows, helper: installHelper, forwarderBundleID: installBundleID, diagnostics: root.appendingPathComponent("Overnight")) }
         else { remote = nil }
-        overnight = try CodeOvernightService(root: root, builds: builds, remote: remote, journal: journal)
+        overnight = try CodeOvernightService(root: root, builds: builds, remote: remote, journal: journal, phoneBundleID: installBundleID)
+    }
+    public func installedApps(deviceID: String? = nil) async throws -> [CodeInstalledApp] {
+        // Backfill retained jobs from before the separate installation journal.
+        let store = try CodeInstalledAppStore(root: root)
+        for job in try await overnight.status() {
+            if let date = job.installedAt, let artifact = job.artifact {
+                try store.record(CodeInstalledApp(deviceID: artifact.target.deviceID, bundleID: artifact.bundleID,
+                    name: artifact.target.project.scheme, version: artifact.version, build: artifact.build,
+                    installedAt: date, profileExpiresAt: artifact.profileExpiresAt))
+            }
+        }
+        let known = try store.apps()
+        guard let deviceID else { return known }
+        guard !deviceID.isEmpty, deviceID.count <= 128,
+              deviceID.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else {
+            throw CodeFailure("Choose a valid phone.")
+        }
+        let selected = known.filter { $0.deviceID == deviceID }
+        let logs = root.appendingPathComponent("ExpiryReadback")
+        try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        // Unreachable phones retain their last confirmed evidence. A successful
+        // native inventory drops removed/replaced revisions, never other phones.
+        if let apps = try? await CodeNativeInstaller(logs: logs).currentApps(deviceID: deviceID) {
+            let current = selected.filter { record in apps.contains {
+                $0["bundleIdentifier"] as? String == record.bundleID && $0["version"] as? String == record.version &&
+                    ($0["bundleVersion"] as? String ?? $0["buildVersion"] as? String) == record.build
+            } }
+            // An install may finish while inventory suspends this actor. Only
+            // replace records that were included in the inventory request.
+            let newer = try store.apps().filter { $0.deviceID == deviceID && !selected.contains($0) }
+            let snapshot = CodeExpiryReminder.latest(current + newer)
+            try store.replace(deviceID: deviceID, with: snapshot)
+            return snapshot
+        }
+        return selected
     }
     public func refreshBuild(jobID: String, offset: Int) async throws -> CodeRefreshArchiveChunk {
         guard let artifact = try await overnight.status().first(where: { $0.id == jobID || $0.compilationJobID == jobID })?.artifact else {

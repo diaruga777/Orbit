@@ -17,7 +17,7 @@ import UIKit
         let heading = UIStackView(arrangedSubviews: [title, close]); heading.spacing = 12
         close.setContentHuggingPriority(.required, for: .horizontal)
         let refresh = UIButton(type: .system); refresh.setTitle("Phone-only refresh", for: .normal)
-        refresh.addAction(UIAction { [weak self] _ in self?.tabs.selectedIndex = self?.tabs.viewControllers?.firstIndex { $0.tabBarItem.tag == 4 } ?? 0 }, for: .touchUpInside)
+        refresh.addAction(UIAction { [weak self] _ in self?.openRefreshSetup() }, for: .touchUpInside)
         let remote = UIButton(type: .system); remote.setTitle("Remote builds", for: .normal)
         remote.addAction(UIAction { [weak self] _ in self?.showRemoteSetup() }, for: .touchUpInside)
         let actions = UIStackView(arrangedSubviews: [refresh, remote]); actions.spacing = 20; actions.distribution = .fillEqually
@@ -35,6 +35,15 @@ import UIKit
             stack.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         tabs.didMove(toParent: self)
+    }
+    func openRefreshSetup() {
+        guard let navigation = tabs.viewControllers?.first(where: { $0.tabBarItem.tag == 4 }) as? UINavigationController else { return }
+        navigation.popToRootViewController(animated: false)
+        tabs.selectedViewController = navigation
+        if let controller = navigation.topViewController as? UITableViewController {
+            controller.loadViewIfNeeded()
+            controller.tableView.setContentOffset(.zero, animated: false)
+        }
     }
     private func showRemoteSetup() {
         let alert = UIAlertController(title: "Build away from home", message: "In Orbit Mac, open Phone & Remote Setup and enable remote connections. Reopen Orbit Mac, create a new connection code, and paste it in this phone’s Mac tab.\n\nKeep your Mac awake with Orbit running. Authorize this phone by cable first so Apple installations can work remotely too.", preferredStyle: .alert)

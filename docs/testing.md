@@ -211,3 +211,28 @@ group. Simulator acceptance should check sharing a .js file from Files, cold and
 warm Open in Orbit, file selection from either tab, automatic review badges while
 connected to a fixture Mac, offline/relaunch recovery, and approval before native
 rendering. Physical delivery/background reliability remains separate acceptance.
+
+## Expiry setup reminder
+
+`CodeExpiryReminderTests` covers earliest expiry, exact 24-hour lead time, actual
+paid-profile dates, the seven-day fallback, late sync, expired evidence, confirmed
+renewals, durable per-device snapshots, legacy wire fields and exclusion of
+uninstalled build artifacts. Retained-install backfill uses synthetic journals
+and never contacts Apple devices. Simulator navigation checks exercise the same
+notification destination with the banner dismissed and Refresh in overflow tabs.
+
+Physical acceptance must separately check notification permission/denial,
+background delivery before real Personal Team and paid-profile expiry, tapping
+from a terminated app, receipt delivery through CoreDevice, multiple phones,
+app removal, and cancellation after setup/confirmed renewal. Simulator and unit
+checks do not establish physical delivery, Apple account status or renewal.
+
+Expiry reminder verification (2026-10-23): 149 Swift tests passed with four
+optional fixtures skipped; the packaged phone-source fixture passed separately.
+All 14 Python tests, both Go race suites and helper vet passed. The iOS Simulator
+client and ad hoc Mac review bundle built and the bundle passed signature checks.
+Three Simulator UI tests passed, including OS notification delivery while Orbit
+was terminated, tapping it into Refresh setup, and navigation with a dismissed
+banner. Notification response completion stays on the main thread for UIKit’s
+cold-launch scene handling. No physical device, Apple sign-in, actual profile
+renewal, public notarization or marketplace acceptance was performed.

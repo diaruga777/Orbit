@@ -76,7 +76,10 @@ import OrbitAppletUI
         do { try store.remove(scripts[indexPath.row].id); WidgetCenter.shared.reloadAllTimelines(); reload() } catch { show(error.localizedDescription) }
     }
     private func importFile() { let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.javaScript, .plainText]); picker.delegate = self; present(picker, animated: true) }
-    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { if let url = urls.first { open(url) } }
+    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        controller.dismiss(animated: true) { self.open(url) }
+    }
     public func open(_ url: URL) {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
         do { importSource(try OrbitJavaScriptFile(url: url)) } catch { show(error.localizedDescription) }

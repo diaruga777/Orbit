@@ -84,6 +84,7 @@ public struct CodeJob: Codable, Equatable, Sendable {
     public var builtAt: Date?
     public var commitHash: String?
     public var artifact: CodeBuildArtifact?
+    public var installation: CodeInstalledApp?
     public init(id: String, title: String, state: State = .running, log: String = "") {
         self.id = id; self.title = title; self.state = state; self.log = log; startedAt = Date()
     }

@@ -32,6 +32,7 @@ import OrbitCore
                 certificate = try await engine.account.hasCertificate()
                 tableView.reloadData()
                 if let status = try? await engine.readiness() { readinessChanged?(status) }
+                NotificationCenter.default.post(name: .codeRefreshStateChanged, object: nil)
             } catch { message(error.localizedDescription) }
         }
     }

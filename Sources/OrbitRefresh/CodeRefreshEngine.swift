@@ -23,6 +23,26 @@ public actor CodeRefreshEngine {
         }
         return ["cache": cached, "account": team != nil, "certificate": try await account.hasCertificate(), "pairing": try await device.hasPairing(), "connection": await device.recentlyChecked()]
     }
+    public func setupComplete() async throws -> Bool {
+        let status = try await readiness()
+        let verified = try await device.hasVerifiedConnection()
+        return ["cache", "account", "certificate", "pairing"].allSatisfy { status[$0] == true } && verified
+    }
+    /// The running bundle is installed evidence even before phone-only setup.
+    /// Cached imports do not establish installation on this phone.
+    public func installedSelf(deviceID: String, receipt: CodeInstalledApp?) throws -> CodeInstalledApp? {
+        guard let bundleID = Bundle.main.bundleIdentifier,
+              let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String else { return nil }
+        let profiles = try? Self.products(Bundle.main.bundleURL).map {
+            try ProvisioningProfile(data: Data(contentsOf: $0.appendingPathComponent("embedded.mobileprovision")))
+        }
+        let expiry = profiles?.map(\.expirationDate).min()
+        let matching = receipt.flatMap { $0.bundleID == bundleID && $0.version == version && $0.build == build ? $0 : nil }
+        guard expiry != nil || matching != nil else { return nil }
+        return CodeInstalledApp(deviceID: deviceID, bundleID: bundleID, name: "Orbit", version: version, build: build,
+            installedAt: matching?.installedAt ?? .distantPast, profileExpiresAt: expiry ?? matching?.profileExpiresAt)
+    }
     public func verifyConnection() async throws {
         guard !busy else { throw CodeFailure("Wait for the current refresh to finish.") }
         _ = try await device.connect()

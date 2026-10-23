@@ -70,6 +70,7 @@ public final class CodeLocalRefreshStore: @unchecked Sendable {
         let file = directory.appendingPathComponent("refresh.json")
         try JSONEncoder().encode(app).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        NotificationCenter.default.post(name: .codeRefreshStateChanged, object: nil)
     }
     public func remove(_ id: String) throws {
         lock.lock(); defer { lock.unlock() }
@@ -89,4 +90,8 @@ public struct CodeRefreshArchiveChunk: Codable, Sendable {
     public init(artifactID: String, digest: String, byteCount: Int, offset: Int, bytes: Data) {
         self.artifactID = artifactID; self.digest = digest; self.byteCount = byteCount; self.offset = offset; self.bytes = bytes
     }
+}
+
+extension Notification.Name {
+    public static let codeRefreshStateChanged = Notification.Name("Orbit.refreshStateChanged")
 }

@@ -65,6 +65,7 @@ targets:
     info:
       path: Apps/OrbitShare/Info.plist
       properties:
+        CFBundleDisplayName: Orbit
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         OrbitWidgetKeychainGroup: $(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios

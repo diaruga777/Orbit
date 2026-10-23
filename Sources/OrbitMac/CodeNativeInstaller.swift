@@ -67,6 +67,30 @@ public struct CodeNativeInstaller: CodeArtifactInstalling {
                 error: CodeOvernightError(.unknown, stage: handedOff ? "readback" : "connection", recovery: "Couldn’t confirm the phone’s status. Check its connection and refresh."))
         }
     }
+    public func currentApps(deviceID: String) async throws -> [[String: Any]] {
+        let process = CodeProcess(), prefix = logs.appendingPathComponent(UUID().uuidString)
+        defer { pruneDiagnostics(protecting: prefix.lastPathComponent) }
+        let details = try await query(["device", "info", "details", "--device", deviceID], prefix: prefix, stage: "identity", process: process)
+        let result = details["result"] as? [String: Any] ?? [:]
+        let properties = result["properties"] as? [String: Any] ?? [:]
+        let hardware = properties["hardware"] as? [String: Any] ?? result["hardwareProperties"] as? [String: Any] ?? [:]
+        guard hardware["udid"] as? String == deviceID, hardware["reality"] as? String == "physical" else {
+            throw CodeFailure("The Apple connection doesn’t match this phone.")
+        }
+        let document = try await query(["device", "info", "apps", "--device", deviceID], prefix: prefix, stage: "apps", process: process)
+        guard let apps = (document["result"] as? [String: Any])?["apps"] as? [[String: Any]] else { throw CodeFailure("Couldn’t read installed apps.") }
+        return apps
+    }
+    public func confirm(bundleID: String, version: String, build: String, deviceID: String, process: CodeProcess) async throws -> Bool {
+        let prefix = logs.appendingPathComponent(UUID().uuidString)
+        defer { pruneDiagnostics(protecting: prefix.lastPathComponent) }
+        let document = try await query(["device", "info", "apps", "--device", deviceID, "--bundle-id", bundleID],
+            prefix: prefix, stage: "readback", process: process)
+        return ((document["result"] as? [String: Any])?["apps"] as? [[String: Any]] ?? []).contains {
+            $0["bundleIdentifier"] as? String == bundleID && $0["version"] as? String == version &&
+                ($0["bundleVersion"] as? String ?? $0["buildVersion"] as? String) == build
+        }
+    }
     private func installed(_ artifact: CodeBuildArtifact, prefix: URL, stage: String, process: CodeProcess) async throws -> Bool {
         let document = try await query(["device", "info", "apps", "--device", artifact.target.deviceID, "--bundle-id", artifact.bundleID], prefix: prefix, stage: stage, process: process)
         return Self.matchesReadback(document, artifact: artifact)

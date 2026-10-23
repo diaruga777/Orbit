@@ -66,6 +66,21 @@ struct CodeProfileRefresh {
             Self(directory: directory, entries: entries).restore()
         }
     }
+    /// Read every embedded profile, including extensions. Missing evidence uses
+    /// the install-time fallback; never infer a year from a team label.
+    static func expiration(app: URL, root: URL, process: CodeProcess) async throws -> Date {
+        let products = [app] + ((try? FileManager.default.contentsOfDirectory(at: app.appendingPathComponent("PlugIns"), includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "appex" }
+        var dates: [Date] = []
+        for product in products {
+            let decoded = root.appendingPathComponent(UUID().uuidString + ".plist"), log = root.appendingPathComponent(UUID().uuidString + ".log")
+            defer { try? FileManager.default.removeItem(at: decoded); try? FileManager.default.removeItem(at: log) }
+            guard try await process.run("/usr/bin/security", ["cms", "-D", "-i", product.appendingPathComponent("embedded.mobileprovision").path, "-o", decoded.path], directory: root.path, log: log, timeout: 20) == 0,
+                  let profile = try PropertyListSerialization.propertyList(from: Data(contentsOf: decoded), format: nil) as? [String: Any],
+                  let expiry = profile["ExpirationDate"] as? Date else { throw CodeFailure("Couldn’t read the app’s provisioning expiry.") }
+            dates.append(expiry)
+        }
+        return dates.min()!
+    }
     static func verify(app: URL, minimumHours: Int?, root: URL, process: CodeProcess) async throws {
         guard let hours = minimumHours else { return }
         let products = [app] + ((try? FileManager.default.contentsOfDirectory(at: app.appendingPathComponent("PlugIns"), includingPropertiesForKeys: nil)) ?? []).filter { $0.pathExtension == "appex" }

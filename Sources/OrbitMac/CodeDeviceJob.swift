@@ -72,6 +72,16 @@ extension CodeJobs {
             } catch {
                 throw CodeFailure("The app built, but installation failed. Unlock your phone, check its connection to Xcode, then try again. See the Mac job log for details.")
             }
+            let installer = CodeNativeInstaller(logs: root)
+            guard let version = plist?["CFBundleShortVersionString"] as? String, let build = plist?["CFBundleVersion"] as? String,
+                  try await installer.confirm(bundleID: bundle, version: version, build: build, deviceID: options.deviceID, process: process) else {
+                throw CodeFailure("The installation hasn’t been confirmed on your phone. Check its connection before trying again.")
+            }
+            let installed = CodeInstalledApp(deviceID: options.deviceID, bundleID: bundle,
+                name: plist?["CFBundleDisplayName"] as? String ?? plist?["CFBundleName"] as? String ?? project.scheme,
+                version: version, build: build, installedAt: Date(),
+                profileExpiresAt: try? await CodeProfileRefresh.expiration(app: appURL, root: root, process: process))
+            try recordInstallation(job.id, app: installed)
             if options.installOnly != true {
                 stage(job.id, "Launching on your phone…", from: 0.93, to: 0.97, seconds: 10)
                 try await command("/usr/bin/xcrun", ["devicectl", "device", "process", "launch", "--device", options.deviceID, "--terminate-existing", bundle], directory: checkout.directory.path, process: process, log: log)
