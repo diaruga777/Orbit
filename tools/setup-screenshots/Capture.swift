@@ -123,6 +123,7 @@ struct ScreenshotPhone { var id: String; var name: String }
             let view = NSHostingView(rootView: OrbitSetupView(setup: setup, model: model)
                 .environment(\.colorScheme, .light)
                 .environment(\.controlActiveState, .active)
+                .allowsHitTesting(false)
                 .background(Color(nsColor: .windowBackgroundColor)))
             window.contentView = view
             window.setContentSize(NSSize(width: 1000, height: 740))
