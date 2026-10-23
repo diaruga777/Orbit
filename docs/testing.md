@@ -196,3 +196,18 @@ consent/action/persistence across relaunch, and existing widget import/preview.
 Keychain UI checks use local ad hoc signing, without Apple account sign-in.
 Physical phone installation, Personal Team lifetime renewal, public notarization
 and marketplace listing were not performed.
+
+## Expiry setup reminder
+
+`CodeExpiryReminderTests` covers earliest expiry, exact 24-hour lead time, actual
+paid-profile dates, the seven-day fallback, late sync, expired evidence, confirmed
+renewals, durable per-device snapshots, legacy wire fields and exclusion of
+uninstalled build artifacts. Retained-install backfill uses synthetic journals
+and never contacts Apple devices. Simulator navigation checks exercise the same
+notification destination with the banner dismissed and Refresh in overflow tabs.
+
+Physical acceptance must separately check notification permission/denial,
+background delivery before real Personal Team and paid-profile expiry, tapping
+from a terminated app, receipt delivery through CoreDevice, multiple phones,
+app removal, and cancellation after setup/confirmed renewal. Simulator and unit
+checks do not establish physical delivery, Apple account status or renewal.

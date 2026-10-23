@@ -30,8 +30,9 @@ public struct CodeArtifactStore: Sendable {
             let (digest, size) = try Self.digest(product)
             let used = try manifests().reduce(Int64(0)) { $0 + $1.byteCount }
             guard size <= quota, used <= quota - size else { throw CodeFailure("The retained build limit is full. Remove old builds on your Mac, then retry.") }
-            let artifact = CodeBuildArtifact(id: id, jobID: jobID, target: target, bundleID: bundle, version: version,
+            var artifact = CodeBuildArtifact(id: id, jobID: jobID, target: target, bundleID: bundle, version: version,
                 build: build, commit: commit, digest: digest, signingAuthority: signing, byteCount: size)
+            artifact.profileExpiresAt = try? await CodeProfileRefresh.expiration(app: product, root: root, process: process)
             let manifest = directory.appendingPathComponent("artifact.json")
             try JSONEncoder().encode(artifact).write(to: manifest, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: manifest.path)

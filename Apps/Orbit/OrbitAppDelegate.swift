@@ -9,6 +9,7 @@ import OrbitWire
 
 @main final class OrbitAppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        OrbitExpiryNotifications.shared.start()
         CodeRefreshBackground.register()
         let identifier = (Bundle.main.bundleIdentifier ?? "org.example.orbit.ios") + ".overnight-builds"
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
@@ -53,6 +54,10 @@ import OrbitWire
             })
             window.rootViewController = UINavigationController(rootViewController: controller)
             window.makeKeyAndVisible(); return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--open-expiry-notification") {
+            UserDefaults.standard.set(true, forKey: "Orbit.dismissedExtraSetup")
+            UserDefaults.standard.set(true, forKey: "Orbit.openRefreshSetup")
         }
         if ProcessInfo.processInfo.arguments.contains("--reset-extra-setup") { UserDefaults.standard.removeObject(forKey: "Orbit.dismissedExtraSetup") }
         if ProcessInfo.processInfo.arguments.contains("--reset-connection") { connection.pairingCode = "" }
@@ -110,6 +115,7 @@ import OrbitWire
             window.rootViewController = controller
         }
         window.makeKeyAndVisible()
+        openRefreshSetupIfNeeded()
         if let url = options.urlContexts.first?.url { openWidget(url) }
     }
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
@@ -127,15 +133,31 @@ import OrbitWire
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         UserDefaults.standard.set(tabBarController.selectedIndex, forKey: "Orbit.selectedTab")
     }
+    func openRefreshSetupIfNeeded() {
+        guard UserDefaults.standard.bool(forKey: "Orbit.openRefreshSetup"),
+              let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+        root.dismiss(animated: false)
+        root.openRefreshSetup()
+        UserDefaults.standard.removeObject(forKey: "Orbit.openRefreshSetup")
+    }
+    private var expirySync: Task<Void, Never>?
     private var readiness: Task<Void, Never>?
     func sceneDidBecomeActive(_ scene: UIScene) {
+        openRefreshSetupIfNeeded()
+        expirySync?.cancel()
+        expirySync = Task {
+            while !Task.isCancelled {
+                await OrbitExpiryNotifications.shared.synchronize()
+                do { try await Task.sleep(for: .seconds(60)) } catch { break }
+            }
+        }
         readiness?.cancel()
         readiness = Task { await connection.offerInstallWindow(seconds: 3600) }
         Task {
             if let readiness = try? await CodeRefreshEngine.shared.readiness() { _ = try? await connection.rpc("phone_setup_status", readiness) }
         }
     }
-    func sceneDidEnterBackground(_ scene: UIScene) { readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
+    func sceneDidEnterBackground(_ scene: UIScene) { expirySync?.cancel(); expirySync = nil; Task { await OrbitExpiryNotifications.shared.update() }; readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
 }
 final class OrbitPhoneConnection: @unchecked Sendable {
     static let shared = OrbitPhoneConnection()

@@ -12,6 +12,16 @@ public struct CodeAppleEndpointContainer: CodeEndpointContainerAccess {
         self.root = root; self.bundleID = bundleID
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     }
+    /// Public receipt identifies this installation's phone without granting any
+    /// installation authority. Its fixed path survives app updates.
+    public func writeInstallation(_ app: CodeInstalledApp) async throws {
+        try await withDevice(app.deviceID) { scratch, process in
+            let source = scratch.appendingPathComponent("installation.json")
+            try JSONEncoder().encode(app).write(to: source, options: .atomic)
+            _ = try await command(["device", "copy", "to", "--device", app.deviceID, "--source", source.path,
+                "--destination", CodeInstalledApp.phoneReceiptPath, "--domain-type", "appDataContainer", "--domain-identifier", bundleID], scratch: scratch, process: process)
+        }
+    }
     public func writeChallenge(_ data: Data, id: String, deviceID: String) async throws {
         guard data.count <= 4096 else { throw CodeFailure("Invalid phone authorization challenge.") }
         let remote = try CodeEndpointEnrollment.path(id: id, proof: false)

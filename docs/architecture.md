@@ -119,3 +119,37 @@ capability or Orbit connection is needed by the standalone host. First launch
 and changed script digests require local consent. Builds/install/schedules go
 through the existing trusted target and detached committed build pipeline; the
 export itself never installs.
+
+## Installed-app expiry and setup reminders
+
+Mac builds retain the earliest embedded app/extension profile expiration in
+`CodeBuildArtifact.profileExpiresAt`. Confirmed native editor installs and
+retained scheduled installs record device, bundle, version/build, installation
+time and optional expiry in a separate `installed-apps.json` journal. Compilation,
+IPA caching, a control connection and uncertain installation do not create this
+evidence. Old retained confirmed jobs backfill the journal; missing profile dates
+use seven days from confirmed installation, never an assumed paid-team year.
+
+After installing Orbit, the Mac copies a public receipt to the fixed
+`Documents/OrbitInstallation.json` path in that app’s private container using the
+native, UDID-verified Apple connection. This identifies the phone before optional
+remote authorization; it grants no installation authority and holds no secrets.
+Existing endpoint bindings provide an alternative for older installations.
+The phone’s `installed_apps` RPC requests its device snapshot. A successful native
+inventory removes missing/replaced revisions; unavailable devices keep the last
+confirmed snapshot. Each phone filters and persists only its own entries. The
+running Orbit bundle supplies its profile expiry even without a Mac connection;
+confirmed phone-side renewals supersede older Mac evidence. Imports alone do not.
+Apps installed outside Orbit cannot generally be inventoried from an iOS sandbox.
+
+The phone syncs on foreground entry and once a minute while active. Local refresh
+changes also recompute the reminder. `UNUserNotificationCenter` owns a single
+non-repeating request 24 hours before the earliest future expiry. A first late
+sync inside that window delivers immediately; repeated checks do not repeat a
+delivered reminder for the same expiry. Renewal replaces the pending deadline.
+Configured account, certificate, pairing file and current Orbit cache cancel the
+setup reminder; a transient VPN disconnect does not reclassify setup as incomplete.
+Notification authorization is requested in the foreground only when there is an
+installed app to protect. Denial leaves the existing setup banner available.
+Tapping the notification uses the same Refresh destination as the banner, including
+cold launches and overflow tabs. It does not start Apple sign-in or installation.

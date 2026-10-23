@@ -1,6 +1,15 @@
 import XCTest
 
 final class OrbitSetupBannerUITests: XCTestCase {
+    func testExpiryNotificationOpensSetupWithDismissedBannerOnColdLaunch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--open-expiry-notification", "--reset-connection"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Refresh"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Apple Account"].exists)
+        XCTAssertTrue(app.staticTexts["Cache Orbit"].exists)
+        XCTAssertFalse(app.staticTexts["Take Orbit with you"].exists)
+    }
     func testOptionalSetupRoutesAndDismissalSurviveRelaunch() {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-extra-setup"]

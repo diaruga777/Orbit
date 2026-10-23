@@ -60,6 +60,7 @@ public struct CodeBuildArtifact: Codable, Equatable, Sendable {
     public var signingAuthority: String
     public var createdAt: Date
     public var byteCount: Int64
+    public var profileExpiresAt: Date?
     public init(id: String, jobID: String, target: CodeOvernightTarget, bundleID: String, version: String,
                 build: String, commit: String, digest: String, signingAuthority: String, byteCount: Int64, createdAt: Date = Date()) {
         self.id = id; self.jobID = jobID; self.target = target; self.bundleID = bundleID; self.version = version

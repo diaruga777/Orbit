@@ -55,6 +55,7 @@ public actor OrbitHost {
             let data = try JSONSerialization.data(withJSONObject: p)
             let response = await service.handle(data, authenticatedPeerID: peer ?? "local-mac")
             return try JSONSerialization.jsonObject(with: response)
+        case "installed_apps": return try object(await service.installedApps(deviceID: p["deviceID"] as? String))
         case "browse": return try browse(p)
         case "targets":
             await populateMissingTargetIcons { project in
