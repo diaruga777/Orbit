@@ -78,7 +78,7 @@ final class CodeExpiryReminderTests: XCTestCase {
         let service = try CodeService(root: root)
         let before = try await service.installedApps()
         XCTAssertTrue(before.isEmpty)
-        job.state = .succeeded; job.installedAt = now; job.artifact?.profileExpiresAt = now.addingTimeInterval(365 * 86400)
+        job.revision += 1; job.state = .succeeded; job.installedAt = now; job.artifact?.profileExpiresAt = now.addingTimeInterval(365 * 86400)
         try store.save(job)
         let restarted = try CodeService(root: root)
         let apps = try await restarted.installedApps()
