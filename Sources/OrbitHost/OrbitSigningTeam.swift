@@ -12,6 +12,7 @@ extension OrbitSetup {
     /// metadata and certificate subjects, never account tokens or private keys.
     public func signingTeams() -> [OrbitSigningTeam] {
         let preferences = UserDefaults(suiteName: "com.apple.dt.Xcode")
+        _ = preferences?.synchronize() // Reload after the user returns from Xcode Accounts.
         var teams = Self.signingTeams(in: preferences?.dictionary(forKey: "IDEProvisioningTeamManagerUserDefaultDictionary") ?? [:])
         var items: CFTypeRef?
         let query: [CFString: Any] = [kSecClass: kSecClassIdentity, kSecReturnRef: true, kSecMatchLimit: kSecMatchLimitAll]

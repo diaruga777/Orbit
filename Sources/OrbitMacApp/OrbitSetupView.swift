@@ -33,7 +33,7 @@ struct OrbitSetupView: View {
             }.padding(36).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }.frame(minWidth: 850, minHeight: 660)
         .task(id: setup.state.step) {
-            if setup.state.step == .phone { setup.listPhones(model) }
+            if setup.state.step == .phone && !setup.state.installed { setup.listPhones(model) }
             if setup.state.step == .account { setup.checkAccounts() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in

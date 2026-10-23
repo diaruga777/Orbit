@@ -133,8 +133,31 @@ notifications, tools, token/Origin/Host rejection and payload limits.
 dismissal in Simulator. The banners do not initiate remote configuration or Apple
 sign-in merely by appearing.
 
+`scripts/test_setup_installer.sh` drives a synthetic `/dev/tty` challenge through
+the production terminal adapter, checking secure reply forwarding and redaction
+without running the real installer.
+
 Installer execution, fresh-Mac Homebrew/Xcode download, Apple sign-in/2FA/security
 keys and sudo prompts require separate interactive acceptance; automated checks
 never execute those commands. Physical phone/Personal Team install and renewal,
 remote installation away from home, public notarization and marketplace listing
 remain separate acceptance work.
+
+## Onboarding verification (2026-10-23)
+
+- Bootstrap generated the source-built transport and current Xcode project in a
+  detached checkout.
+- 135 Swift tests passed with four optional fixture checks skipped. The packaged
+  phone-source/resume check passed separately against the newly built Mac bundle.
+- Python stdio/HTTP MCP tests, both Go race suites and Apple helper vet passed.
+- The iOS Simulator client and complete ad-hoc Mac review bundle built. The
+  packaged Mac app automatically started MCP and answered `orbit_status` using an
+  isolated empty catalog. No device-discovery command or installer was invoked by
+  this runtime check.
+- Two Simulator UI tests passed: optional banner destinations/dismissal and the
+  existing JavaScript consent/native preview flow. The 13 inert wizard screenshots
+  and synthetic interactive terminal probe passed.
+
+Fresh-Mac Homebrew/Xcode installation, Apple authentication, physical installation
+and renewal, remote-network installation, public notarization and marketplace
+listing were not performed.

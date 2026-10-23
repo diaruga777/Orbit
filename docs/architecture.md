@@ -46,7 +46,7 @@ use that selected folder. Existing target source paths remain durable.
 
 The Mac starts a separate Python MCP HTTP adapter after its local service starts,
 retries startup as tools become available, and owns its lifetime. The adapter
-binds only `127.0.0.1:49211`, validates Host/Origin, requires a random bearer token,
+binds only `127.0.0.1` (port 49211, or an available port if occupied), validates Host/Origin, requires a random bearer token,
 bounds requests/connections, and uses the same CLI tool inventory and Host socket
 as stdio. `mcp-http.json` is owner-only secret state, never a public progress file.
 Tokens rotate on adapter startup; clients must reload connection settings after a

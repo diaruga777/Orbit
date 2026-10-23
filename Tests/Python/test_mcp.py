@@ -92,6 +92,14 @@ class MCPHTTPTests(unittest.TestCase):
             code, reply = self.request({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'orbit_status'}})
             self.assertEqual(code, 200); self.assertFalse(reply['result']['isError'])
             rpc.assert_called_once_with('status', {})
+    def test_bad_parameters_reject_without_dispatch_and_server_remains_available(self):
+        with patch.object(orbit, 'rpc') as rpc:
+            for params in [[], None, 'invalid']:
+                code, reply = self.request({'jsonrpc':'2.0','id':1,'method':'tools/call','params':params})
+                self.assertEqual(code, 200); self.assertEqual(reply['error']['code'], -32602)
+            rpc.assert_not_called()
+        self.assertEqual(self.request({'jsonrpc':'2.0','id':2,'method':'ping'})[0], 200)
+
     def test_auth_origin_host_limits_and_no_event_stream(self):
         message = {'jsonrpc':'2.0','id':1,'method':'tools/list'}
         with patch.object(orbit, 'handle_mcp') as handler:

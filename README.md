@@ -210,7 +210,7 @@ Removing a target keeps its source repository and the app already installed on y
 ## Connect your agent
 
 Orbit starts its MCP service whenever the Mac client is running. Its authenticated
-Streamable HTTP endpoint listens only on `127.0.0.1:49211/mcp`; the owner-only
+Streamable HTTP endpoint listens only on loopback (normally `127.0.0.1:49211/mcp`); the owner-only
 `~/.orbit/mcp-http.json` contains the connection settings and a token rotated each
 launch. No separate macOS MCP permission is needed. Folder and Local Network
 consent live together in setup. External MCP hosts still need their own server

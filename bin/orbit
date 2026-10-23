@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Orbit CLI and stdio MCP. Python standard library only; no agent SDK required."""
 import argparse
+import errno
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import secrets
@@ -76,7 +77,9 @@ def tool_specs():
 def handle_mcp(message):
     if not isinstance(message, dict) or message.get('jsonrpc') != '2.0':
         return {'jsonrpc':'2.0','id':None,'error':{'code':-32600,'message':'Invalid JSON-RPC request'}}
-    method = message.get('method'); params = message.get('params') or {}
+    method = message.get('method'); params = message.get('params', {})
+    if not isinstance(params, dict):
+        return {'jsonrpc':'2.0','id':message.get('id'),'error':{'code':-32602,'message':'Invalid parameters'}}
     if 'id' not in message:
         return None
     reply = {'jsonrpc':'2.0','id':message['id']}
@@ -191,7 +194,12 @@ def mcp_http(parent_pid, port=49211):
     root = Path(os.environ.get('ORBIT_HOME', str(Path.home() / '.orbit')))
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     # Bind before publishing credentials: another running instance owns its port.
-    server = MCPHTTPServer(('127.0.0.1', port), MCPHTTPHandler)
+    try:
+        server = MCPHTTPServer(('127.0.0.1', port), MCPHTTPHandler)
+    except OSError as exc:
+        if exc.errno != errno.EADDRINUSE:
+            raise
+        server = MCPHTTPServer(('127.0.0.1', 0), MCPHTTPHandler)
     server.token = secrets.token_urlsafe(32)
     config = {'mcpServers': {'orbit': {'url': f'http://127.0.0.1:{server.server_port}/mcp',
                                      'headers': {'Authorization': 'Bearer ' + server.token}}}}

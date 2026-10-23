@@ -37,7 +37,7 @@ import SwiftUI
                 self.stream?.fileHandleForReading.readabilityHandler = nil
                 self.running = false; self.succeeded = task.terminationStatus == 0
                 self.output += self.succeeded ? "\nMac tools installed.\n" : "\nInstallation stopped. You can try again.\n"
-                self.response = ""; self.responses = []; self.process = nil; self.input = nil; self.stream = nil
+                self.response = ""; self.process = nil; self.input = nil; self.stream = nil
             }
         }
         do { try task.run(); process = task; self.input = input; self.stream = stream; running = true }
@@ -46,8 +46,9 @@ import SwiftUI
     private func receive(_ data: Data) {
         var text = String(decoding: data, as: UTF8.self)
         text = text.replacingOccurrences(of: "\u{001B}\\[[0-?]*[ -/]*[@-~]", with: "", options: .regularExpression)
-        for value in responses where !value.isEmpty { text = text.replacingOccurrences(of: value, with: "••••") }
-        output = String((output + text).suffix(16000))
+        var transcript = output + text
+        for value in responses where !value.isEmpty { transcript = transcript.replacingOccurrences(of: value, with: "••••") }
+        output = String(transcript.suffix(16000))
     }
     func send() {
         guard running, !response.contains("\n"), !response.contains("\r") else { return }

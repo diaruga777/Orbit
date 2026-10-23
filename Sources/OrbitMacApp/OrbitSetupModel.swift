@@ -15,7 +15,6 @@ import OrbitCore
     @Published var message = ""
     @Published var log = ""
     @Published var paired = false
-    @Published var phoneRefreshReady = false
     @Published var loginItem = false
     @Published var loaded = false
     private let setup = OrbitSetup(root: OrbitPaths.root)
@@ -105,7 +104,6 @@ import OrbitCore
             if self.devices.isEmpty { self.message = "Unlock your iPhone, connect it by cable, and tap Trust. Open Xcode’s Devices and Simulators if it still doesn’t appear." }
         }
     }
-    func checkPhone() { perform { self.phoneReady = try await self.setup.phoneReady(self.state.deviceID); self.message = self.phoneReady ? "Developer Mode is on. Your iPhone is ready." : "Turn on Developer Mode, restart your phone, and confirm Turn On. Then check again." } }
     func install(_ model: OrbitMacModel) {
         perform {
             guard OrbitSetupState.validTeam(self.state.teamID), OrbitSetupState.validPrefix(self.state.bundlePrefix), !self.state.deviceID.isEmpty else { throw CodeFailure("Choose your Apple Account and iPhone first.") }
@@ -171,11 +169,7 @@ import OrbitCore
             let status = try await model.rpc("status") as? [String: Any] ?? [:]
             let config = status["configuration"] as? [String: Any] ?? [:]
             self.paired = !(config["trustedPeers"] as? [String] ?? []).isEmpty
-            let report = try await model.rpc("phone_setup_status") as? [String: Any] ?? [:]
-            let readiness = report["readiness"] as? [String: Bool] ?? [:]
-            let fresh = Date().timeIntervalSince1970 - (report["updatedAt"] as? Double ?? 0) < 180
-            self.phoneRefreshReady = self.paired && fresh && ["cache", "account", "certificate", "pairing", "connection"].allSatisfy { readiness[$0] == true }
-            self.message = self.state.step == .refresh ? (self.phoneRefreshReady ? "Your phone’s refresh setup is ready." : "Finish Refresh setup in Orbit on your iPhone, then reopen the app and check again.") : (self.paired ? "Your iPhone is connected." : "Open Orbit on your iPhone and connect it using this pairing code.")
+            self.message = self.paired ? "Your iPhone is connected." : "Open Orbit on your iPhone and connect it using this pairing code."
         }
     }
     func installMac() {
