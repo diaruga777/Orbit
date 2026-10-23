@@ -34,7 +34,7 @@ import OrbitHost
                 } }
                 do { try await server.start(); status = "Ready" }
                 catch { status = error.localizedDescription }
-                while !Task.isCancelled { mcp.startIfNeeded(); await refresh(); try? await Task.sleep(for: .seconds(5)) }
+                while !Task.isCancelled { await mcp.startIfNeeded(); await refresh(); try? await Task.sleep(for: .seconds(5)) }
             } catch { status = error.localizedDescription }
         }
     }

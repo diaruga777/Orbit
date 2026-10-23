@@ -147,7 +147,7 @@ remain separate acceptance work.
 
 - Bootstrap generated the source-built transport and current Xcode project in a
   detached checkout.
-- 135 Swift tests passed with four optional fixture checks skipped. The packaged
+- 136 Swift tests passed with four optional fixture checks skipped. The packaged
   phone-source/resume check passed separately against the newly built Mac bundle.
 - Python stdio/HTTP MCP tests, both Go race suites and Apple helper vet passed.
 - The iOS Simulator client and complete ad-hoc Mac review bundle built. The

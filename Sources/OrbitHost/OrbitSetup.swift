@@ -114,6 +114,37 @@ public actor OrbitSetup {
         } catch { result.detail = error.localizedDescription }
         return result
     }
+    public func recommendedXcode() async throws -> String {
+        let request = URLRequest(url: URL(string: "https://xcodereleases.com/data.json")!, timeoutInterval: 30)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200, data.count <= 1024 * 1024 else {
+            throw CodeFailure("Couldn’t check Xcode downloads. Try again in a moment.")
+        }
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        return try Self.recommendedXcode(in: data, macOSVersion: "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)")
+    }
+    /// Uses the same public release metadata as xcodes; all remote version text
+    /// is validated before becoming an installer argument. Betas are excluded.
+    public nonisolated static func recommendedXcode(in data: Data, macOSVersion: String) throws -> String {
+        func numericVersion(_ value: String) -> Bool {
+            let parts = value.split(separator: ".", omittingEmptySubsequences: false)
+            return (2...3).contains(parts.count) && parts.allSatisfy { !$0.isEmpty && $0.count <= 3 && $0.allSatisfy { $0.isASCII && $0.isNumber } }
+        }
+        let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] ?? []
+        let versions = rows.compactMap { row -> String? in
+            guard let version = row["version"] as? [String: Any],
+                  let release = version["release"] as? [String: Any], release["release"] as? Bool == true,
+                  let number = version["number"] as? String, numericVersion(number),
+                  let minimum = row["requires"] as? String, numericVersion(minimum),
+                  number.compare("26.2", options: .numeric) != .orderedAscending,
+                  minimum.compare(macOSVersion, options: .numeric) != .orderedDescending else { return nil }
+            return number
+        }
+        guard let version = versions.max(by: { $0.compare($1, options: .numeric) == .orderedAscending }) else {
+            throw CodeFailure("Update macOS to install the Xcode version Orbit needs, then try again.")
+        }
+        return version
+    }
     public func phoneReady(_ device: String) async throws -> Bool {
         guard !device.isEmpty, device.count <= 128 else { return false }
         let output = root.appendingPathComponent("device-check-" + UUID().uuidString + ".json")

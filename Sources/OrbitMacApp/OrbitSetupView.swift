@@ -54,7 +54,7 @@ struct OrbitSetupView: View {
                 readiness("Xcode setup", ready: setup.tools.firstLaunch)
                 readiness("iPhone build tools", ready: setup.tools.iOSSDK)
                 readiness("Local tools", ready: setup.tools.python)
-                OrbitToolInstallerView(installer: setup.installer, check: setup.checkTools)
+                OrbitToolInstallerView(installer: setup.installer, install: setup.installTools, check: setup.checkTools)
                 Text("Apple may ask for your account, a verification code, or your Mac password. Reply below when asked. Downloads can take a while.").font(.callout).foregroundStyle(.secondary)
             case .access:
                 Text("Your apps will live here. You can choose another folder anytime.")
@@ -129,11 +129,12 @@ struct OrbitSetupView: View {
 
 private struct OrbitToolInstallerView: View {
     @ObservedObject var installer: OrbitToolInstaller
+    var install: () -> Void
     var check: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("Install Mac Tools", action: installer.start).disabled(installer.running)
+                Button("Install Mac Tools", action: install).disabled(installer.running)
                 Button("Check Again", action: check).disabled(installer.running)
                 if installer.running { ProgressView().controlSize(.small); Button("Cancel", action: installer.cancel) }
             }

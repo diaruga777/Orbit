@@ -13,7 +13,14 @@ import SwiftUI
     private var stream: Pipe?
     private var responses: [String] = []
 
-    func start() { start(script: Self.installScript) }
+    func start(xcodeVersion: String?) {
+        if let xcodeVersion {
+            guard xcodeVersion.count < 16, xcodeVersion.allSatisfy({ $0.isASCII && ($0.isNumber || $0 == ".") }) else { return }
+            start(script: Self.installScript.replacingOccurrences(of: "--latest", with: xcodeVersion))
+        } else {
+            start(script: Self.installScript.replacingOccurrences(of: "xcodes install --latest --select", with: "print 'Xcode tools changed. Check again and restart setup.'; exit 1"))
+        }
+    }
     // Internal injection is used only by the synthetic terminal probe.
     func start(script: String) {
         guard !running else { return }

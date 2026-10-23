@@ -28,6 +28,7 @@ struct ScreenshotPhone { var id: String; var name: String }
     func persist() {}
     func installMac() {}
     func checkTools() {}
+    func installTools() {}
     func checkAccounts() {}
     func openXcode() {}
     func allowFolder(_ model: OrbitMacModel) {}

@@ -29,7 +29,8 @@ iroh transport and explains native installation authorization and restart/re-pai
 
 `OrbitToolInstaller` runs the upstream Homebrew/xcodes installer through a private
 pseudo-terminal inside the wizard. It installs missing full Xcode and Python,
-finishes Xcode’s first launch and downloads the iOS platform. Homebrew is installed
+selects a stable Xcode compatible with the current macOS using the upstream
+release feed, finishes Xcode’s first launch and downloads the iOS platform. Homebrew is installed
 only if needed; shipped phone source/native archives avoid end-user Go/XcodeGen.
 Terminal output is bounded, transient and excluded from diagnostics and setup
 state; input uses a secure field with terminal echo disabled. Xcodes owns Apple

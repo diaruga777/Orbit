@@ -72,6 +72,19 @@ final class OrbitSetupTests: XCTestCase {
         XCTAssertEqual(config.allowedRoots, [folder.resolvingSymlinksInPath().path])
         XCTAssertEqual(config.provider, "local")
     }
+    func testXcodeRecommendationAvoidsBetasUnsupportedMacOSAndUnsafeVersionText() throws {
+        let rows: [[String: Any]] = [
+            ["version": ["number": "27.1", "release": ["release": true]], "requires": "26.6"],
+            ["version": ["number": "27.2", "release": ["beta": 1]], "requires": "15.6"],
+            ["version": ["number": "26.2", "release": ["release": true]], "requires": "15.6"],
+            ["version": ["number": "26.1", "release": ["release": true]], "requires": "15.0"],
+            ["version": ["number": "99.0;touch", "release": ["release": true]], "requires": "15.6"]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: rows)
+        XCTAssertEqual(try OrbitSetup.recommendedXcode(in: data, macOSVersion: "15.6.1"), "26.2")
+        XCTAssertEqual(try OrbitSetup.recommendedXcode(in: data, macOSVersion: "26.6.0"), "27.1")
+        XCTAssertThrowsError(try OrbitSetup.recommendedXcode(in: data, macOSVersion: "15.0.0"))
+    }
     func testPhoneReadinessRequiresSelectedPhysicalPhoneAndDeveloperMode() {
         var result: [String: Any] = ["hardwareProperties": ["udid": "phone", "reality": "physical"], "deviceProperties": ["developerModeStatus": "enabled"]]
         XCTAssertTrue(OrbitSetup.phoneReady(["result": result], expected: "phone"))

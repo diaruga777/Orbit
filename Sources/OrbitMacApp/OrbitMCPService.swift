@@ -6,7 +6,7 @@ import OrbitHost
 @MainActor final class OrbitMCPService {
     private var process: Process?
     private(set) var status = "Starting local tools…"
-    func startIfNeeded() {
+    func startIfNeeded() async {
         guard process?.isRunning != true else { return }
         let cli = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AgentTools/bin/orbit")
         guard FileManager.default.fileExists(atPath: cli.path) else { status = "Local tools are missing from this Orbit app."; return }
@@ -14,8 +14,9 @@ import OrbitHost
         // Wait for tool setup instead of opening a second system installer.
         let python = OrbitSetup.pythonExecutable
         if python == "/usr/bin/python3" {
-            guard FileManager.default.fileExists(atPath: "/Library/Developer/CommandLineTools/usr/bin/python3") ||
-                  FileManager.default.fileExists(atPath: "/Applications/Xcode.app/Contents/Developer/usr/bin/python3") else { return }
+            guard let selected = try? await OrbitCommand.run("/usr/bin/xcode-select", ["-p"]) else { return }
+            let directory = String(decoding: selected, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard FileManager.default.isExecutableFile(atPath: directory + "/usr/bin/python3") else { return }
         }
         let task = Process()
         task.executableURL = URL(fileURLWithPath: python)

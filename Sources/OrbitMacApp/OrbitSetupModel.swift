@@ -58,6 +58,17 @@ import OrbitCore
         }
     }
     func checkTools() { perform { self.tools = await self.setup.checkTools(); self.message = self.tools.detail } }
+    func installTools() {
+        perform {
+            self.tools = await self.setup.checkTools()
+            let version: String?
+            if !self.tools.xcode || !self.tools.iOSSDK {
+                self.message = "Finding Xcode for your Mac…"
+                version = try await self.setup.recommendedXcode()
+            } else { version = nil }
+            self.installer.start(xcodeVersion: version)
+        }
+    }
     func selectDetectedTeam() {
         if state.teamID.isEmpty, teams.count == 1 { state.teamID = teams[0].id; persist() }
     }

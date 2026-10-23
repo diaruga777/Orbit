@@ -17,7 +17,8 @@ Orbit on your selected iPhone. Keep both devices on the same Wi-Fi for setup.
 There is no AI integrations step, Team ID field or bundle ID field.
 
 The tools page uses [xcodes](https://github.com/XcodesOrg/xcodes), installed via
-Homebrew (which Orbit installs if needed). Apple sign-in, verification and Mac
+Homebrew (which Orbit installs if needed). Orbit selects the newest stable Xcode
+compatible with your macOS from the same release feed used by xcodes. Apple sign-in, verification and Mac
 password prompts appear in a private interactive installer inside Orbit; replies
 and transcripts are never saved in setup/build logs. Xcodes owns its download
 credentials in Keychain. Add your signing account in Xcode’s own Accounts screen;
