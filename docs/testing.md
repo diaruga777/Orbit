@@ -50,7 +50,7 @@ fixture models into a separate accessory utility. The only view substitution is
 the disk-image path check, so the initial Install Orbit Mac screen can be shown
 without mounting a DMG. Continue enablement is extracted from the actual model.
 
-The 17 PNGs and `manifest.json` go to `dist/setup-screenshots` (or the directory
+The 17 PNGs, browsable `index.html` and `manifest.json` go to `dist/setup-screenshots` (or the directory
 passed as the first argument). They cover the ten steps, DMG installation, missing
 tools and first launch, alternate AI integrations, and mock installation progress
 and success. All account/device/pairing values are fictional. Captures show the

@@ -45,9 +45,20 @@ PLIST
 "$APP/Contents/MacOS/OrbitSetupScreenshots" "$OUTPUT"
 python3 - "$OUTPUT" <<'PY'
 from pathlib import Path
-import sys
+import html, json, struct, sys
 output = Path(sys.argv[1])
-files = sorted(output.glob('*.png'))
-assert len(files) == 17, f'Expected 17 captures, got {len(files)}'
-print(f'Captured {len(files)} wizard screens in {output}')
+manifest = json.loads((output/'manifest.json').read_text())
+captures = manifest['captures']
+assert len(captures) == 17, f'Expected 17 captures, got {len(captures)}'
+assert {c['step'] for c in captures} == {'welcome', 'tools', 'access', 'account', 'phone', 'agents', 'install', 'connect', 'refresh', 'complete'}
+sections = []
+for capture in captures:
+    path = output/capture['file']
+    data = path.read_bytes()
+    assert data[:8] == b'\x89PNG\r\n\x1a\n', path
+    assert struct.unpack('>II', data[16:24]) == (2000, 1480), path
+    label = html.escape(path.stem.replace('-', ' '))
+    sections.append(f'<section><h2>{label}</h2><a href="{path.name}"><img src="{path.name}" alt="{label}" loading="lazy"></a></section>')
+(output/'index.html').write_text('''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orbit Mac setup screenshots</title><style>body{font:16px system-ui;max-width:1100px;margin:40px auto;padding:0 24px;background:#eef0f4;color:#202430}h1{font-size:28px}h2{font-size:18px}section{margin:40px 0}img{width:100%;border-radius:8px;box-shadow:0 2px 16px #0002}a{color:inherit}</style><h1>Orbit Mac setup</h1><p>17 captures of the actual native wizard, using fictional data and inert actions. No Apple sign-in or phone installation was performed. Click any image for the full 2000 × 1480 PNG.</p>'''+''.join(sections)+'</html>')
+print(f'Captured and verified {len(captures)} wizard screens in {output}')
 PY
