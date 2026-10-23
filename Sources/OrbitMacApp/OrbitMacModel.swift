@@ -32,7 +32,8 @@ import OrbitHost
                     alert.addButton(withTitle: "Connect"); alert.addButton(withTitle: "Cancel")
                     return alert.runModal() == .alertFirstButtonReturn
                 } }
-                try await server.start(); status = "Ready"
+                do { try await server.start(); status = "Ready" }
+                catch { status = error.localizedDescription }
                 while !Task.isCancelled { mcp.startIfNeeded(); await refresh(); try? await Task.sleep(for: .seconds(5)) }
             } catch { status = error.localizedDescription }
         }

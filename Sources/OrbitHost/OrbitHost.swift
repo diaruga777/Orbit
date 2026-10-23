@@ -301,7 +301,7 @@ public actor OrbitHost {
         try? saveTargets()
     }
     private func browse(_ p: [String: Any]) throws -> Any {
-        let path = p["path"] as? String ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let path = p["path"] as? String ?? configuration.allowedRoots.first ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard path.hasPrefix("/") else { throw CodeFailure("Choose an absolute Mac path.") }
         let entries = try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.isDirectoryKey], options: p["hidden"] as? Bool == true ? [] : [.skipsHiddenFiles])
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
@@ -315,8 +315,8 @@ public actor OrbitHost {
         let name = try OrbitGitHub.repository(required(p, "repository"))
         let inspection = try await OrbitGitHub.inspect(name)
         guard inspection["compatible"] as? Bool == true else { throw CodeFailure("No Xcode project was found in this repository.") }
-        let projects = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("Repositories")
-        let folder = projects.appendingPathComponent(name.replacingOccurrences(of: "/", with: "--"))
+        let projectsRoot = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("Repositories")
+        let folder = projectsRoot.appendingPathComponent(name.replacingOccurrences(of: "/", with: "--"))
         guard !FileManager.default.fileExists(atPath: folder.path) else { throw CodeFailure("This repository is already cloned. Add a local target from \(folder.path).") }
         try FileManager.default.createDirectory(at: folder.deletingLastPathComponent(), withIntermediateDirectories: true)
         let branch = p["branch"] as? String ?? inspection["defaultBranch"] as? String ?? "main"

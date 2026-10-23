@@ -15,6 +15,9 @@ public final class OrbitServer: @unchecked Sendable {
         self.root = root; self.host = host; transport = OrbitGoTransport(configuration: .init(stateDirectory: root.appendingPathComponent("Identity")))
     }
     public func start() async throws {
+        // Local MCP/CLI and scheduling do not depend on Local Network consent.
+        try startLocalSocket()
+        Task { while !Task.isCancelled { await host.tick(); try? await Task.sleep(for: .seconds(60)) } }
         let config = await host.configuration
         let listener = try await transport.listen(bindAddress: config.listen)
         listeners.append(listener)
@@ -27,8 +30,6 @@ public final class OrbitServer: @unchecked Sendable {
             dumbpipeID = try await OrbitDumbpipe.shared.start(secretURL: root.appendingPathComponent("Identity/iroh.key"))
             Task { try? await OrbitDumbpipe.shared.accept { await self.serve($0, pairingAllowed: true) } }
         }
-        try startLocalSocket()
-        Task { while !Task.isCancelled { await host.tick(); try? await Task.sleep(for: .seconds(60)) } }
     }
     public func pairingCode() async throws -> String {
         let config = await host.configuration
