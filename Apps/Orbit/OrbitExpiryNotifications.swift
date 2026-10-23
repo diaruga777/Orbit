@@ -102,13 +102,19 @@ import OrbitRefresh
             UserDefaults.standard.set(plan.key, forKey: "Orbit.lastExpiryReminder")
         } catch { NSLog("Orbit expiry reminder: %@", error.localizedDescription) }
     }
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .list]
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                           withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Task { @MainActor in completionHandler([.banner, .sound, .list]) }
     }
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard response.notification.request.identifier == CodeExpiryReminder.notificationID,
-              response.actionIdentifier == UNNotificationDefaultActionIdentifier else { return }
-        await MainActor.run { self.openSetup() }
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                           withCompletionHandler completionHandler: @escaping () -> Void) {
+        // UIKit's scene-response completion must also run on the main thread;
+        // the async Objective-C bridge can resume it on a cooperative executor.
+        Task { @MainActor in
+            if response.notification.request.identifier == CodeExpiryReminder.notificationID,
+               response.actionIdentifier == UNNotificationDefaultActionIdentifier { self.openSetup() }
+            completionHandler()
+        }
     }
     func openSetup() {
         UserDefaults.standard.set(true, forKey: "Orbit.openRefreshSetup")
