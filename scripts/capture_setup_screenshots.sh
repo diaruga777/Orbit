@@ -39,7 +39,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 </dict></plist>
 PLIST
-/usr/bin/open -n -W "$APP" --args "$OUTPUT"
+# This accessory capture tool renders offscreen and exits; it does not need a
+# Launch Services foreground session (which can be unavailable on a locked Mac).
+"$APP/Contents/MacOS/OrbitSetupScreenshots" "$OUTPUT"
 python3 - "$OUTPUT" <<'PY'
 from pathlib import Path
 import sys
