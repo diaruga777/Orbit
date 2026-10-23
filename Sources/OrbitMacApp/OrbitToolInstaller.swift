@@ -13,12 +13,14 @@ import SwiftUI
     private var stream: Pipe?
     private var responses: [String] = []
 
-    func start() {
+    func start() { start(script: Self.installScript) }
+    // Internal injection is used only by the synthetic terminal probe.
+    func start(script: String) {
         guard !running else { return }
         output = "Preparing Mac tools…\n"; succeeded = false; responses = []
         let task = Process(), input = Pipe(), stream = Pipe()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/script")
-        task.arguments = ["-q", "/dev/null", "/bin/zsh", "-c", Self.installScript]
+        task.arguments = ["-q", "/dev/null", "/bin/zsh", "-c", script]
         task.standardInput = input; task.standardOutput = stream; task.standardError = stream
         // Inherited CI credentials must never reach the interactive installer.
         var environment = ProcessInfo.processInfo.environment

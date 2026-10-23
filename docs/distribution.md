@@ -11,11 +11,11 @@ The normal development build script separately verifies certificate and designat
 requirement before replacing its persistent bundle. Keep the bundle ID, path and
 certificate stable across builds.
 
-The wizard checks full Xcode, first-launch completion, iOS SDK 26+, and Python. It
-opens Apple’s Command Line Tools installer or the Xcode App Store listing when
-needed, runs first-launch setup when requested, and waits for Apple’s license,
-account, trust and Developer Mode interactions. Xcode selection/components and
-account setup may require action in Xcode. It never installs WebDriverAgent.
+The wizard installs missing Xcode and Python with Homebrew/xcodes, checks
+first-launch completion and the iOS SDK, and hosts private interactive installer
+prompts. Signing-account login uses Xcode’s native Accounts screen; Orbit detects
+teams by name afterward. Apple trust and Developer Mode still require interaction.
+It never installs WebDriverAgent.
 
 The phone project is a bundled ZIP of committed source plus the generated native
 transport/device archives. A SHA-256 manifest is inside the signed bundle. Setup
@@ -27,11 +27,11 @@ The current packaged Mac executable is for the build host architecture; releases
 built on Apple Silicon are arm64, not universal.
 
 Every install has a durable target/job ID. An interrupted wizard resumes the job;
-only installation/readback success unlocks the connection step. Pairing requires
-explicit phone approval. The final refresh step checks a recent authenticated
-phone report for account, certificate, pairing, cached self build and a recently checked LocalDevVPN connection. This checks
-configuration, not proof of an entire seven-day renewal cycle. Use the intended
-account/phone to perform physical acceptance before releasing.
+only installation/readback success completes the phone-install portion of setup.
+Pairing is on that same page, requires explicit phone approval, and can be finished
+later. Phone-only refresh and remote building are optional after the wizard; their
+banner and setup destinations do not prove a successful renewal or remote install.
+Use the intended account/phone to perform physical acceptance before releasing.
 
 The explicit pairing-file export uses the selected native phone’s existing Apple
 pairing record. It requires the full record, rejects another UDID, creates a new
