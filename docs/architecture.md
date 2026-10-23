@@ -106,9 +106,33 @@ private JSON storage is committed only after validated output. Widgets reject
 interactive nodes. Applets use a separate `Orbit.Applets.v1` Keychain service,
 scoped to the containing app's access group, with ThisDeviceOnly state.
 
-The phone reviews every import/update before evaluation. Mac `applet_add` queues
-source without executing it; a paired phone can list but cannot mutate Mac files
-or export projects. CLI/MCP and Mac UI share the Host catalog and exporter.
+The phone reviews every import/update before evaluation. Mac drag-and-drop,
+file selection, CLI/MCP and folder additions share the Host script catalog.
+`script_import` infers kind from validated inert metadata; existing `applet_add`
+and `widget_add` retain their kind checks. Defaults are Applets/Widgets under the
+setup folder (or the legacy state root before setup); `script_folder` stores a
+per-kind override and copies existing imports without overwriting user files.
+Existing private deployment queues migrate once. The selected folders are the
+catalog, scanned every two seconds and on listing, including saves and renames.
+Only top-level .js files are checked: bounded UTF-8 regular-file reads, no symlinks
+or execution. Invalid files produce local diagnostics independently; at most 24
+scripts per kind are delivered. Content determines kind across both folders;
+for duplicate IDs the most recently saved valid file wins, with a diagnostic.
+Mac removal deletes matching files from the selected folders; already-approved
+phone copies remain independent. A paired phone can list source but cannot
+mutate Mac files, choose folders or export projects.
+
+While active, the phone polls the pinned paired Mac every ten seconds and on
+activation. Unapproved snapshots are stored separately in the same ThisDeviceOnly
+Keychain service, with tab badges and review rows. Offline failures preserve the
+last received queue. Exact installed sources and dismissed digests are skipped;
+changed sources require fresh consent and stale review confirmations are rejected.
+No unapproved script touches executable records or private K-V state. iOS controls
+background opportunities; immediate delivery while Orbit is closed is not promised.
+The file browser and Open in Orbit route by the same header parser. A native
+share extension accepts one JavaScript file, shows metadata/website consent, and
+writes an approved script through the existing containing-app Keychain group.
+It never evaluates source and adds no App Group or iCloud entitlement.
 
 `Sources/OrbitHost/Resources/AppletHost` contains the canonical shared runtime,
 SwiftUI applet view, standalone entrypoint and Xcode template. SwiftPM compiles

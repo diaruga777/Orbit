@@ -3,6 +3,7 @@ import BackgroundTasks
 import OrbitCore
 import OrbitRefresh
 import OrbitWidgetUI
+import OrbitWidgets
 import OrbitUI
 import OrbitTransport
 import OrbitWire
@@ -100,6 +101,11 @@ import OrbitWire
             self.applets = applets
             let appletNavigation = UINavigationController(rootViewController: applets)
             appletNavigation.tabBarItem = UITabBarItem(title: "Applets", image: UIImage(systemName: "curlybraces.square"), tag: 6)
+            widgets.pendingCountChanged = { [weak widgetNavigation] count in widgetNavigation?.tabBarItem.badgeValue = count == 0 ? nil : String(count) }
+            applets.pendingCountChanged = { [weak appletNavigation] count in appletNavigation?.tabBarItem.badgeValue = count == 0 ? nil : String(count) }
+            widgets.routeImport = { [weak self] file in self?.reviewFile(file) }
+            applets.routeImport = { [weak self] file in self?.reviewFile(file) }
+            widgets.refreshInbox(); applets.refreshInbox()
             tabs.viewControllers = [project, apps, appletNavigation, widgetNavigation, refresh, settings]
             tabs.selectedIndex = connection.pairingCode.isEmpty ? 5 : min(5, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
             window.rootViewController = OrbitSetupBannerController(tabs: tabs)
@@ -116,26 +122,55 @@ import OrbitWire
         if let url = URLContexts.first?.url { openWidget(url) }
     }
     private func openWidget(_ url: URL) {
-        guard url.isFileURL, let widgets, let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+        guard url.isFileURL else { return }
         let access = url.startAccessingSecurityScopedResource()
-        let isApplet = ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max) <= 128 * 1024 &&
-            ((try? String(contentsOf: url, encoding: .utf8).hasPrefix("/* orbit-applet\n")) ?? false)
-        if access { url.stopAccessingSecurityScopedResource() }
-        root.tabs.selectedIndex = isApplet ? 2 : 3
-        DispatchQueue.main.async { (isApplet ? self.applets : widgets)?.open(url) }
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let file = try OrbitJavaScriptFile(url: url)
+            DispatchQueue.main.async { self.reviewFile(file) }
+        } catch {
+            let alert = UIAlertController(title: "Import JavaScript", message: error.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            window?.rootViewController?.present(alert, animated: true)
+        }
+    }
+    private func reviewFile(_ file: OrbitJavaScriptFile) {
+        guard let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+        root.tabs.selectedIndex = file.kind == .applet ? 2 : 3
+        (file.kind == .applet ? applets : widgets)?.review(file.script.source)
     }
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         UserDefaults.standard.set(tabBarController.selectedIndex, forKey: "Orbit.selectedTab")
     }
     private var readiness: Task<Void, Never>?
+    private var scriptSync: Task<Void, Never>?
     func sceneDidBecomeActive(_ scene: UIScene) {
+        scriptSync?.cancel()
+        scriptSync = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.syncScripts()
+                do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            }
+        }
         readiness?.cancel()
         readiness = Task { await connection.offerInstallWindow(seconds: 3600) }
         Task {
             if let readiness = try? await CodeRefreshEngine.shared.readiness() { _ = try? await connection.rpc("phone_setup_status", readiness) }
         }
     }
-    func sceneDidEnterBackground(_ scene: UIScene) { readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
+    private func syncScripts() async {
+        guard !connection.pairingCode.isEmpty else { return }
+        let peer = connection.peerID
+        for (method, controller) in [("applets", applets), ("widgets", widgets)] {
+            do {
+                let result = try await connection.rpc(method) as? [[String: String]] ?? []
+                guard !Task.isCancelled, peer == connection.peerID else { return }
+                try controller?.receive(result.compactMap { $0["source"] }, origin: peer)
+            } catch { /* Keep the last received queue while the Mac is unavailable. */ }
+        }
+    }
+    func sceneWillResignActive(_ scene: UIScene) { scriptSync?.cancel(); scriptSync = nil }
+    func sceneDidEnterBackground(_ scene: UIScene) { scriptSync?.cancel(); scriptSync = nil; readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
 }
 final class OrbitPhoneConnection: @unchecked Sendable {
     static let shared = OrbitPhoneConnection()

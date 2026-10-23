@@ -196,3 +196,18 @@ consent/action/persistence across relaunch, and existing widget import/preview.
 Keychain UI checks use local ad hoc signing, without Apple account sign-in.
 Physical phone installation, Personal Team lifetime renewal, public notarization
 and marketplace listing were not performed.
+
+## JavaScript file import and automatic delivery
+
+`OrbitScriptImportTests` covers content inference, selected-folder copies, catalog
+restart, direct folder additions/edits, malformed/oversized/symlink isolation,
+phone read-only access, folder changes and preservation of existing user files.
+`OrbitScriptInboxTests` covers durable unapproved receipt, unchanged-source
+deduplication, per-digest dismissal, peer changes, stale approval rejection and
+bounded file reads. Imported fixtures throw if evaluated.
+
+The iOS build includes the native Share extension and its containing-app Keychain
+group. Simulator acceptance should check sharing a .js file from Files, cold and
+warm Open in Orbit, file selection from either tab, automatic review badges while
+connected to a fixture Mac, offline/relaunch recovery, and approval before native
+rendering. Physical delivery/background reliability remains separate acceptance.

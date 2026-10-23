@@ -29,6 +29,8 @@ public struct OrbitTarget: Codable, Identifiable, Sendable {
     }
 }
 public struct OrbitConfiguration: Codable, Sendable {
+    public var appletFolder: String?
+    public var widgetFolder: String?
     public var phoneBundleID: String?
     public var listen = "0.0.0.0:49210"
     public var provider = "local"

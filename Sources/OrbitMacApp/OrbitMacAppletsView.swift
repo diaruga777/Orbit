@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 struct OrbitMacAppletsView: View {
     @ObservedObject var model: OrbitMacModel
-    @State private var scripts: [[String: String]] = []
+    private var scripts: [[String: String]] { model.applets }
     @State private var message = ""
     @State private var export: AppletExportChoice?
     var body: some View {
@@ -19,6 +19,7 @@ struct OrbitMacAppletsView: View {
                 Button("Blank Host App") { export = AppletExportChoice(path: nil) }
                 Button("Add JavaScript", action: add).buttonStyle(.borderedProminent)
             }
+            OrbitScriptFolderView(model: model, applets: true)
             if scripts.isEmpty { ContentUnavailableView("Your Little Apps", systemImage: "curlybraces.square", description: Text("Import a .js file or copy a prompt to make one.")) }
             List(Array(scripts.enumerated()), id: \.offset) { _, script in
                 HStack {
@@ -28,18 +29,20 @@ struct OrbitMacAppletsView: View {
                     Button("Remove") { Task { do { _ = try await model.rpc("applet_remove", ["id": script["id"] ?? ""]); await reload() } catch { message = error.localizedDescription } } }
                 }.padding(.vertical, 8)
             }
-            Text("On iPhone, open Applets → Add → From Mac. Approve a script, then tap to open it. Standalone apps get their own icon and use an Apple app slot.").foregroundStyle(.secondary)
+            Text("Files sync when Orbit is open on your connected iPhone. Review new files and updates in Applets. Standalone apps use an Apple app slot.").foregroundStyle(.secondary)
+            if !model.scriptMessage.isEmpty { Text(model.scriptMessage).font(.callout).textSelection(.enabled) }
+            if !model.scriptIssues.isEmpty { Text(model.scriptIssues.joined(separator: "\n")).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
             if !message.isEmpty { Text(message).textSelection(.enabled) }
         }.padding(28).task { await reload() }
         .sheet(item: $export) { choice in
             OrbitAppletExportSheet(model: model, source: scripts.first { $0["id"] == choice.path }?["source"])
         }
     }
-    private func reload() async { do { scripts = try await model.rpc("applets") as? [[String: String]] ?? [] } catch { message = error.localizedDescription } }
+    private func reload() async { await model.refreshScripts() }
     private func add() {
-        let panel = NSOpenPanel(); panel.allowedContentTypes = [.javaScript, .plainText]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { do { _ = try await model.rpc("applet_add", ["path": url.path]); await reload() } catch { message = error.localizedDescription } }
+        let panel = NSOpenPanel(); panel.allowedContentTypes = [.javaScript]; panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        Task { await model.importScripts(panel.urls) }
     }
 }
 private struct AppletExportChoice: Identifiable { let id = UUID(); let path: String? }

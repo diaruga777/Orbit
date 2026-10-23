@@ -68,6 +68,52 @@ public final class OrbitWidgetStore: @unchecked Sendable {
         for family in Self.families { try write(nil, key: "output-" + id + "-" + family) }
         try write(nil, key: "storage-" + id)
     }
+    /// Unapproved Mac source is persisted separately from executable scripts and private K-V data.
+    public func pendingScripts() throws -> [OrbitWidgetScript] {
+        lock.lock(); defer { lock.unlock() }
+        return try read("pending").map { try JSONDecoder().decode([OrbitWidgetScript].self, from: $0) } ?? []
+    }
+    public func receive(_ sources: [String], origin: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        let oldOrigin = try read("pending-origin").map { String(decoding: $0, as: UTF8.self) }
+        let dismissed = oldOrigin == origin ? try dismissedScripts() : [:]
+        var pending: [OrbitWidgetScript] = [], seen = Set<String>()
+        for source in sources.prefix(24) {
+            let candidate = try applets ? OrbitAppletDefinition.widgetScript(source) : OrbitWidgetScript(source: source)
+            guard seen.insert(candidate.id).inserted else { continue }
+            if try script(candidate.id)?.source == source { continue }
+            if dismissed[candidate.id] == OrbitWidgetDefinition.digest(source) { continue }
+            pending.append(candidate)
+        }
+        // Validate the entire snapshot before replacing the last successfully received queue.
+        try write(JSONEncoder().encode(pending), key: "pending")
+        if oldOrigin != origin { try write(nil, key: "dismissed") }
+        try write(Data(origin.utf8), key: "pending-origin")
+    }
+    private func dismissedScripts() throws -> [String: String] {
+        try read("dismissed").map { try JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+    }
+    public func dismissPending(_ source: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        let candidate = try applets ? OrbitAppletDefinition.widgetScript(source) : OrbitWidgetScript(source: source)
+        var dismissed = try dismissedScripts()
+        // Bound remembered dismissals; a new source digest is always offered for review.
+        if dismissed.count >= 24, dismissed[candidate.id] == nil { dismissed = [:] }
+        dismissed[candidate.id] = OrbitWidgetDefinition.digest(source)
+        try write(JSONEncoder().encode(dismissed), key: "dismissed")
+        try clearPending(source)
+    }
+    public func approvePending(_ source: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard try pendingScripts().contains(where: { $0.source == source }) else {
+            throw OrbitWidgetError("This file changed on your Mac. Review the latest copy.")
+        }
+        try install(source)
+        try clearPending(source)
+    }
+    private func clearPending(_ source: String) throws {
+        try write(JSONEncoder().encode(pendingScripts().filter { $0.source != source }), key: "pending")
+    }
     public func storage(_ id: String) throws -> [String: String] {
         guard Self.validID(id) else { throw OrbitWidgetError("Invalid widget identifier.") }
         return try read("storage-" + id).map { try JSONDecoder().decode([String: String].self, from: $0) } ?? [:]

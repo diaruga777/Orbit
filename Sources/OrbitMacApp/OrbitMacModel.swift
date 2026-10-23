@@ -1,8 +1,16 @@
 import SwiftUI
 import AppKit
 import OrbitHost
+import UniformTypeIdentifiers
 
 @MainActor final class OrbitMacModel: ObservableObject {
+    @Published var applets: [[String: String]] = []
+    @Published var widgets: [[String: String]] = []
+    @Published var appletFolder = ""
+    @Published var widgetFolder = ""
+    @Published var scriptMessage = ""
+    @Published var scriptIssues: [String] = []
+    @Published var scriptImportFailed = false
     @Published var status = "Starting…"
     @Published var pairing = ""
     @Published var targets: [[String: Any]] = []
@@ -47,6 +55,47 @@ import OrbitHost
     }
     func refresh() async {
         targets = (try? await rpc("targets")) as? [[String: Any]] ?? []
+        await refreshScripts()
+    }
+    func refreshScripts() async {
+        do {
+            let state = try await rpc("script_status") as? [String: Any] ?? [:]
+            appletFolder = state["appletFolder"] as? String ?? ""
+            widgetFolder = state["widgetFolder"] as? String ?? ""
+            scriptIssues = state["issues"] as? [String] ?? []
+            applets = try await rpc("applets") as? [[String: String]] ?? []
+            widgets = try await rpc("widgets") as? [[String: String]] ?? []
+        } catch { scriptMessage = error.localizedDescription }
+    }
+    func importScripts(_ urls: [URL]) async {
+        var failures: [String] = [], count = 0
+        for url in urls {
+            let access = url.startAccessingSecurityScopedResource()
+            do {
+                guard url.isFileURL, url.pathExtension.lowercased() == "js" else { throw NSError(domain: "Orbit", code: 3, userInfo: [NSLocalizedDescriptionKey: "Choose an Orbit .js file."]) }
+                _ = try await rpc("script_import", ["path": url.path]); count += 1
+            } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
+            if access { url.stopAccessingSecurityScopedResource() }
+        }
+        scriptMessage = failures.isEmpty ? "\(count) imported. Your iPhone will receive them when Orbit is open and connected." : failures.joined(separator: "\n")
+        scriptImportFailed = !failures.isEmpty
+        await refreshScripts()
+    }
+    func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
+        let files = providers.filter { $0.canLoadObject(ofClass: URL.self) }
+        guard !files.isEmpty else { return false }
+        Task {
+            var urls: [URL] = []
+            for provider in files {
+                let url: URL? = await withCheckedContinuation { continuation in
+                    _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url) }
+                }
+                if let url { urls.append(url) }
+            }
+            if urls.isEmpty { scriptMessage = "Couldn’t read those files. Try Add JavaScript."; scriptImportFailed = true }
+            else { await importScripts(urls) }
+        }
+        return true
     }
     func pair() { Task { await host?.openPairing(); pairing = (try? await server?.pairingCode()) ?? "" } }
     func search() { Task { do { results = try await rpc("repo_search", ["query": query]) as? [[String: Any]] ?? [] } catch { status = error.localizedDescription } } }

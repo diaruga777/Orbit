@@ -18,6 +18,7 @@ public final class OrbitServer: @unchecked Sendable {
         // Local MCP/CLI and scheduling do not depend on Local Network consent.
         try startLocalSocket()
         Task { while !Task.isCancelled { await host.tick(); try? await Task.sleep(for: .seconds(60)) } }
+        Task { while !Task.isCancelled { await host.scanScripts(); try? await Task.sleep(for: .seconds(2)) } }
         let config = await host.configuration
         let listener = try await transport.listen(bindAddress: config.listen)
         listeners.append(listener)
