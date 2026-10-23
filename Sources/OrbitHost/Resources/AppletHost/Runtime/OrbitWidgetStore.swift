@@ -7,14 +7,16 @@ import Security
 public final class OrbitWidgetStore: @unchecked Sendable {
     private let directory: URL?
     private let group: String?
+    private let applets: Bool
+    private var service: String { applets ? "Orbit.Applets.v1" : "Orbit.Widgets.v1" }
     private let lock = NSRecursiveLock()
-    public init(directory: URL? = nil, accessGroup: String? = nil) {
-        self.directory = directory
+    public init(directory: URL? = nil, accessGroup: String? = nil, applets: Bool = false) {
+        self.directory = directory; self.applets = applets
         group = accessGroup ?? Bundle.main.object(forInfoDictionaryKey: "OrbitWidgetKeychainGroup") as? String
     }
     private func read(_ key: String) throws -> Data? {
         if let directory { return try? Data(contentsOf: directory.appendingPathComponent(key)) }
-        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "Orbit.Widgets.v1",
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: key, kSecAttrSynchronizable as String: false, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         if let group { query[kSecAttrAccessGroup as String] = group }
         var result: CFTypeRef?
@@ -29,7 +31,7 @@ public final class OrbitWidgetStore: @unchecked Sendable {
             let url = directory.appendingPathComponent(key)
             if let data { try data.write(to: url, options: .atomic) } else { try? FileManager.default.removeItem(at: url) }; return
         }
-        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "Orbit.Widgets.v1",
+        var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: key, kSecAttrSynchronizable as String: false]
         if let group { query[kSecAttrAccessGroup as String] = group }
         guard let data else { let result = SecItemDelete(query as CFDictionary); guard result == errSecSuccess || result == errSecItemNotFound else { throw OrbitWidgetError("Couldn’t remove this widget.") }; return }
@@ -49,7 +51,7 @@ public final class OrbitWidgetStore: @unchecked Sendable {
     }
     public func install(_ source: String) throws {
         lock.lock(); defer { lock.unlock() }
-        let script = try OrbitWidgetScript(source: source)
+        let script = try applets ? OrbitAppletDefinition.widgetScript(source) : OrbitWidgetScript(source: source)
         var ids = try identifiers()
         guard ids.contains(script.id) || ids.count < 24 else { throw OrbitWidgetError("Remove a widget before adding another.") }
         // Every update is reviewed by the caller, including changes in domains.

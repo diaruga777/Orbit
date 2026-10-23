@@ -6,6 +6,7 @@ struct OrbitMacView: View {
     @ObservedObject var model: OrbitMacModel
     var body: some View {
         TabView {
+            OrbitMacAppletsView(model: model).tabItem { Label("Applets", systemImage: "curlybraces.square") }
             OrbitMacWidgetsView(model: model).tabItem { Label("Widgets", systemImage: "square.grid.2x2") }
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {

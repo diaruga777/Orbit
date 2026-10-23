@@ -121,3 +121,22 @@ by the locked Mac. No Apple account sign-in, physical device access, actual
 seven-day/self/extension renewal, installed SpringBoard widget refresh cycle,
 background reliability, public notarization or marketplace acceptance is claimed.
 The review DMG is development signed; release packaging requires Developer ID.
+
+## JavaScript applets
+
+`OrbitAppletTests` covers inert manifests, widget/applet separation, interactive
+controls, action inputs, fresh-VM persistence, network denial, failed invocations
+and stale-update rejection. `OrbitAppletHostTests` covers local-only queue/export
+permissions, independent phone copies, self-contained committed exports and icons.
+Python tests cover MCP and CLI export contracts.
+
+Use `ORBIT_TEST_APPLET_EXPORT=/tmp/OrbitAppletFixture swift test --filter
+OrbitAppletHostTests.testStandaloneExportIsCommittedSelfContainedAndHasIcon` to
+retain a blank exported host. Create a detached worktree from that repository,
+then build its `AppletHost` scheme for Simulator.
+`OrbitAppletsUITests` imports a file through Paste, checks consent before render,
+launches the native applet and taps its action. Run it alongside
+`OrbitWidgetsUITests` on Simulator. These checks do not establish physical
+installation, Personal Team renewal, widget sharing, or marketplace acceptance.
+Standalone apps consume a separate development app slot; physical acceptance
+must verify the selected icon and dedicated launch on the intended phone.

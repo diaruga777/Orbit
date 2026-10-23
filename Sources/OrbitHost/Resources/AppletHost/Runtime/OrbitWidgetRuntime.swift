@@ -14,7 +14,7 @@ public enum OrbitWidgetRuntime {
 /// Public JavaScriptCore APIs cannot interrupt a tight loop. Bound the caller's
 /// wait, cancel network work, and quarantine the queue. Two occupied evaluations
 /// cap leaked workers until the process exits; an extension also has an OS budget.
-private final class OrbitWidgetExecution: @unchecked Sendable {
+final class OrbitWidgetExecution: @unchecked Sendable {
     private static let slots = DispatchSemaphore(value: 2)
     private let queue = DispatchQueue(label: "Orbit.widget.JavaScript", qos: .utility)
     private let lock = NSLock()
@@ -29,8 +29,10 @@ private final class OrbitWidgetExecution: @unchecked Sendable {
     private let storage: [String: String]
     private let family: String
     private let now: Date
-    init(script: OrbitWidgetScript, storage: [String: String], family: String, now: Date) {
-        self.script = script; self.storage = storage; self.family = family; self.now = now
+    private let event: OrbitAppletEvent?
+    private let applet: Bool
+    init(script: OrbitWidgetScript, storage: [String: String], family: String, now: Date, applet: Bool = false, event: OrbitAppletEvent? = nil) {
+        self.script = script; self.storage = storage; self.family = family; self.now = now; self.applet = applet; self.event = event
     }
     func start(_ continuation: CheckedContinuation<OrbitWidgetOutput, Error>) {
         lock.lock()
@@ -92,13 +94,14 @@ private final class OrbitWidgetExecution: @unchecked Sendable {
         context.setObject(fetch, forKeyedSubscript: "_orbitFetch" as NSString)
         context.setObject(finish, forKeyedSubscript: "_orbitFinish" as NSString)
         context.setObject(fail, forKeyedSubscript: "_orbitFail" as NSString)
-        let config: [String: Any] = ["family": family, "now": ISO8601DateFormatter().string(from: now), "storage": storage]
+        var config: [String: Any] = ["family": family, "now": ISO8601DateFormatter().string(from: now), "storage": storage]
+        config["event"] = event.map { ["action": $0.action, "values": $0.values] as [String: Any] } ?? NSNull()
         guard let data = try? JSONSerialization.data(withJSONObject: config) else { stop(OrbitWidgetError("Couldn’t load widget data.")); return }
         context.evaluateScript("const _orbitConfig = " + String(decoding: data, as: UTF8.self) + ";\n" + Self.bootstrap)
         guard !self.isCompleted else { return }
         context.evaluateScript(script.source, withSourceURL: URL(string: "orbit-widget://" + script.id + ".js"))
         guard !self.isCompleted else { return }
-        context.evaluateScript(Self.invoke)
+        context.evaluateScript(applet ? Self.invokeApplet : Self.invoke)
     }
     private func decode(_ json: String) {
         guard !self.isCompleted else { return }
@@ -111,7 +114,7 @@ private final class OrbitWidgetExecution: @unchecked Sendable {
             var previous = Date.distantPast
             for entry in result.entries {
                 guard entry.date >= previous, entry.date >= now.addingTimeInterval(-60), entry.date <= now.addingTimeInterval(2 * 86400) else { throw OrbitWidgetError("Widget timeline entries need increasing dates within the next two days.") }
-                var count = 0; try entry.view.validate(count: &count); previous = entry.date
+                var count = 0; try entry.view.validate(count: &count, interactive: applet); previous = entry.date
             }
             guard result.entries[0].date <= now.addingTimeInterval(1) else { throw OrbitWidgetError("Start the widget timeline with the current time.") }
             result.updatedAt = now
@@ -140,6 +143,17 @@ private final class OrbitWidgetExecution: @unchecked Sendable {
           text: async () => body, json: async () => JSON.parse(body)}));
       });
     });
+    """#
+    private static let invokeApplet = #"""
+    (async () => {
+      if (typeof module.exports.render !== 'function') throw new Error('Export render(ctx).');
+      if (_orbitConfig.event) {
+        if (typeof module.exports.action !== 'function') throw new Error('Export action(ctx, event) for controls.');
+        await module.exports.action(ctx, Object.freeze(_orbitConfig.event));
+      } else if (module.exports.update) { await module.exports.update(ctx); }
+      const view = await module.exports.render(ctx);
+      _orbitFinish(JSON.stringify({entries:[{date:ctx.now.toISOString(),view}], storage:_orbitData, updatedAt:ctx.now.toISOString()}));
+    })().catch(error => _orbitFail(String(error.message || error)));
     """#
     private static let invoke = #"""
     (async () => {

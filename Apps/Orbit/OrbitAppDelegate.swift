@@ -34,6 +34,7 @@ import OrbitWire
 @MainActor final class OrbitSceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControllerDelegate {
     var window: UIWindow?
     private var widgets: OrbitWidgetsController?
+    private var applets: OrbitWidgetsController?
     let connection = OrbitPhoneConnection.shared
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
@@ -91,8 +92,15 @@ import OrbitWire
             self.widgets = widgets
             let widgetNavigation = UINavigationController(rootViewController: widgets)
             widgetNavigation.tabBarItem = UITabBarItem(title: "Widgets", image: UIImage(systemName: "square.grid.2x2"), tag: 5)
-            tabs.viewControllers = [project, apps, widgetNavigation, refresh, settings]
-            tabs.selectedIndex = connection.pairingCode.isEmpty ? 4 : min(4, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
+            let applets = OrbitWidgetsController(deployments: {
+                let result = try await connection.rpc("applets") as? [[String: Any]] ?? []
+                return result.compactMap { $0["source"] as? String }
+            }, applets: true)
+            self.applets = applets
+            let appletNavigation = UINavigationController(rootViewController: applets)
+            appletNavigation.tabBarItem = UITabBarItem(title: "Applets", image: UIImage(systemName: "curlybraces.square"), tag: 6)
+            tabs.viewControllers = [project, apps, appletNavigation, widgetNavigation, refresh, settings]
+            tabs.selectedIndex = connection.pairingCode.isEmpty ? 5 : min(5, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
             window.rootViewController = tabs
         } catch {
             let controller = UIViewController(); controller.view.backgroundColor = .systemBackground
@@ -108,8 +116,12 @@ import OrbitWire
     }
     private func openWidget(_ url: URL) {
         guard url.isFileURL, let widgets, let tabs = window?.rootViewController as? UITabBarController else { return }
-        tabs.selectedIndex = 2
-        DispatchQueue.main.async { widgets.open(url) }
+        let access = url.startAccessingSecurityScopedResource()
+        let isApplet = ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? Int.max) <= 128 * 1024 &&
+            ((try? String(contentsOf: url, encoding: .utf8).hasPrefix("/* orbit-applet\n")) ?? false)
+        if access { url.stopAccessingSecurityScopedResource() }
+        tabs.selectedIndex = isApplet ? 2 : 3
+        DispatchQueue.main.async { (isApplet ? self.applets : widgets)?.open(url) }
     }
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
         UserDefaults.standard.set(tabBarController.selectedIndex, forKey: "Orbit.selectedTab")

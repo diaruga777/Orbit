@@ -62,6 +62,30 @@ public actor OrbitHost {
                 return try await self.decoded(request).apps ?? []
             }
             return try object(targets)
+        case "applet_prompt": return ["prompt": OrbitAppletPrompt.text, "blank": OrbitAppletExport.blank]
+        case "applets": return try appletDeployments()
+        case "applet_add":
+            guard peer == nil else { throw CodeFailure("Deploy applet files from the Mac.") }
+            let source = try appletSource(p)
+            let script = try OrbitAppletDefinition.widgetScript(source)
+            let directory = root.appendingPathComponent("Applets")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let existing = try appletDeployments()
+            guard existing.count < 24 || existing.contains(where: { $0["id"] == script.id }) else { throw CodeFailure("Remove an applet before adding another.") }
+            try Data(source.utf8).write(to: directory.appendingPathComponent(script.id + ".js"), options: .atomic)
+            return ["id": script.id, "name": script.definition.name, "pendingPhoneApproval": true]
+        case "applet_remove":
+            guard peer == nil else { throw CodeFailure("Remove Mac applet deployments on the Mac.") }
+            let id = try required(p, "id")
+            guard try appletDeployments().contains(where: { $0["id"] == id }) else { throw CodeFailure("Applet not found.") }
+            try FileManager.default.removeItem(at: root.appendingPathComponent("Applets/" + id + ".js")); return ["removed": id]
+        case "applet_export":
+            guard peer == nil else { throw CodeFailure("Create standalone app projects on the Mac.") }
+            let destination = try required(p, "destination")
+            guard destination.hasPrefix("/") else { throw CodeFailure("Choose an absolute destination path.") }
+            return try await OrbitAppletExport.create(source: p["path"] == nil ? nil : appletSource(p),
+                destination: URL(fileURLWithPath: destination), bundleID: required(p, "bundleID"),
+                icon: (p["iconPath"] as? String).map { URL(fileURLWithPath: $0) })
         case "widgets": return try widgetDeployments()
         case "widget_add":
             guard peer == nil else { throw CodeFailure("Deploy widget files from the Mac.") }
@@ -153,6 +177,22 @@ public actor OrbitHost {
             try await service.revokeEndpointAuthorizations(); try saveConfiguration(); return ["forgotten": true]
         default: throw CodeFailure("Unknown Orbit method: \(method)")
         }
+    }
+    private func appletSource(_ p: [String: Any]) throws -> String {
+        let path = try required(p, "path")
+        guard path.hasPrefix("/"), (try URL(fileURLWithPath: path).resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= OrbitWidgetDefinition.maximumSourceBytes else { throw CodeFailure("Choose a JavaScript file under 128 KB.") }
+        let source = try String(contentsOfFile: path, encoding: .utf8)
+        _ = try OrbitAppletDefinition.parse(source)
+        return source
+    }
+    private func appletDeployments() throws -> [[String: String]] {
+        let directory = root.appendingPathComponent("Applets")
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "js" }.sorted { $0.lastPathComponent < $1.lastPathComponent }.prefix(24).map {
+                let source = try appletSource(["path": $0.path]), definition = try OrbitAppletDefinition.parse(source)
+                return ["id": definition.id, "name": definition.name, "source": source, "digest": OrbitWidgetDefinition.digest(source)]
+            }
     }
     private func widgetDeployments() throws -> [[String: String]] {
         let directory = root.appendingPathComponent("Widgets")

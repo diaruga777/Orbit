@@ -54,6 +54,7 @@ public struct OrbitWidgetScript: Codable, Identifiable, Sendable {
     public var source: String
     public var installedAt: Date
     public var id: String { definition.id }
+    init(definition: OrbitWidgetDefinition, source: String) { self.definition = definition; self.source = source; installedAt = Date() }
     public init(source: String) throws { definition = try .parse(source); self.source = source; installedAt = Date() }
 }
 
@@ -66,11 +67,15 @@ public struct OrbitWidgetNode: Codable, Equatable, Sendable {
     public var color: String?
     public var spacing: Double?
     public var children: [OrbitWidgetNode]?
+    public var action: String?
+    public var key: String?
+    public var value: String?
+    public var isOn: Bool?
     public var date: Date?
     public init(type: String, text: String? = nil) { self.type = type; self.text = text }
-    public func validate(depth: Int = 0, count: inout Int) throws {
+    public func validate(depth: Int = 0, count: inout Int, interactive: Bool = false) throws {
         count += 1
-        guard count <= 120, depth <= 8, ["text", "symbol", "vstack", "hstack", "spacer", "date"].contains(type),
+        guard count <= 120, depth <= 8, (["text", "symbol", "vstack", "hstack", "spacer", "date"] + (interactive ? ["button", "textfield", "toggle", "divider"] : [])).contains(type),
               (text?.count ?? 0) <= 2000, (symbol?.count ?? 0) <= 80,
               size.map({ $0.isFinite && (8...72).contains($0) }) ?? true,
               spacing.map({ $0.isFinite && (0...40).contains($0) }) ?? true,
@@ -78,7 +83,12 @@ public struct OrbitWidgetNode: Codable, Equatable, Sendable {
               weight.map({ ["regular", "medium", "semibold", "bold"].contains($0) }) ?? true else {
             throw OrbitWidgetError("This widget returned an unsupported layout.")
         }
-        for child in children ?? [] { try child.validate(depth: depth + 1, count: &count) }
+        if ["button", "textfield", "toggle"].contains(type) {
+            guard let action, !action.isEmpty, action.count <= 128,
+                  type == "button" || (key.map { !$0.isEmpty && $0.count <= 128 } ?? false),
+                  (value?.count ?? 0) <= 2000 else { throw OrbitWidgetError("Controls need a short action and input key.") }
+        }
+        for child in children ?? [] { try child.validate(depth: depth + 1, count: &count, interactive: interactive) }
     }
 }
 

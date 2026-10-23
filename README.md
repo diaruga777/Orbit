@@ -2,7 +2,7 @@
 
 **Build an iOS app. Keep it on your phone.**
 
-Orbit is an open source iPhone/iPad source editor and Mac build companion. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices. Orbit also hosts single-file JavaScript Home Screen and Lock Screen widgets.
+Orbit is an open source iPhone/iPad source editor and Mac build companion. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices. Orbit also hosts single-file JavaScript applets and Home Screen / Lock Screen widgets.
 
 You need a Mac, an iPhone, and either a coding agent subscription/credits or enough development experience to configure the tools yourself. Orbit includes an MCP and setup/deploy skills, so an agent can follow this README end to end. Orbit does not require an AI provider, subscription, hosted backend or paid Apple membership.
 
@@ -23,7 +23,15 @@ Xcode resolves the pinned Swift package sources on first build. See
 [DMG packaging](docs/distribution.md) for producing a release. A development-signed
 review DMG is not a publicly notarized download.
 
-## JavaScript widgets and phone refresh
+## JavaScript applets, widgets and phone refresh
+
+**Applets → Add → Copy AI Prompt** gives public ChatGPT or another assistant the
+complete single-file applet API. Import/paste its `.js` file on iPhone or queue it
+from Mac, approve its websites, then tap to open a native interactive applet.
+On Mac, **Applets → Make Standalone App** (or **Blank Host App**) creates a
+committed Xcode project with an icon selector. Add that project to Apps to build
+and install it with your own signing setup. MCP supports the same workflow.
+See [applets](docs/applets/README.md).
 
 **Widgets → Add → Copy AI Prompt** gives you a prompt for public ChatGPT or another
 assistant. Import/paste its `.js` file, review the allowed websites, preview it,

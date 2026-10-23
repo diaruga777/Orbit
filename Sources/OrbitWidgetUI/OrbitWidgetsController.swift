@@ -4,13 +4,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 import WidgetKit
 import OrbitWidgets
+import OrbitAppletUI
 
 @MainActor public final class OrbitWidgetsController: UITableViewController, UIDocumentPickerDelegate {
-    private let store = OrbitWidgetStore()
+    private let store: OrbitWidgetStore
+    private let applets: Bool
     private var scripts: [OrbitWidgetScript] = []
     private let deployments: (() async throws -> [String])?
-    public init(deployments: (() async throws -> [String])? = nil) {
-        self.deployments = deployments; super.init(style: .insetGrouped); title = "Widgets"
+    public init(deployments: (() async throws -> [String])? = nil, applets: Bool = false) {
+        self.deployments = deployments; self.applets = applets; store = OrbitWidgetStore(applets: applets); super.init(style: .insetGrouped); title = applets ? "Applets" : "Widgets"
     }
     required init?(coder: NSCoder) { fatalError() }
     public override func viewDidLoad() {
@@ -19,7 +21,7 @@ import OrbitWidgets
             UIAction(title: "Import JavaScript", image: UIImage(systemName: "doc")) { [weak self] _ in self?.importFile() },
             UIAction(title: "Paste JavaScript", image: UIImage(systemName: "doc.on.clipboard")) { [weak self] _ in self?.paste() },
             UIAction(title: "From Mac", image: UIImage(systemName: "desktopcomputer")) { [weak self] _ in self?.fromMac() },
-            UIAction(title: "Copy AI Prompt", image: UIImage(systemName: "sparkles")) { _ in UIPasteboard.general.string = OrbitWidgetPrompt.text }
+            UIAction(title: "Copy AI Prompt", image: UIImage(systemName: "sparkles")) { [weak self] _ in UIPasteboard.general.string = self?.applets == true ? OrbitAppletPrompt.text : OrbitWidgetPrompt.text }
         ]))
         reload()
     }
@@ -28,16 +30,16 @@ import OrbitWidgets
     public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { max(1, scripts.count) }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        guard !scripts.isEmpty else { cell.textLabel?.text = "Add Your First Widget"; cell.detailTextLabel?.text = "Import a JavaScript file or copy a prompt to make one."; cell.detailTextLabel?.numberOfLines = 0; return cell }
+        guard !scripts.isEmpty else { cell.textLabel?.text = applets ? "Add Your First Applet" : "Add Your First Widget"; cell.detailTextLabel?.text = "Import a JavaScript file or copy a prompt to make one."; cell.detailTextLabel?.numberOfLines = 0; return cell }
         let script = scripts[indexPath.row]
         cell.textLabel?.text = script.definition.name
-        cell.detailTextLabel?.text = "Requests updates every \(script.definition.refreshMinutes) minutes"
+        cell.detailTextLabel?.text = applets ? "Tap to open" : "Requests updates every \(script.definition.refreshMinutes) minutes"
         cell.imageView?.image = UIImage(systemName: "square.grid.2x2"); cell.accessoryType = .disclosureIndicator; return cell
     }
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard !scripts.isEmpty else { importFile(); return }
-        navigationController?.pushViewController(OrbitWidgetDetailController(script: scripts[indexPath.row], store: store), animated: true)
+        launch(scripts[indexPath.row])
     }
     public override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         guard !scripts.isEmpty else { return }
@@ -57,13 +59,13 @@ import OrbitWidgets
         present(UINavigationController(rootViewController: controller), animated: true)
     }
     private func fromMac() {
-        guard let deployments else { show("Connect your Mac to receive widgets."); return }
+        guard let deployments else { show(applets ? "Connect your Mac to receive applets." : "Connect your Mac to receive widgets."); return }
         Task { do {
             let sources = try await deployments()
-            guard !sources.isEmpty else { show("No widgets waiting on your Mac."); return }
+            guard !sources.isEmpty else { show(applets ? "No applets waiting on your Mac." : "No widgets waiting on your Mac."); return }
             let picker = UIAlertController(title: "From Mac", message: nil, preferredStyle: .actionSheet)
             for source in sources {
-                if let definition = try? OrbitWidgetDefinition.parse(source) {
+                if let definition = try? definition(source) {
                     picker.addAction(UIAlertAction(title: definition.name, style: .default) { [weak self] _ in self?.review(source) })
                 }
             }
@@ -72,20 +74,27 @@ import OrbitWidgets
     }
     public func review(_ source: String) {
         do {
-            let definition = try OrbitWidgetDefinition.parse(source)
+            let definition = try definition(source)
             let replacing = try store.script(definition.id) != nil
             let websites = definition.domains.isEmpty ? "No network access." : "Websites: " + definition.domains.joined(separator: ", ")
             let alert = UIAlertController(title: (replacing ? "Update " : "Add ") + definition.name + "?", message: websites + "\n\nThis JavaScript can save its own data on your phone. Only add code you trust.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            alert.addAction(UIAlertAction(title: replacing ? "Update Widget" : "Add Widget", style: .default) { [weak self] _ in
+            alert.addAction(UIAlertAction(title: applets ? (replacing ? "Update Applet" : "Add Applet") : (replacing ? "Update Widget" : "Add Widget"), style: .default) { [weak self] _ in
                 guard let self else { return }; do {
                     try store.install(source); WidgetCenter.shared.reloadAllTimelines(); reload()
-                    navigationController?.pushViewController(OrbitWidgetDetailController(script: try OrbitWidgetScript(source: source), store: store), animated: true)
+                    launch(try applets ? OrbitAppletDefinition.widgetScript(source) : OrbitWidgetScript(source: source))
                 } catch { show(error.localizedDescription) }
             }); present(alert, animated: true)
         } catch { show(error.localizedDescription) }
     }
-    private func show(_ text: String) { let alert = UIAlertController(title: "Widgets", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true) }
+    private func definition(_ source: String) throws -> OrbitWidgetDefinition {
+        try applets ? OrbitAppletDefinition.widgetScript(source).definition : OrbitWidgetDefinition.parse(source)
+    }
+    private func launch(_ script: OrbitWidgetScript) {
+        if applets { navigationController?.pushViewController(UIHostingController(rootView: OrbitAppletView(script: script, store: store)), animated: true) }
+        else { navigationController?.pushViewController(OrbitWidgetDetailController(script: script, store: store), animated: true) }
+    }
+    private func show(_ text: String) { let alert = UIAlertController(title: applets ? "Applets" : "Widgets", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true) }
 }
 
 @MainActor private final class OrbitWidgetPasteController: UIViewController {

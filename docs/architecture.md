@@ -7,7 +7,7 @@ Orbit is independent of Luna. It contains a source editor, a Mac executor and tr
 | `OrbitCore` | Codable requests, revisions, drafts, job state, retained artifacts, phone-bound install grants |
 | `OrbitMac` | File editing, SourceKit, Xcode build jobs, isolated Git worktrees, signing/profile checks, native and bounded remote installation |
 | `OrbitRefresh` | Phone-owned Apple sessions, signing, cached IPA validation, LocalDevVPN installation and readback |
-| `OrbitWidgets` / `OrbitWidgetUI` | Single-file JavaScript runtime, grants, K-V storage, native layouts and import/preview |
+| `OrbitWidgets` / `OrbitWidgetUI` | Single-file JavaScript runtime, grants, K-V storage, native widget/applet layouts and consent |
 | `OrbitUI` | UIKit editor, syntax highlighting, completion, diagnostics and build views extracted from Luna Code |
 | `OrbitWire` | Peer IDs, bounded byte streams and pairing routes |
 | `OrbitTransport` | Source-built Go mutual TLS, explicit Syncthing relays, native iroh streams, framing and phone-owned service forwarding |
@@ -59,3 +59,26 @@ The iOS client offers readiness in the foreground and requests BGProcessing wind
 - The Mac must be logged in, awake, with Xcode account access available. No always-on Luna/Orbit hosted service fills that role.
 - There is no automatic signing-key migration. The Mac DMG bundles a resumable setup wizard and phone source; it signs the iOS clients with the user’s own account. Public DMGs require Developer ID and notarization, separately from review packaging.
 - WidgetKit controls network refresh scheduling. JavaScript runs in the installed host extension; new scripts do not create native extensions. See [widgets](widgets/README.md) and [phone refresh](local-refresh.md).
+
+## JavaScript applets
+
+Applets use an inert `orbit-applet` JSON header, exact-host HTTPS grants and the
+widget evaluator's quotas/deadline. `update` runs on launch/reload; `action` receives
+a control name and string inputs before `render`. Each invocation has a fresh VM;
+private JSON storage is committed only after validated output. Widgets reject
+interactive nodes. Applets use a separate `Orbit.Applets.v1` Keychain service,
+scoped to the containing app's access group, with ThisDeviceOnly state.
+
+The phone reviews every import/update before evaluation. Mac `applet_add` queues
+source without executing it; a paired phone can list but cannot mutate Mac files
+or export projects. CLI/MCP and Mac UI share the Host catalog and exporter.
+
+`Sources/OrbitHost/Resources/AppletHost` contains the canonical shared runtime,
+SwiftUI applet view, standalone entrypoint and Xcode template. SwiftPM compiles
+the same runtime/UI sources used by exported projects. Export copies these
+resources into a new self-contained repository and commits it on main, with a
+user-owned bundle ID and normalized 1024px icon. No external package, paid
+capability or Orbit connection is needed by the standalone host. First launch
+and changed script digests require local consent. Builds/install/schedules go
+through the existing trusted target and detached committed build pipeline; the
+export itself never installs.

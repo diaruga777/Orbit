@@ -63,3 +63,23 @@ class MCPTests(unittest.TestCase):
                 with patch.dict('os.environ',{'ORBIT_HOME':folder}): self.assertEqual(orbit.rpc('targets'),[{'id':'app'}])
             finally: thread.join(timeout=5); sock.close()
 if __name__=='__main__': unittest.main()
+
+class AppletContractTests(unittest.TestCase):
+    def test_applet_tools_forward_export_and_reject_unknown_args(self):
+        params = {'destination':'/tmp/MyApplet','bundleID':'com.example.myapplet','iconPath':'/tmp/icon.png'}
+        with patch.object(orbit,'rpc',return_value={}) as rpc:
+            reply = orbit.handle_mcp({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'orbit_applet_export','arguments':params}})
+            rpc.assert_called_once_with('applet_export',params)
+            self.assertFalse(reply['result']['isError'])
+        names = {s['name']:s for s in orbit.tool_specs()}
+        self.assertTrue(names['orbit_applet_prompt']['annotations']['readOnlyHint'])
+        self.assertIn('orbit_applet_add', names)
+
+    def test_applet_export_cli_accepts_blank_or_file(self):
+        for source in [[], ['/tmp/app.js']]:
+            args = ['orbit','applet-export',*source,'--destination','/tmp/App','--bundle-id','com.example.app']
+            with patch.object(orbit,'rpc',return_value={}) as rpc, patch('sys.argv',args):
+                orbit.main()
+                expected = {'destination':'/tmp/App','bundleID':'com.example.app'}
+                if source: expected['path'] = source[0]
+                rpc.assert_called_once_with('applet_export',expected)

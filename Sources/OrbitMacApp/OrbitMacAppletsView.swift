@@ -1,0 +1,107 @@
+import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
+
+struct OrbitMacAppletsView: View {
+    @ObservedObject var model: OrbitMacModel
+    @State private var scripts: [[String: String]] = []
+    @State private var message = ""
+    @State private var export: AppletExportChoice?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Text("Applets").font(.largeTitle.bold())
+                Spacer()
+                Button("Copy AI Prompt") { Task { do {
+                    let result = try await model.rpc("applet_prompt") as? [String: String] ?? [:]
+                    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(result["prompt"] ?? "", forType: .string)
+                } catch { message = error.localizedDescription } } }
+                Button("Blank Host App") { export = AppletExportChoice(path: nil) }
+                Button("Add JavaScript", action: add).buttonStyle(.borderedProminent)
+            }
+            if scripts.isEmpty { ContentUnavailableView("Your Little Apps", systemImage: "curlybraces.square", description: Text("Import a .js file or copy a prompt to make one.")) }
+            List(Array(scripts.enumerated()), id: \.offset) { _, script in
+                HStack {
+                    VStack(alignment: .leading) { Text(script["name"] ?? "Applet").font(.headline); Text("Ready for your iPhone").foregroundStyle(.secondary) }
+                    Spacer()
+                    Button("Make Standalone App") { export = AppletExportChoice(path: script["id"]) }
+                    Button("Remove") { Task { do { _ = try await model.rpc("applet_remove", ["id": script["id"] ?? ""]); await reload() } catch { message = error.localizedDescription } } }
+                }.padding(.vertical, 8)
+            }
+            Text("On iPhone, open Applets → Add → From Mac. Approve a script, then tap to open it. Standalone apps get their own icon and use an Apple app slot.").foregroundStyle(.secondary)
+            if !message.isEmpty { Text(message).textSelection(.enabled) }
+        }.padding(28).task { await reload() }
+        .sheet(item: $export) { choice in
+            OrbitAppletExportSheet(model: model, source: scripts.first { $0["id"] == choice.path }?["source"])
+        }
+    }
+    private func reload() async { do { scripts = try await model.rpc("applets") as? [[String: String]] ?? [] } catch { message = error.localizedDescription } }
+    private func add() {
+        let panel = NSOpenPanel(); panel.allowedContentTypes = [.javaScript, .plainText]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { do { _ = try await model.rpc("applet_add", ["path": url.path]); await reload() } catch { message = error.localizedDescription } }
+    }
+}
+private struct AppletExportChoice: Identifiable { let id = UUID(); let path: String? }
+
+private struct OrbitAppletExportSheet: View {
+    @ObservedObject var model: OrbitMacModel
+    let source: String?
+    @Environment(\.dismiss) private var dismiss
+    @State private var bundleID = ""
+    @State private var icon: URL?
+    @State private var result: [String: String]?
+    @State private var message = ""
+    @State private var busy = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Standalone App").font(.title.bold())
+            if let result {
+                Text("Your project is ready.")
+                Text(result["project"] ?? "").font(.callout).textSelection(.enabled)
+                Text("Add it to Apps to build and install with your Xcode account.").foregroundStyle(.secondary)
+                HStack {
+                    Button("Show Project") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: result["project"] ?? "")]) }
+                    Button("Add to Apps") {
+                        model.project = result["project"] ?? ""; model.scheme = "AppletHost"; model.branch = "main"
+                        if model.phone.isEmpty { message = "Choose your phone in Add App, then add this project." }
+                        else { model.add(); dismiss() }
+                    }.buttonStyle(.borderedProminent)
+                    Button("Done") { dismiss() }
+                }
+            } else {
+                TextField("Bundle ID, e.g. com.yourname.myapp", text: $bundleID)
+                HStack {
+                    if let icon, let image = NSImage(contentsOf: icon) { Image(nsImage: image).resizable().scaledToFit().frame(width: 64, height: 64) }
+                    Button(icon?.lastPathComponent ?? "Choose Icon…") {
+                        let panel = NSOpenPanel(); panel.allowedContentTypes = [.png, .jpeg]
+                        if panel.runModal() == .OK { icon = panel.url }
+                    }
+                    if icon != nil { Button("Use Default") { icon = nil } }
+                }
+                Text("Use a square image. The default is a simple JS icon.").foregroundStyle(.secondary)
+                HStack { Button("Cancel") { dismiss() }; Button("Create Project…", action: create).buttonStyle(.borderedProminent).disabled(bundleID.isEmpty || busy) }
+            }
+            if busy { ProgressView() }
+            if !message.isEmpty { Text(message).foregroundStyle(.secondary).textSelection(.enabled) }
+        }.padding(28).frame(width: 520)
+    }
+    private func create() {
+        let panel = NSSavePanel(); panel.nameFieldStringValue = "MyApplet"; panel.canCreateDirectories = true; panel.title = "New Applet Project Folder"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        busy = true; message = ""
+        Task { @MainActor in
+            var temporary: URL?
+            defer { busy = false; if let temporary { try? FileManager.default.removeItem(at: temporary) } }
+            do {
+                var params: [String: Any] = ["destination": destination.path, "bundleID": bundleID]
+                if let source {
+                    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".js"); temporary = url
+                    try Data(source.utf8).write(to: url, options: .atomic); params["path"] = url.path
+                }
+                params["iconPath"] = icon?.path
+                result = try await model.rpc("applet_export", params) as? [String: String]
+            } catch { message = error.localizedDescription }
+        }
+    }
+}

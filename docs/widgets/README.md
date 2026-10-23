@@ -48,7 +48,7 @@ use last-completed-refresh semantics, not database transactions.
 
 Native layout nodes are text, SF Symbol, horizontal/vertical stack, spacer and
 relative date. The complete generation prompt is maintained in
-`Sources/OrbitWidgets/OrbitWidgetPrompt.swift` and mirrored in the bundled agent
+`Sources/OrbitHost/Resources/AppletHost/Runtime/OrbitWidgetPrompt.swift` and mirrored in the bundled agent
 skill reference. Maximum source size is 128 KiB; layouts are bounded to 120 nodes
 and eight levels. Timelines contain a current entry plus up to 63 ordered future
 entries within 48 hours. A refresh permits at most eight requests, 1 MiB each,
