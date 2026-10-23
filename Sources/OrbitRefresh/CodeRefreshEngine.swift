@@ -23,6 +23,11 @@ public actor CodeRefreshEngine {
         }
         return ["cache": cached, "account": team != nil, "certificate": try await account.hasCertificate(), "pairing": try await device.hasPairing(), "connection": await device.recentlyChecked()]
     }
+    public func setupComplete() async throws -> Bool {
+        let status = try await readiness()
+        let verified = try await device.hasVerifiedConnection()
+        return ["cache", "account", "certificate", "pairing"].allSatisfy { status[$0] == true } && verified
+    }
     /// The running bundle is installed evidence even before phone-only setup.
     /// Cached imports do not establish installation on this phone.
     public func installedSelf(deviceID: String, receipt: CodeInstalledApp?) throws -> CodeInstalledApp? {

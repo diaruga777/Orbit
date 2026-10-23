@@ -50,8 +50,7 @@ import OrbitRefresh
         let engine = CodeRefreshEngine.shared
         // A disconnected VPN is transient; configured credentials/cache determine
         // setup completion, without repeatedly asking after a completed setup.
-        let readiness = (try? await engine.readiness()) ?? [:]
-        let complete = ["cache", "account", "certificate", "pairing"].allSatisfy { readiness[$0] == true }
+        let complete = (try? await engine.setupComplete()) ?? false
         let id = deviceID ?? "this-phone"
         var apps = ((try? CodeInstalledAppStore(root: OrbitPhoneConnection.root.appendingPathComponent("Expiry")).apps()) ?? []).filter { $0.deviceID == id }
         if let own = try? await engine.installedSelf(deviceID: id, receipt: receipt) { apps.append(own) }

@@ -45,6 +45,10 @@ public actor CodeService {
         }
         let known = try store.apps()
         guard let deviceID else { return known }
+        guard !deviceID.isEmpty, deviceID.count <= 128,
+              deviceID.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else {
+            throw CodeFailure("Choose a valid phone.")
+        }
         let selected = known.filter { $0.deviceID == deviceID }
         let logs = root.appendingPathComponent("ExpiryReadback")
         try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)

@@ -147,7 +147,8 @@ changes also recompute the reminder. `UNUserNotificationCenter` owns a single
 non-repeating request 24 hours before the earliest future expiry. A first late
 sync inside that window delivers immediately; repeated checks do not repeat a
 delivered reminder for the same expiry. Renewal replaces the pending deadline.
-Configured account, certificate, pairing file and current Orbit cache cancel the
+Configured account, certificate, pairing file, current Orbit cache and a successful
+connection check cancel the
 setup reminder; a transient VPN disconnect does not reclassify setup as incomplete.
 Notification authorization is requested in the foreground only when there is an
 installed app to protect. Denial leaves the existing setup banner available.
