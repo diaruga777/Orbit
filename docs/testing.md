@@ -184,3 +184,15 @@ remain separate acceptance work.
 Fresh-Mac Homebrew/Xcode installation, Apple authentication, physical installation
 and renewal, remote-network installation, public notarization and marketplace
 listing were not performed.
+
+## Applet verification (2026-10-23)
+
+The integrated revision passed 142 Swift tests (four optional integration fixtures
+skipped), 14 Python tests, both Go race suites and the helper vet check. The
+packaged phone-source fixture passed separately. Both Orbit clients and a
+self-contained exported host built; the Mac review bundle passed signature
+verification. Simulator UI checks passed applet import consent/action, standalone
+consent/action/persistence across relaunch, and existing widget import/preview.
+Keychain UI checks use local ad hoc signing, without Apple account sign-in.
+Physical phone installation, Personal Team lifetime renewal, public notarization
+and marketplace listing were not performed.
