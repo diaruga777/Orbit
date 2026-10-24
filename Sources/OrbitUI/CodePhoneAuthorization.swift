@@ -33,6 +33,8 @@ import OrbitCore
                 }
                 alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
                 alert.popoverPresentationController?.sourceView = controller.view
+                alert.popoverPresentationController?.sourceRect = CGRect(x: controller.view.bounds.midX, y: controller.view.bounds.midY, width: 1, height: 1)
+                alert.popoverPresentationController?.permittedArrowDirections = []
                 controller.present(alert, animated: true)
             } catch { completed(error.localizedDescription) }
         }

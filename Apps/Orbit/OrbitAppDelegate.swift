@@ -81,6 +81,7 @@ import OrbitWire
                 return CodeBrowserPage(items: items, next: (result["next"] as? NSNumber)?.int64Value)
             }, pairing: { OrbitConnectionController(connection: connection) }, peerID: { connection.peerID })
             let tabs = UITabBarController()
+            tabs.mode = .tabSidebar
             tabs.delegate = self
             let project = CodeWorkspaceController(environment: environment)
             project.tabBarItem = UITabBarItem(title: "Project", image: UIImage(systemName: "curlybraces"), tag: 0)

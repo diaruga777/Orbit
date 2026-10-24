@@ -106,7 +106,7 @@ import OrbitAppletUI
                     picker.addAction(UIAlertAction(title: definition.name, style: .default) { [weak self] _ in self?.review(source) })
                 }
             }
-            picker.addAction(UIAlertAction(title: "Cancel", style: .cancel)); picker.popoverPresentationController?.sourceView = view; present(picker, animated: true)
+            picker.addAction(UIAlertAction(title: "Cancel", style: .cancel)); picker.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem; present(picker, animated: true)
         } catch { show(error.localizedDescription) } }
     }
     public func review(_ source: String, fromInbox: Bool = false) {

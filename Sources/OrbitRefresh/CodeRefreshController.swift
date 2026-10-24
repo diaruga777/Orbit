@@ -134,6 +134,8 @@ import OrbitCore
         let alert = UIAlertController(title: "Apple Team", message: nil, preferredStyle: .actionSheet)
         for team in teams { alert.addAction(UIAlertAction(title: team.name, style: .default) { _ in self.perform { try await self.engine.account.select(team) } }) }
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = view
+        alert.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+        alert.popoverPresentationController?.permittedArrowDirections = []
         present(alert, animated: true)
     }
     private func verify(_ request: TwoFactorRequest) async throws -> TwoFactorResponse {

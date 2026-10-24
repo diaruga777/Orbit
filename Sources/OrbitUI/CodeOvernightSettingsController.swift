@@ -91,7 +91,7 @@ import OrbitCore
         }
         case (2, 1): configure(.tailscale)
         case (2, 2): configure(.syncthing)
-        case (4, _) where !jobs.isEmpty: show(jobs[indexPath.row])
+        case (4, _) where !jobs.isEmpty: show(jobs[indexPath.row], at: indexPath)
         default: break
         }
     }
@@ -124,7 +124,7 @@ import OrbitCore
         })
         alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); present(alert, animated: true)
     }
-    private func show(_ job: CodeOvernightJob) {
+    private func show(_ job: CodeOvernightJob, at indexPath: IndexPath) {
         let alert = UIAlertController(title: job.target.project.scheme, message: "\(label(job.state.rawValue))\n\(job.error?.recovery ?? "")", preferredStyle: .actionSheet)
         if job.artifact != nil {
             alert.addAction(UIAlertAction(title: "Retry Installation", style: .default) { [weak self] _ in self?.operation(.overnightInstall, job: job) })
@@ -133,7 +133,8 @@ import OrbitCore
             alert.addAction(UIAlertAction(title: "Cancel Job", style: .destructive) { [weak self] _ in self?.operation(.overnightCancel, job: job) })
         }
         alert.addAction(UIAlertAction(title: "Close", style: .cancel))
-        alert.popoverPresentationController?.sourceView = view; present(alert, animated: true)
+        alert.popoverPresentationController?.sourceView = tableView
+        alert.popoverPresentationController?.sourceRect = tableView.rectForRow(at: indexPath); present(alert, animated: true)
     }
     private func operation(_ operation: CodeRequest.Operation, job: CodeOvernightJob) {
         Task {
@@ -153,7 +154,9 @@ import OrbitCore
             // Share files, not an ephemeral archive tied to the current connection.
             let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             let controller = UIActivityViewController(activityItems: files, applicationActivities: nil)
-            controller.popoverPresentationController?.sourceView = view; present(controller, animated: true)
+            controller.popoverPresentationController?.sourceView = view
+            controller.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+            controller.popoverPresentationController?.permittedArrowDirections = []; present(controller, animated: true)
         } catch { message = error.localizedDescription; tableView.reloadData() }
         }
     }
