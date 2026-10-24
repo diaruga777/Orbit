@@ -20,6 +20,7 @@ import OrbitAppletUI
     required init?(coder: NSCoder) { fatalError() }
     public override func viewDidLoad() {
         super.viewDidLoad()
+        tableView.cellLayoutMarginsFollowReadableWidth = true
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: nil, menu: UIMenu(children: [
             UIAction(title: "Import JavaScript", image: UIImage(systemName: "doc")) { [weak self] _ in self?.importFile() },
             UIAction(title: "Paste JavaScript", image: UIImage(systemName: "doc.on.clipboard")) { [weak self] _ in self?.paste() },

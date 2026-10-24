@@ -19,6 +19,7 @@ import OrbitCore
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     public override func viewDidLoad() {
         super.viewDidLoad()
+        tableView.cellLayoutMarginsFollowReadableWidth = true
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Refresh All", style: .plain, target: self, action: #selector(refreshAll))
         reload()
     }

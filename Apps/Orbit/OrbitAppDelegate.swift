@@ -33,6 +33,26 @@ import OrbitWire
         configuration.delegateClass = OrbitSceneDelegate.self; return configuration
     }
 }
+/// Keep destination identity separate from UIKit's legacy viewControllers API,
+/// which is unavailable after adopting UITab for the system sidebar.
+@MainActor class OrbitTabBarController: UITabBarController {
+    let destinations: [UIViewController]
+    init(destinations: [UIViewController]) {
+        self.destinations = destinations
+        super.init(nibName: nil, bundle: nil)
+        mode = .tabSidebar
+        tabs = destinations.map { controller in
+            UITab(title: controller.tabBarItem.title ?? "", image: controller.tabBarItem.image,
+                  identifier: String(controller.tabBarItem.tag)) { _ in controller }
+        }
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:)") }
+    var destinationIndex: Int {
+        get { tabs.firstIndex { $0 === selectedTab } ?? 0 }
+        set { if tabs.indices.contains(newValue) { selectedTab = tabs[newValue] } }
+    }
+}
+
 @MainActor final class OrbitSceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControllerDelegate {
     var window: UIWindow?
     private var widgets: OrbitWidgetsController?
@@ -80,9 +100,6 @@ import OrbitWire
                 }
                 return CodeBrowserPage(items: items, next: (result["next"] as? NSNumber)?.int64Value)
             }, pairing: { OrbitConnectionController(connection: connection) }, peerID: { connection.peerID })
-            let tabs = UITabBarController()
-            tabs.mode = .tabSidebar
-            tabs.delegate = self
             let project = CodeWorkspaceController(environment: environment)
             project.tabBarItem = UITabBarItem(title: "Project", image: UIImage(systemName: "curlybraces"), tag: 0)
             let apps = UINavigationController(rootViewController: OrbitTargetsController(connection: connection))
@@ -107,14 +124,15 @@ import OrbitWire
             self.applets = applets
             let appletNavigation = UINavigationController(rootViewController: applets)
             appletNavigation.tabBarItem = UITabBarItem(title: "Applets", image: UIImage(systemName: "curlybraces.square"), tag: 6)
-            widgets.pendingCountChanged = { [weak widgetNavigation] count in widgetNavigation?.tabBarItem.badgeValue = count == 0 ? nil : String(count) }
-            applets.pendingCountChanged = { [weak appletNavigation] count in appletNavigation?.tabBarItem.badgeValue = count == 0 ? nil : String(count) }
             widgets.routeImport = { [weak self] file in self?.reviewFile(file) }
             applets.routeImport = { [weak self] file in self?.reviewFile(file) }
+            let tabs = OrbitSetupBannerController(destinations: [project, apps, appletNavigation, widgetNavigation, refresh, settings])
+            tabs.delegate = self
+            widgets.pendingCountChanged = { [weak tabs] count in tabs?.tabs[3].badgeValue = count == 0 ? nil : String(count) }
+            applets.pendingCountChanged = { [weak tabs] count in tabs?.tabs[2].badgeValue = count == 0 ? nil : String(count) }
             widgets.refreshInbox(); applets.refreshInbox()
-            tabs.viewControllers = [project, apps, appletNavigation, widgetNavigation, refresh, settings]
-            tabs.selectedIndex = connection.pairingCode.isEmpty ? 5 : min(5, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
-            window.rootViewController = OrbitSetupBannerController(tabs: tabs)
+            tabs.destinationIndex = connection.pairingCode.isEmpty ? 5 : min(5, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
+            window.rootViewController = tabs
         } catch {
             let controller = UIViewController(); controller.view.backgroundColor = .systemBackground
             let label = UILabel(); label.text = error.localizedDescription; label.numberOfLines = 0
@@ -153,11 +171,12 @@ import OrbitWire
     }
     private func reviewFile(_ file: OrbitJavaScriptFile) {
         guard let root = window?.rootViewController as? OrbitSetupBannerController else { return }
-        root.tabs.selectedIndex = file.kind == .applet ? 2 : 3
+        root.destinationIndex = file.kind == .applet ? 2 : 3
         (file.kind == .applet ? applets : widgets)?.review(file.script.source)
     }
-    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        UserDefaults.standard.set(tabBarController.selectedIndex, forKey: "Orbit.selectedTab")
+    func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
+        guard let tabs = tabBarController as? OrbitTabBarController else { return }
+        UserDefaults.standard.set(tabs.destinationIndex, forKey: "Orbit.selectedTab")
     }
     func openRefreshSetupIfNeeded() {
         guard UserDefaults.standard.bool(forKey: "Orbit.openRefreshSetup"),
@@ -278,6 +297,10 @@ final class OrbitPhoneConnection: @unchecked Sendable {
     let connection: OrbitPhoneConnection
     init(connection: OrbitPhoneConnection) { self.connection = connection; super.init(style: .insetGrouped); title = "Orbit Mac" }
     required init?(coder: NSCoder) { fatalError() }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        tableView.cellLayoutMarginsFollowReadableWidth = true
+    }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 4 }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         connection.localID.isEmpty ? nil : "This phone: " + connection.localID

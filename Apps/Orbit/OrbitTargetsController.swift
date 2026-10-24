@@ -16,7 +16,7 @@ import OrbitRefresh
     }
     required init?(coder: NSCoder) { fatalError() }
     override func viewDidLoad() {
-        super.viewDidLoad(); search.searchResultsUpdater = self; search.searchBar.placeholder = "Search GitHub"
+        super.viewDidLoad(); tableView.cellLayoutMarginsFollowReadableWidth = true; search.searchResultsUpdater = self; search.searchBar.placeholder = "Search GitHub"
         navigationItem.searchController = search
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: UIAction { [weak self] _ in self?.add() })
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)

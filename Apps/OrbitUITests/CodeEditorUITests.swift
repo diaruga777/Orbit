@@ -30,6 +30,23 @@ final class CodeEditorUITests: XCTestCase {
         app.terminate()
     }
 
+    func testIPadSidebarCanOpenRefresh() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad sidebar check") }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-connection"]
+        app.launch()
+        let toggle = app.buttons["Toggle sidebar"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 15))
+        toggle.tap()
+        attach("iPad sidebar destinations", app)
+        let refresh = app.descendants(matching: .any).matching(identifier: "Refresh").firstMatch
+        XCTAssertTrue(refresh.waitForExistence(timeout: 5))
+        refresh.tap()
+        XCTAssertTrue(app.buttons["Refresh All"].waitForExistence(timeout: 5))
+        attach("iPad sidebar refresh", app)
+    }
+
     func testStandaloneLaunchShowsMacSetupAndApps() {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-connection"]
