@@ -10,6 +10,43 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(app.cells["OrbitTarget:invalid"].exists)
         attach("Target icons and fallbacks", app)
     }
+    func testIPadRotationAndTargetMenu() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad layout check") }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-icons-preview"]
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.launch()
+        let row = app.cells["OrbitTarget:preview"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        attach("iPad apps portrait", app)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        expectation(for: NSPredicate { _, _ in app.frame.width > app.frame.height }, evaluatedWith: app)
+        waitForExpectations(timeout: 10)
+        row.tap()
+        XCTAssertTrue(app.buttons["Build and Install"].waitForExistence(timeout: 5))
+        attach("iPad target menu landscape", app)
+        app.terminate()
+    }
+
+    func testIPadSidebarCanOpenRefresh() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad sidebar check") }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-connection"]
+        app.launch()
+        let toggle = app.buttons["Toggle sidebar"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 15))
+        toggle.tap()
+        attach("iPad sidebar destinations", app)
+        let refresh = app.descendants(matching: .any).matching(identifier: "Refresh").firstMatch
+        XCTAssertTrue(refresh.waitForExistence(timeout: 5))
+        refresh.tap()
+        XCTAssertTrue(app.buttons["Refresh All"].waitForExistence(timeout: 5))
+        attach("iPad sidebar refresh", app)
+    }
+
     func testStandaloneLaunchShowsMacSetupAndApps() {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-connection"]

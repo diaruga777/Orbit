@@ -249,3 +249,16 @@ Orbit’s extension consent, shared Keychain import and subsequent applet render
 The Mac was locked, so Finder drag/drop and desktop visual acceptance were not
 performed. No physical phone, Apple sign-in, background-delivery guarantee, public
 notarization or marketplace acceptance is claimed.
+
+## iPad window cleanup (2026-10-24)
+
+All six iOS destinations use native tab/sidebar identities, preserving selected
+routes and JavaScript review badges. The tab controller is the window root; the
+optional setup banner reserves a measured top inset without inheriting that
+inset back into its own margins. This keeps rotation and sidebar transitions
+under UIKit’s control. Target/job menus anchor to rows and import menus to Add.
+
+Simulator checks on iPadOS 26.2 passed rotation/target menu, sidebar-to-Refresh,
+optional setup routing/dismissal and cold-launch expiry routing. A fresh iOS 26.2
+iPhone Simulator passed setup/expiry routing and widget content routing from
+Applets before consent. No Apple sign-in or physical device access was used.

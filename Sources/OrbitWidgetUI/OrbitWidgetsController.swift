@@ -20,6 +20,7 @@ import OrbitAppletUI
     required init?(coder: NSCoder) { fatalError() }
     public override func viewDidLoad() {
         super.viewDidLoad()
+        tableView.cellLayoutMarginsFollowReadableWidth = true
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: nil, menu: UIMenu(children: [
             UIAction(title: "Import JavaScript", image: UIImage(systemName: "doc")) { [weak self] _ in self?.importFile() },
             UIAction(title: "Paste JavaScript", image: UIImage(systemName: "doc.on.clipboard")) { [weak self] _ in self?.paste() },
@@ -106,7 +107,7 @@ import OrbitAppletUI
                     picker.addAction(UIAlertAction(title: definition.name, style: .default) { [weak self] _ in self?.review(source) })
                 }
             }
-            picker.addAction(UIAlertAction(title: "Cancel", style: .cancel)); picker.popoverPresentationController?.sourceView = view; present(picker, animated: true)
+            picker.addAction(UIAlertAction(title: "Cancel", style: .cancel)); picker.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem; present(picker, animated: true)
         } catch { show(error.localizedDescription) } }
     }
     public func review(_ source: String, fromInbox: Bool = false) {

@@ -178,3 +178,7 @@ Notification authorization is requested in the foreground only when there is an
 installed app to protect. Denial leaves the existing setup banner available.
 Tapping the notification uses the same Refresh destination as the banner, including
 cold launches and overflow tabs. It does not start Apple sign-in or installation.
+
+## iPad navigation
+
+The iOS client uses the system tab/sidebar layout so every destination is available in wide windows. The project browser keeps its existing split editor. Rotation is declared for both device families; compact windows keep UIKit’s tab navigation. Target and job menus anchor to their selected rows, while import choices anchor to Add.
