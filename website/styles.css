@@ -43,7 +43,7 @@ h1>span{color:var(--blue)}
 .showcase-label{letter-spacing:1.2px;font-weight:600;margin-bottom:16px}
 .demo-label{letter-spacing:0;font-weight:400}
 .product-stage{position:relative;padding:30px 108px 42px 28px;background:radial-gradient(ellipse at 88% 17%,#bdd7fa80,transparent 53%),linear-gradient(115deg,#e9edf4,#e1eafa);border-radius:20px;border:1px solid #dce5f3;min-height:475px}
-.mac-window{background:var(--surface);border:1px solid #98a7bd55;border-radius:12px;box-shadow:0 22px 50px #34527b20;overflow:hidden;width:94%;min-height:409px}
+.mac-window{background:var(--surface);border:1px solid #98a7bd55;border-radius:12px;box-shadow:0 22px 50px #34527b20;overflow:hidden;width:85%;min-height:409px}
 .window-bar{height:43px;display:flex;justify-content:space-between;align-items:center;padding:0 16px;border-bottom:1px solid var(--line);font-size:10px;font-weight:550;background:var(--code-bg)}
 .traffic-lights{display:flex;gap:6px;width:100px}
 .traffic-lights i{width:9px;height:9px;border-radius:50%;background:#ff625a;border:1px solid #0001}
@@ -177,7 +177,7 @@ details[open] summary:after{content:"−"}
 
 @media(max-width:1000px){.wrap{width:calc(100% - 56px)}
 .product-stage{padding:25px 70px 35px 20px}
-.mac-window{width:96%}
+.mac-window{width:100%}.phone-preview{display:none}
 .phone-preview{right:18px;width:197px;height:410px}
 .window-content{grid-template-columns:130px minmax(0,1fr)}
 .demo-main{padding:25px 24px}

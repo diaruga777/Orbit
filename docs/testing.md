@@ -273,3 +273,15 @@ anchor links and release/source destinations. Confirm assets also load under
 `/Orbit/`, the document has no horizontal overflow and the console has no errors.
 The product UI is an illustration; it is not physical-device acceptance or proof
 of an installation. Deployment and notarized DMG publication remain separate.
+
+Landing-page verification (2026-10-25): reviewed 320, 390, 768 and 1280 pixel
+layouts with no horizontal document overflow, light/dark appearance, saved theme
+restoration, all three feature tabs and Up/Down/Home/End navigation, FAQ expansion
+and anchor navigation. Browser console was clean. JavaScript syntax, local
+assets, unique IDs, fragment destinations and the SVG parsed successfully; the
+`/Orbit/` preview returned HTTP 200. Bootstrap ran in a detached checkout with
+isolated `ORBIT_HOME`. The unchanged application sources passed 156 Swift tests
+(four optional fixtures skipped), 14 Python tests, both Go race suites and Go vet.
+The iOS Simulator client and ad hoc Mac review bundle built; Mac signature
+verification passed. No physical-device acceptance, Apple sign-in, public
+notarization, live Pages deployment or marketplace listing was performed.
