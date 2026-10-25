@@ -8,6 +8,12 @@ You need a Mac, an iPhone, and either a coding agent subscription/credits or eno
 
 > Free Apple accounts are supported. Apple limits Personal Teams to three installed development apps per device, three registered devices and ten App IDs; profiles expire after seven days. Orbit itself uses one app slot. Orbit defaults to **every six days**, leaving a day for recovery. This works for compatible apps within Apple's limits—not every app or entitlement. A new build needs an awake, logged-in Mac and a reachable, trusted phone. Once cached on iPhone, the same installed build can be renewed without the Mac through the phone’s Refresh tab. [Apple account limits](https://developer.apple.com/help/account/basics/about-your-developer-account)
 
+## Website
+
+The landing page lives in [`website/`](website/). It is a dependency-free static
+site prepared for GitHub Pages at `https://diaruga777.github.io/Orbit/`. See
+[website hosting](docs/website.md) for preview, deployment and release downloads.
+
 ## Install from a DMG
 
 Open **Orbit Mac** from the DMG to launch the resumable setup wizard. It installs
