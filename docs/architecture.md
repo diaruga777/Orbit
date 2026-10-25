@@ -182,3 +182,15 @@ cold launches and overflow tabs. It does not start Apple sign-in or installation
 ## iPad navigation
 
 The iOS client uses the system tab/sidebar layout so every destination is available in wide windows. The project browser keeps its existing split editor. Rotation is declared for both device families; compact windows keep UIKit’s tab navigation. Target and job menus anchor to their selected rows, while import choices anchor to Add.
+
+## Public website
+
+`website/` contains a standalone static landing page. It shares Orbit’s native
+light surfaces, system typography, blue accents and code colors without linking
+any application runtime. Its interactive product illustration uses fictional
+projects and does not perform builds or connect to devices. Theme preference is
+the only browser-local state; there are no analytics, external fonts, account
+forms, API calls or secrets. Relative asset paths support the `/Orbit/` Pages
+base path. The isolated Pages workflow uploads only `website/`; source and
+release assets stay in GitHub’s repository and Releases services. See
+[website hosting](website.md).
