@@ -48,7 +48,8 @@ import OrbitWidgets
     private func loaded(_ result: Result<OrbitJavaScriptFile, Error>) {
         do {
             let file = try result.get(); self.file = file
-            let websites = file.script.definition.domains.isEmpty ? "No network access." : "Websites: " + file.script.definition.domains.joined(separator: ", ")
+            var websites = file.script.definition.domains.isEmpty ? "No network access." : "Websites: " + file.script.definition.domains.joined(separator: ", ")
+            if file.kind == .applet, let consent = try OrbitAppletDefinition.parse(file.script.source).pollingConsent { websites += "\n\n" + consent }
             let store = OrbitWidgetStore(applets: file.kind == .applet)
             let replacing = try store.script(file.script.id) != nil
             status.text = file.script.definition.name + "\n\n" + websites + "\n\nThis JavaScript can save its own data on your phone. Only add code you trust."

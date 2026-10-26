@@ -285,3 +285,32 @@ isolated `ORBIT_HOME`. The unchanged application sources passed 156 Swift tests
 The iOS Simulator client and ad hoc Mac review bundle built; Mac signature
 verification passed. No physical-device acceptance, Apple sign-in, public
 notarization, live Pages deployment or marketplace listing was performed.
+
+## Applet polling
+
+`OrbitAppletPollingTests` covers inert interval/capability validation, legacy
+headers, independent poll hooks, parsing, persistent cadence, restart catch-up,
+event-ID deduplication, durable delivery retries, failed-parser/network/output
+rollback, backoff, notification consent, changed sources and deletion. Tests use
+synthetic JSON and denied hosts; they do not contact internet sources or phones.
+The exported-host check verifies background metadata and included scheduler source.
+
+Simulator acceptance should import `docs/applets/examples/release-watch.js`, review
+the sites/schedule/notifications before execution, allow or deny system alerts,
+inspect saved parsed data, and check notification routing from a cold launch.
+Test background expiration, Background App Refresh disabled and standalone source
+updates requiring fresh approval separately. Unit tests and Simulator builds do
+not establish actual iPhone background cadence, notification delivery, physical
+installation/renewal or marketplace acceptance.
+
+Applet polling verification (2026-10-26): bootstrap generated native dependencies
+in a detached checkout. All 165 Swift tests passed (four optional fixtures
+skipped); the packaged phone-source fixture passed separately. All 14 Python MCP
+checks, both Go race suites and helper vet passed. The iOS Simulator client,
+ad hoc signed Mac review bundle and committed exported standalone host built;
+Mac signature verification passed. Three Simulator UI checks passed: polling
+consent/parsing/persistence/cadence, existing applet actions and widget import.
+The polling check passed again after the final scheduling safeguards. Fixtures
+used synthetic JSON; no live-source availability, physical-device background
+cadence, Apple sign-in, actual install/renewal, public notarization or marketplace
+acceptance is claimed.

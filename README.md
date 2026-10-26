@@ -60,6 +60,10 @@ imports choose the right tab from the content. Tap an approved applet to open it
 On Mac, **Applets → Make Standalone App** (or **Blank Host App**) creates a
 committed Xcode project with an icon selector. Add that project to Apps to build
 and install it with your own signing setup. MCP supports the same workflow.
+Applets can also check an approved HTTPS source every few hours, parse results
+and send local notifications. Set `pollHours`, export `poll(ctx)`, and compare
+results in private storage. iOS chooses background check times; overdue checks
+also run while Orbit is open. This works in standalone hosts too.
 See [applets](docs/applets/README.md).
 
 **Widgets → Add → Copy AI Prompt** gives you a prompt for public ChatGPT or another

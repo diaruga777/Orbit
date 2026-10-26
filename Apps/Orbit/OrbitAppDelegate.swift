@@ -3,6 +3,7 @@ import BackgroundTasks
 import OrbitCore
 import OrbitRefresh
 import OrbitWidgetUI
+import OrbitAppletUI
 import OrbitWidgets
 import OrbitUI
 import OrbitTransport
@@ -11,6 +12,7 @@ import OrbitWire
 @main final class OrbitAppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         OrbitExpiryNotifications.shared.start()
+        OrbitAppletBackground.shared.register()
         CodeRefreshBackground.register()
         let identifier = (Bundle.main.bundleIdentifier ?? "org.example.orbit.ios") + ".overnight-builds"
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) { task in
@@ -144,6 +146,10 @@ import OrbitWire
             OrbitExpiryNotifications.shared.openSetup()
         }
         openRefreshSetupIfNeeded()
+        if let id = options.notificationResponse?.notification.request.content.userInfo["appletID"] as? String {
+            UserDefaults.standard.set(id, forKey: "Orbit.openApplet")
+        }
+        openAppletIfNeeded()
         if let url = options.urlContexts.first?.url { openWidget(url) }
         #if DEBUG && targetEnvironment(simulator)
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--script-inbox-fixture"), ProcessInfo.processInfo.arguments.count > index + 1 {
@@ -185,10 +191,20 @@ import OrbitWire
         root.openRefreshSetup()
         UserDefaults.standard.removeObject(forKey: "Orbit.openRefreshSetup")
     }
+    func openAppletIfNeeded() {
+        guard let id = UserDefaults.standard.string(forKey: "Orbit.openApplet"),
+              let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+        root.dismiss(animated: false)
+        root.destinationIndex = 2
+        applets?.openApplet(id)
+        UserDefaults.standard.removeObject(forKey: "Orbit.openApplet")
+    }
     private var expirySync: Task<Void, Never>?
     private var readiness: Task<Void, Never>?
     private var scriptSync: Task<Void, Never>?
     func sceneDidBecomeActive(_ scene: UIScene) {
+        OrbitAppletBackground.shared.foreground()
+        openAppletIfNeeded()
         widgets?.refreshInbox(); applets?.refreshInbox()
         scriptSync?.cancel()
         scriptSync = Task { [weak self] in
@@ -222,7 +238,7 @@ import OrbitWire
             } catch { /* Keep the last received queue while the Mac is unavailable. */ }
         }
     }
-    func sceneWillResignActive(_ scene: UIScene) { scriptSync?.cancel(); scriptSync = nil }
+    func sceneWillResignActive(_ scene: UIScene) { scriptSync?.cancel(); scriptSync = nil; OrbitAppletBackground.shared.background() }
     func sceneDidEnterBackground(_ scene: UIScene) { expirySync?.cancel(); expirySync = nil; Task { await OrbitExpiryNotifications.shared.update() }; scriptSync?.cancel(); scriptSync = nil; readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
 
 }

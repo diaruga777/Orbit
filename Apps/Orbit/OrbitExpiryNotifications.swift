@@ -113,6 +113,11 @@ import OrbitRefresh
         Task { @MainActor in
             if response.notification.request.identifier == CodeExpiryReminder.notificationID,
                response.actionIdentifier == UNNotificationDefaultActionIdentifier { self.openSetup() }
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+               let id = response.notification.request.content.userInfo["appletID"] as? String {
+                UserDefaults.standard.set(id, forKey: "Orbit.openApplet")
+                for scene in UIApplication.shared.connectedScenes { (scene.delegate as? OrbitSceneDelegate)?.openAppletIfNeeded() }
+            }
             completionHandler()
         }
     }
