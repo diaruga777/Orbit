@@ -1,6 +1,29 @@
 import XCTest
 
 final class OrbitAppletsUITests: XCTestCase {
+    func testPollingConsentParsesAndPersistsWithoutRepeatingBeforeDue() throws {
+        let app = XCUIApplication(), springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        app.launchArguments = ["--reset-connection"]; app.launch()
+        app.tabBars.buttons["Applets"].tap()
+        app.navigationBars["Applets"].buttons["Add"].tap(); app.buttons["Paste JavaScript"].tap()
+        let editor = app.textViews.firstMatch; XCTAssertTrue(editor.waitForExistence(timeout: 5)); editor.tap()
+        let id = "poll-" + UUID().uuidString.lowercased()
+        editor.typeText("/* orbit-applet\n{\"id\":\"\(id)\",\"name\":\"Polling Fixture\",\"domains\":[],\"pollHours\":6,\"notifications\":true}\n*/\nmodule.exports={poll(ctx){const data=JSON.parse('{\"value\":\"Parsed result\"}');ctx.storage.set('result',data.value);ctx.storage.set('n',ctx.storage.get('n',0)+1);ctx.notify({id:'first',title:'Polling test',body:data.value})},render(ctx){return {type:'text',text:ctx.storage.get('result','Not run')+' · Checks '+ctx.storage.get('n',0)}}};")
+        app.navigationBars["JavaScript"].buttons["Review"].tap()
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS 'every 6 hours' AND label CONTAINS 'Can send notifications'")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Parsed result · Checks 1"].exists)
+        alert.buttons["Add Applet"].tap()
+        if springboard.buttons["Allow"].waitForExistence(timeout: 3) { springboard.buttons["Allow"].tap() }
+        XCTAssertTrue(app.staticTexts["Parsed result · Checks 1"].waitForExistence(timeout: 15))
+        app.navigationBars["Polling Fixture"].buttons["Reload"].tap()
+        XCTAssertTrue(app.staticTexts["Parsed result · Checks 1"].waitForExistence(timeout: 5))
+        app.terminate(); app.launch()
+        app.tabBars.buttons["Applets"].tap()
+        app.cells.containing(.staticText, identifier: "Polling Fixture").firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Parsed result · Checks 1"].waitForExistence(timeout: 10))
+    }
     func testImportConsentLaunchActionAndPersistence() throws {
         let app = XCUIApplication(); app.launchArguments = ["--reset-connection"]; app.launch()
         XCTAssertTrue(app.tabBars.buttons["Applets"].waitForExistence(timeout: 10))

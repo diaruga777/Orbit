@@ -105,9 +105,48 @@ final class OrbitAppletPollingTests: XCTestCase {
         let foreground = try OrbitAppletDefinition.widgetScript(source("module.exports.update=ctx=>ctx.notify({id:'x',title:'X',body:''}); module.exports.render=()=>({type:'text'});"))
         do { _ = try await OrbitAppletRuntime.run(script: foreground, storage: [:]); XCTFail("Foreground notify allowed") } catch { }
     }
+    func testInterruptedLeaseSurvivesRestartAndPreventsAnImmediateRetry() async throws {
+        let (store, script, root) = try fixture(source(hook))
+        defer { try? FileManager.default.removeItem(at: root) }
+        let lease = OrbitAppletPollState(digest: OrbitWidgetDefinition.digest(script.source), nextAttempt: now.addingTimeInterval(900))
+        try store.savePolling(lease, storage: [:], script: script)
+        let runner = OrbitAppletRunner()
+        try await runner.check(script: script, store: store, now: now) { _ in XCTFail("Lease retried early") }
+        XCTAssertTrue(try store.storage(script.id).isEmpty)
+        try await runner.check(script: script, store: store, now: now.addingTimeInterval(900)) { _ in }
+        XCTAssertEqual(try store.storage(script.id)["checks"], "1")
+    }
+    func testForegroundCannotOverwriteAnActiveCheck() async throws {
+        let (store, script, root) = try fixture(source(hook))
+        defer { try? FileManager.default.removeItem(at: root) }
+        let runner = OrbitAppletRunner(), gate = DeliveryGate()
+        let checking = Task { try await runner.check(script: script, store: store, now: now) { _ in await gate.hold() } }
+        await gate.waitUntilHeld()
+        do { _ = try await runner.run(script: script, store: store); XCTFail("Overlapping invocation") } catch { }
+        let overlapping = try await runner.check(script: script, store: store, now: now) { _ in XCTFail("Duplicate check") }
+        XCTAssertFalse(overlapping)
+        await gate.release()
+        _ = try await checking.value
+        XCTAssertEqual(try store.storage(script.id)["checks"], "1")
+    }
 }
 
 private actor Notices {
     var values: [OrbitAppletNotification] = []
     func add(_ value: OrbitAppletNotification) { values.append(value) }
+}
+
+private actor DeliveryGate {
+    private var held = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiter: CheckedContinuation<Void, Never>?
+    func hold() async {
+        held = true; waiter?.resume(); waiter = nil
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func waitUntilHeld() async {
+        if held { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+    func release() { continuation?.resume(); continuation = nil }
 }
