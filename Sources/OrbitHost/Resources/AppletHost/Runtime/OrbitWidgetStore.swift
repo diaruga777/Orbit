@@ -10,6 +10,7 @@ public final class OrbitWidgetStore: @unchecked Sendable {
     private let applets: Bool
     private var service: String { applets ? "Orbit.Applets.v1" : "Orbit.Widgets.v1" }
     private let lock = NSRecursiveLock()
+    var executionScope: String { directory?.path ?? (group ?? "default") }
     public init(directory: URL? = nil, accessGroup: String? = nil, applets: Bool = false) {
         self.directory = applets ? directory?.appendingPathComponent("Applets") : directory; self.applets = applets
         group = accessGroup ?? Bundle.main.object(forInfoDictionaryKey: "OrbitWidgetKeychainGroup") as? String
@@ -68,6 +69,7 @@ public final class OrbitWidgetStore: @unchecked Sendable {
         try write(nil, key: "script-" + id)
         for family in Self.families { try write(nil, key: "output-" + id + "-" + family) }
         try write(nil, key: "storage-" + id)
+        try write(nil, key: "applet-state-" + id)
     }
     /// Unapproved Mac source is persisted separately from executable scripts and private K-V data.
     public func pendingScripts() throws -> [OrbitWidgetScript] {
@@ -116,8 +118,31 @@ public final class OrbitWidgetStore: @unchecked Sendable {
         try write(JSONEncoder().encode(pendingScripts().filter { $0.source != source }), key: "pending")
     }
     public func storage(_ id: String) throws -> [String: String] {
+        lock.lock(); defer { lock.unlock() }
         guard Self.validID(id) else { throw OrbitWidgetError("Invalid widget identifier.") }
+        if applets, let state = try appletState(id) { return state.storage }
         return try read("storage-" + id).map { try JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+    }
+    private struct AppletState: Codable {
+        var storage: [String: String]
+        var polling: OrbitAppletPollState?
+    }
+    private func appletState(_ id: String) throws -> AppletState? {
+        try read("applet-state-" + id).map { try JSONDecoder().decode(AppletState.self, from: $0) }
+    }
+    public func pollingState(_ id: String) throws -> OrbitAppletPollState? {
+        lock.lock(); defer { lock.unlock() }
+        guard applets, Self.validID(id) else { throw OrbitWidgetError("Invalid applet.") }
+        return try appletState(id)?.polling
+    }
+    /// Storage and the notification outbox commit together, after source readback.
+    public func savePolling(_ state: OrbitAppletPollState, storage: [String: String], script: OrbitWidgetScript) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard applets, try self.script(script.id)?.source == script.source,
+              storage.count <= 128, try JSONEncoder().encode(storage).count <= 64 * 1024 else {
+            throw OrbitWidgetError("The applet changed while checking. Try again.")
+        }
+        try write(JSONEncoder().encode(AppletState(storage: storage, polling: state)), key: "applet-state-" + script.id)
     }
     public func output(_ id: String, family: String) throws -> OrbitWidgetOutput? {
         guard Self.validID(id), Self.families.contains(family) else { throw OrbitWidgetError("Invalid widget.") }
@@ -130,8 +155,11 @@ public final class OrbitWidgetStore: @unchecked Sendable {
         }
         let storage = try JSONEncoder().encode(output.storage), data = try JSONEncoder().encode(output)
         guard storage.count <= 64 * 1024, output.storage.count <= 128, data.count <= 384 * 1024 else { throw OrbitWidgetError("This widget has saved too much data.") }
-        try write(storage, key: "storage-" + script.id)
         try write(data, key: "output-" + script.id + "-" + family)
+        if applets {
+            let state = AppletState(storage: output.storage, polling: try appletState(script.id)?.polling)
+            try write(JSONEncoder().encode(state), key: "applet-state-" + script.id)
+        } else { try write(storage, key: "storage-" + script.id) }
     }
     public static let families = ["small", "medium", "large", "circular", "rectangular", "inline"]
     private static func validID(_ id: String) -> Bool { !id.isEmpty && id.count <= 64 && id.unicodeScalars.allSatisfy { CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789.-").contains($0) } }

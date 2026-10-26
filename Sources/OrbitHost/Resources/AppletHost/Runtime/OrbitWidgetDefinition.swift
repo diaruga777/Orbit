@@ -109,6 +109,7 @@ public struct OrbitWidgetOutput: Codable, Sendable {
     public var storage: [String: String]
     public var updatedAt: Date
     public var failure: String?
+    public var notifications: [OrbitAppletNotification]?
     public init(entries: [OrbitWidgetEntry], storage: [String: String], updatedAt: Date, failure: String? = nil) {
         self.entries = entries; self.storage = storage; self.updatedAt = updatedAt; self.failure = failure
     }

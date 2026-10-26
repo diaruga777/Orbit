@@ -19,6 +19,16 @@ public struct OrbitAppletView: View {
                 if let node { OrbitAppletNodeView(node: node, inputs: $inputs, send: send) }
                 if busy { ProgressView("Loading…") }
                 if let failure { Text(failure).foregroundStyle(.red).accessibilityIdentifier("applet.error") }
+                if let consent = try? OrbitAppletDefinition.parse(script.source).pollingConsent {
+                    Text(consent).font(.footnote).foregroundStyle(.secondary)
+                    if let state = try? store.pollingState(script.id) {
+                        if let date = state.lastSuccess { Text("Last checked " + date.formatted()).font(.footnote) }
+                        if let error = state.failure { Text(error).font(.footnote).foregroundStyle(.red) }
+                    }
+                    #if os(iOS)
+                    if let error = OrbitAppletBackground.shared.schedulingFailure { Text(error).font(.footnote).foregroundStyle(.red) }
+                    #endif
+                }
             }.padding().frame(maxWidth: .infinity, alignment: .leading).disabled(busy)
         }
         .navigationTitle(script.definition.name)
@@ -33,10 +43,16 @@ public struct OrbitAppletView: View {
         invocation = Task { @MainActor in
             defer { busy = false }
             do {
-                let output = try await OrbitAppletRuntime.run(script: script, storage: store.storage(script.id), event: event)
+                #if os(iOS)
+                if event == nil {
+                    await OrbitAppletBackground.shared.requestPermissionIfNeeded()
+                    do { try await OrbitAppletBackground.shared.check(script) }
+                    catch { failure = error.localizedDescription }
+                    await OrbitAppletBackground.shared.schedule()
+                }
+                #endif
+                let output = try await OrbitAppletRunner.shared.run(script: script, store: store, event: event)
                 try Task.checkCancellation()
-                // Use a normal cache family; applets live in a separate store namespace.
-                try store.save(output, script: script, family: "large")
                 node = output.entries.first?.view
                 inputs = [:]
                 if let node { collectInputs(node) }

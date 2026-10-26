@@ -106,6 +106,21 @@ private JSON storage is committed only after validated output. Widgets reject
 interactive nodes. Applets use a separate `Orbit.Applets.v1` Keychain service,
 scoped to the containing app's access group, with ThisDeviceOnly state.
 
+Optional inert `pollHours`/`notifications` metadata grants scheduled applet checks.
+`OrbitAppletRunner` serializes foreground actions and native polling per stored
+applet. A fresh VM runs only `poll(ctx)`; its output is validated without calling
+render/update. Storage and the bounded alert outbox commit in a single
+ThisDeviceOnly record after source readback. Stable event IDs deduplicate the last
+64 deliveries. Failed checks preserve prior data and back off 15 minutes; an
+interrupted check retains its retry lease. Successful checks advance by the
+requested hours; notification submission failure retains the outbox. The iOS
+composition requests BGAppRefresh windows and catches up every minute while
+active, with cancellation on expiration. iOS controls actual execution times.
+Permission prompts occur in the foreground; denied alerts are dropped while
+checks continue. Tapping an alert opens the installed applet. Standalone hosts
+register the same scheduler and restrict execution to the consented bundled digest.
+No push entitlement, paid capability, hosted scheduler or AI dependency is added.
+
 The phone reviews every import/update before evaluation. Mac drag-and-drop,
 file selection, CLI/MCP and folder additions share the Host script catalog.
 `script_import` infers kind from validated inert metadata; existing `applet_add`

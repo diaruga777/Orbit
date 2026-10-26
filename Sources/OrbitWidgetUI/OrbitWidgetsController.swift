@@ -35,6 +35,11 @@ import OrbitAppletUI
         reload()
     }
     public func refreshInbox() { reload() }
+    public func openApplet(_ id: String) {
+        guard applets, let script = try? store.script(id) else { return }
+        navigationController?.popToRootViewController(animated: false)
+        launch(script)
+    }
     private func reload() {
         do {
             scripts = try store.scripts(); pending = try store.pendingScripts()
@@ -59,7 +64,8 @@ import OrbitAppletUI
         guard !scripts.isEmpty else { cell.textLabel?.text = applets ? "Add Your First Applet" : "Add Your First Widget"; cell.detailTextLabel?.text = "Import a JavaScript file or copy a prompt to make one."; cell.detailTextLabel?.numberOfLines = 0; return cell }
         let script = scripts[indexPath.row]
         cell.textLabel?.text = script.definition.name
-        cell.detailTextLabel?.text = applets ? "Tap to open" : "Requests updates every \(script.definition.refreshMinutes) minutes"
+        cell.detailTextLabel?.text = applets ? ((try? OrbitAppletDefinition.parse(script.source).pollingConsent) ?? "Tap to open") : "Requests updates every \(script.definition.refreshMinutes) minutes"
+        cell.detailTextLabel?.numberOfLines = 0
         cell.imageView?.image = UIImage(systemName: "square.grid.2x2"); cell.accessoryType = .disclosureIndicator; return cell
     }
     public override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -114,7 +120,8 @@ import OrbitAppletUI
         do {
             let definition = try definition(source)
             let replacing = try store.script(definition.id) != nil
-            let websites = definition.domains.isEmpty ? "No network access." : "Websites: " + definition.domains.joined(separator: ", ")
+            var websites = definition.domains.isEmpty ? "No network access." : "Websites: " + definition.domains.joined(separator: ", ")
+            if applets, let consent = try OrbitAppletDefinition.parse(source).pollingConsent { websites += "\n\n" + consent }
             let alert = UIAlertController(title: (replacing ? "Update " : "Add ") + definition.name + "?", message: websites + "\n\nThis JavaScript can save its own data on your phone. Only add code you trust.", preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: applets ? (replacing ? "Update Applet" : "Add Applet") : (replacing ? "Update Widget" : "Add Widget"), style: .default) { [weak self] _ in

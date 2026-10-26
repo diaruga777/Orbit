@@ -31,8 +31,11 @@ final class OrbitWidgetExecution: @unchecked Sendable {
     private let now: Date
     private let event: OrbitAppletEvent?
     private let applet: Bool
-    init(script: OrbitWidgetScript, storage: [String: String], family: String, now: Date, applet: Bool = false, event: OrbitAppletEvent? = nil) {
+    private let poll: Bool
+    private let notifications: Bool
+    init(script: OrbitWidgetScript, storage: [String: String], family: String, now: Date, applet: Bool = false, event: OrbitAppletEvent? = nil, poll: Bool = false, notifications: Bool = false) {
         self.script = script; self.storage = storage; self.family = family; self.now = now; self.applet = applet; self.event = event
+        self.poll = poll; self.notifications = notifications
     }
     func start(_ continuation: CheckedContinuation<OrbitWidgetOutput, Error>) {
         lock.lock()
@@ -94,7 +97,7 @@ final class OrbitWidgetExecution: @unchecked Sendable {
         context.setObject(fetch, forKeyedSubscript: "_orbitFetch" as NSString)
         context.setObject(finish, forKeyedSubscript: "_orbitFinish" as NSString)
         context.setObject(fail, forKeyedSubscript: "_orbitFail" as NSString)
-        var config: [String: Any] = ["family": family, "now": ISO8601DateFormatter().string(from: now), "storage": storage]
+        var config: [String: Any] = ["family": family, "now": ISO8601DateFormatter().string(from: now), "storage": storage, "poll": poll, "notifications": notifications]
         config["event"] = event.map { ["action": $0.action, "values": $0.values] as [String: Any] } ?? NSNull()
         guard let data = try? JSONSerialization.data(withJSONObject: config) else { stop(OrbitWidgetError("Couldn’t load widget data.")); return }
         context.evaluateScript("const _orbitConfig = " + String(decoding: data, as: UTF8.self) + ";\n" + Self.bootstrap)
@@ -109,6 +112,8 @@ final class OrbitWidgetExecution: @unchecked Sendable {
             guard json.utf8.count <= 384 * 1024 else { throw OrbitWidgetError("The widget returned too much data.") }
             let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
             var result = try decoder.decode(OrbitWidgetOutput.self, from: Data(json.utf8))
+            guard (result.notifications?.count ?? 0) <= 1, result.notifications?.isEmpty != false || notifications else { throw OrbitWidgetError("Notifications are only available in an approved poll hook.") }
+            for notification in result.notifications ?? [] { try notification.validate() }
             guard !result.entries.isEmpty, result.entries.count <= 64, result.storage.count <= 128,
                   try JSONEncoder().encode(result.storage).count <= 64 * 1024 else { throw OrbitWidgetError("The widget returned too much data.") }
             var previous = Date.distantPast
@@ -135,7 +140,14 @@ final class OrbitWidgetExecution: @unchecked Sendable {
       },
       remove(key) { delete _orbitData[String(key)]; }
     });
-    const ctx = Object.freeze({family: _orbitConfig.family, now: new Date(_orbitConfig.now), storage: _orbitStorage});
+    const _orbitNotifications = [];
+    const ctx = Object.freeze({family: _orbitConfig.family, now: new Date(_orbitConfig.now), storage: _orbitStorage,
+      notify(notification) {
+        if (!_orbitConfig.notifications) throw new Error('Declare notifications:true and call notify only from poll(ctx).');
+        if (_orbitNotifications.length) throw new Error('Send at most one notification per poll.');
+        _orbitNotifications.push(notification);
+      }
+    });
     globalThis.fetch = (url, options = {}) => new Promise((resolve, reject) => {
       _orbitFetch(String(url), JSON.stringify(options), (error, status, body) => {
         if (error) { reject(new Error(error)); return; }
@@ -146,6 +158,12 @@ final class OrbitWidgetExecution: @unchecked Sendable {
     """#
     private static let invokeApplet = #"""
     (async () => {
+      if (_orbitConfig.poll) {
+        if (typeof module.exports.poll !== 'function') throw new Error('Export poll(ctx) for scheduled checks.');
+        await module.exports.poll(ctx);
+        _orbitFinish(JSON.stringify({entries:[{date:ctx.now.toISOString(),view:{type:'text',text:'Checked'}}], storage:_orbitData, notifications:_orbitNotifications, updatedAt:ctx.now.toISOString()}));
+        return;
+      }
       if (typeof module.exports.render !== 'function') throw new Error('Export render(ctx).');
       if (_orbitConfig.event) {
         if (typeof module.exports.action !== 'function') throw new Error('Export action(ctx, event) for controls.');

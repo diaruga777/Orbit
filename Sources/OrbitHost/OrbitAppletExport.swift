@@ -32,7 +32,8 @@ public enum OrbitAppletExport {
         try fm.createDirectory(at: stage.appendingPathComponent("Config"), withIntermediateDirectories: true)
         try Data("Config/Local.xcconfig\n.DS_Store\n".utf8).write(to: stage.appendingPathComponent(".gitignore"))
         // The display name is data in a plist, never interpolated into build settings.
-        let info: [String: Any] = ["CFBundleDisplayName": script.definition.name, "UILaunchScreen": [:], "UIApplicationSceneManifest": ["UIApplicationSupportsMultipleScenes": false]]
+        let info: [String: Any] = ["CFBundleDisplayName": script.definition.name, "UILaunchScreen": [:], "UIApplicationSceneManifest": ["UIApplicationSupportsMultipleScenes": false],
+                                 "BGTaskSchedulerPermittedIdentifiers": [bundleID + ".applet-poll"], "UIBackgroundModes": ["fetch"]]
         try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: stage.appendingPathComponent("Info.plist"))
         let config = """
         PRODUCT_BUNDLE_IDENTIFIER = \(bundleID)

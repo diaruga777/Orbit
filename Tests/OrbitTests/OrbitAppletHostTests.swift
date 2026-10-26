@@ -36,11 +36,14 @@ final class OrbitAppletHostTests: XCTestCase {
         defer { if ProcessInfo.processInfo.environment["ORBIT_TEST_APPLET_EXPORT"] == nil { try? FileManager.default.removeItem(at: destination) } }
         let result = try await OrbitAppletExport.create(source: nil, destination: destination, bundleID: "org.example.orbit.testapplet")
         XCTAssertEqual(result["scheme"], "AppletHost")
-        for name in ["Sources/Runtime/OrbitWidgetRuntime.swift", "Sources/UI/OrbitAppletView.swift", "Sources/HostApp.swift", "Applet.js", "AppletHost.xcodeproj/project.pbxproj", ".git/HEAD", "Assets.xcassets/AppIcon.appiconset/Icon.png"] {
+        for name in ["Sources/Runtime/OrbitWidgetRuntime.swift", "Sources/Runtime/OrbitAppletPolling.swift", "Sources/UI/OrbitAppletBackground.swift", "Sources/UI/OrbitAppletView.swift", "Sources/HostApp.swift", "Applet.js", "AppletHost.xcodeproj/project.pbxproj", ".git/HEAD", "Assets.xcassets/AppIcon.appiconset/Icon.png"] {
             XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appendingPathComponent(name).path), name)
         }
         let config = try String(contentsOf: destination.appendingPathComponent("Config/App.xcconfig"), encoding: .utf8)
         XCTAssertFalse(config.contains("DEVELOPMENT_TEAM")); XCTAssertFalse(config.contains("ENTITLEMENTS"))
+        let info = try XCTUnwrap(PropertyListSerialization.propertyList(from: Data(contentsOf: destination.appendingPathComponent("Info.plist")), format: nil) as? [String: Any])
+        XCTAssertEqual(info["UIBackgroundModes"] as? [String], ["fetch"])
+        XCTAssertEqual(info["BGTaskSchedulerPermittedIdentifiers"] as? [String], ["org.example.orbit.testapplet.applet-poll"])
         let icon = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: destination.appendingPathComponent("Assets.xcassets/AppIcon.appiconset/Icon.png"))))
         XCTAssertEqual(icon.pixelsWide, 1024); XCTAssertFalse(icon.hasAlpha)
         do { _ = try await OrbitAppletExport.create(source: nil, destination: destination, bundleID: "org.example.bad"); XCTFail("Overwrote existing project") } catch { }

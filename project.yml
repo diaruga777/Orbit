@@ -33,7 +33,8 @@ targets:
           - $(PRODUCT_BUNDLE_IDENTIFIER).remote-build
           - $(PRODUCT_BUNDLE_IDENTIFIER).overnight-builds
           - $(PRODUCT_BUNDLE_IDENTIFIER).refresh-builds
-        UIBackgroundModes: [processing]
+          - $(PRODUCT_BUNDLE_IDENTIFIER).applet-poll
+        UIBackgroundModes: [processing, fetch]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UILaunchScreen: {}
