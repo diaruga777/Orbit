@@ -11,6 +11,7 @@ import OrbitWidgets
     private let store = OrbitWidgetStore(applets: true)
     private let center = UNUserNotificationCenter.current()
     private var foregroundWork: Task<Void, Never>?
+    private var isForeground = false
     // Standalone hosts restrict background execution to the approved bundled digest.
     public var allowedSource: ((String) -> Bool)?
     public private(set) var schedulingFailure: String?
@@ -28,6 +29,7 @@ import OrbitWidgets
         }
     }
     public func foreground() {
+        isForeground = true
         foregroundWork?.cancel()
         foregroundWork = Task {
             await requestPermissionIfNeeded()
@@ -39,6 +41,7 @@ import OrbitWidgets
         }
     }
     public func background() {
+        isForeground = false
         foregroundWork?.cancel(); foregroundWork = nil
         Task { await schedule() }
     }
@@ -46,7 +49,7 @@ import OrbitWidgets
         guard let scripts = try? store.scripts(), scripts.contains(where: {
             (allowedSource?($0.source) ?? true) && (try? OrbitAppletDefinition.parse($0.source).notifications) == true
         }) else { return }
-        if await center.notificationSettings().authorizationStatus == .notDetermined {
+        if await center.notificationSettings().authorizationStatus == .notDetermined, isForeground {
             _ = try? await center.requestAuthorization(options: [.alert, .sound])
         }
     }
@@ -54,7 +57,7 @@ import OrbitWidgets
         do {
             let scripts = try store.scripts().filter { allowedSource?($0.source) ?? true }
             guard scripts.contains(where: { (try? OrbitAppletDefinition.parse($0.source).pollHours) != nil }),
-                  let next = try await OrbitAppletRunner.shared.nextCheck(store: store) else {
+                  let next = try await OrbitAppletRunner.shared.nextCheck(store: store, scriptIDs: Set(scripts.map(\.id))) else {
                 BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier); return
             }
             let request = BGAppRefreshTaskRequest(identifier: identifier)
@@ -66,8 +69,10 @@ import OrbitWidgets
     public func check(_ script: OrbitWidgetScript) async throws {
         guard allowedSource?(script.source) ?? true else { return }
         let center = self.center
+        let store = self.store
         try await OrbitAppletRunner.shared.check(script: script, store: store) { notice in
             let settings = await center.notificationSettings()
+            guard try store.script(script.id)?.source == script.source else { throw OrbitWidgetError("This applet changed before notification delivery.") }
             // Denied alerts are dropped; fetching and private state still work.
             guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else { return }
             let content = UNMutableNotificationContent()

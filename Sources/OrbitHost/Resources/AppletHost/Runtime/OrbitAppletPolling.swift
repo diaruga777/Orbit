@@ -35,12 +35,12 @@ public actor OrbitAppletRunner {
         try store.save(output, script: script, family: "large")
         return output
     }
-    public func nextCheck(store: OrbitWidgetStore, now: Date = Date()) throws -> Date? {
+    public func nextCheck(store: OrbitWidgetStore, scriptIDs: Set<String>? = nil, now: Date = Date()) throws -> Date? {
         try store.scripts().compactMap { script -> Date? in
+            guard scriptIDs?.contains(script.id) ?? true else { return nil }
             guard try OrbitAppletDefinition.parse(script.source).pollHours != nil else { return nil }
-            let state = try store.pollingState(script.id)
-            guard state?.digest == OrbitWidgetDefinition.digest(script.source) else { return now }
-            return state?.pending.isEmpty == false ? min(state!.nextAttempt, now.addingTimeInterval(900)) : state?.nextAttempt
+            guard let state = try store.pollingState(script.id), state.digest == OrbitWidgetDefinition.digest(script.source) else { return now }
+            return state.pending.isEmpty ? state.nextAttempt : min(state.nextAttempt, now.addingTimeInterval(900))
         }.min()
     }
     @discardableResult public func check(script: OrbitWidgetScript, store: OrbitWidgetStore, now: Date = Date(),
@@ -53,7 +53,11 @@ public actor OrbitAppletRunner {
         guard try store.script(script.id)?.source == script.source else { return false }
         let digest = OrbitWidgetDefinition.digest(script.source)
         var state = try store.pollingState(script.id) ?? .init(digest: digest, nextAttempt: now)
-        if state.digest != digest { state = .init(digest: digest, nextAttempt: now) }
+        if state.digest != digest {
+            let delivered = state.delivered
+            state = .init(digest: digest, nextAttempt: now)
+            state.delivered = delivered
+        }
         if state.nextAttempt <= now {
             // Persist a short lease before execution, so interruption cannot spin.
             state.nextAttempt = now.addingTimeInterval(900)

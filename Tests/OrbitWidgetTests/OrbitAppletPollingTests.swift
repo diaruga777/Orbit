@@ -116,6 +116,21 @@ final class OrbitAppletPollingTests: XCTestCase {
         try await runner.check(script: script, store: store, now: now.addingTimeInterval(900)) { _ in }
         XCTAssertEqual(try store.storage(script.id)["checks"], "1")
     }
+    func testApprovedUpdateKeepsDeliveredIDsAndSchedulingFiltersOldSources() async throws {
+        let (store, script, root) = try fixture(source(hook))
+        defer { try? FileManager.default.removeItem(at: root) }
+        let runner = OrbitAppletRunner(), delivered = Notices()
+        try await runner.check(script: script, store: store, now: now) { await delivered.add($0) }
+        let updated = source(hook + "\n// approved update")
+        try store.install(updated)
+        let excluded = try await runner.nextCheck(store: store, scriptIDs: [], now: now)
+        XCTAssertNil(excluded)
+        let changed = try OrbitAppletDefinition.widgetScript(updated)
+        try await runner.check(script: changed, store: store, now: now.addingTimeInterval(1)) { await delivered.add($0) }
+        let count = await delivered.values.count
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(try store.storage(script.id)["checks"], "2")
+    }
     func testForegroundCannotOverwriteAnActiveCheck() async throws {
         let (store, script, root) = try fixture(source(hook))
         defer { try? FileManager.default.removeItem(at: root) }
