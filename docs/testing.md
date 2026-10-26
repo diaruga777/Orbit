@@ -302,3 +302,15 @@ Test background expiration, Background App Refresh disabled and standalone sourc
 updates requiring fresh approval separately. Unit tests and Simulator builds do
 not establish actual iPhone background cadence, notification delivery, physical
 installation/renewal or marketplace acceptance.
+
+Applet polling verification (2026-10-26): bootstrap generated native dependencies
+in a detached checkout. All 165 Swift tests passed (four optional fixtures
+skipped); the packaged phone-source fixture passed separately. All 14 Python MCP
+checks, both Go race suites and helper vet passed. The iOS Simulator client,
+ad hoc signed Mac review bundle and committed exported standalone host built;
+Mac signature verification passed. Three Simulator UI checks passed: polling
+consent/parsing/persistence/cadence, existing applet actions and widget import.
+The polling check passed again after the final scheduling safeguards. Fixtures
+used synthetic JSON; no live-source availability, physical-device background
+cadence, Apple sign-in, actual install/renewal, public notarization or marketplace
+acceptance is claimed.
