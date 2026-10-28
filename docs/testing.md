@@ -36,6 +36,17 @@ blocked by the existing flat macOS `COrbitNet.framework` layout (Xcode requires
 `Versions/Current/Resources/Info.plist`). No physical-device access, Apple sign-in,
 Home Screen/Dock acceptance, public notarization or marketplace listing was done.
 
+Monochrome icon revision (2026-10-28): inspected the white silhouettes, thin
+tapered orbit gaps and solid black background at 128px. All eleven PNG exports
+passed dimensions/opacity checks. Bootstrap, 165 Swift tests (four optional
+fixtures skipped), 14 Python tests, both Go race suites and helper vet passed.
+The iOS Simulator client built with the revised compiled icons; the Mac asset
+catalog compiled directly with `actool`. The packaged Mac app passed signature
+verification, all ten ICNS representations round-tripped at 16–1024px, and the
+packaged phone-source fixture passed. The previously documented Mac Xcode
+framework-validation limitation is unchanged. No physical-device installation,
+Home Screen/Dock acceptance, public notarization or marketplace listing was done.
+
 Swift tests cover document version/conflict handling, SourceKit jobs, detached checkouts, target cadence/restart persistence, trust, framing, exact device readback and retained installation evidence. Python tests exercise the stdio tool contract and real fragmented Unix-socket replies. Go tests exercise TLS identity, framing, relay protocol and synthetic Apple installation exchanges. Optional integration tests skip unless their fixture tools are explicitly supplied.
 
 `OrbitHostTests.testTargetIconsBackfillOlderCatalogAndSurviveRestart` covers legacy target icon migration, wire encoding, persistence and throttled lookup failures. `CodeEditorUITests.testTargetListDisplaysIconsAndMissingImageFallbacks` exercises the actual Apps controller with a thumbnail, absent image and invalid image; its screenshot attachment supports visual review without pairing a phone.
