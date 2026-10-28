@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2AF35535FAFFA7281A68A0A3"
-               BuildableName = "OrbitMac.app"
-               BlueprintName = "OrbitMac"
+               BlueprintIdentifier = "CE69EDA42063C2C5BF35D021"
+               BuildableName = "OrbitMacClient.app"
+               BlueprintName = "OrbitMacClient"
                ReferencedContainer = "container:Orbit.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -32,9 +32,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2AF35535FAFFA7281A68A0A3"
-            BuildableName = "OrbitMac.app"
-            BlueprintName = "OrbitMac"
+            BlueprintIdentifier = "CE69EDA42063C2C5BF35D021"
+            BuildableName = "OrbitMacClient.app"
+            BlueprintName = "OrbitMacClient"
             ReferencedContainer = "container:Orbit.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -55,9 +55,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2AF35535FAFFA7281A68A0A3"
-            BuildableName = "OrbitMac.app"
-            BlueprintName = "OrbitMac"
+            BlueprintIdentifier = "CE69EDA42063C2C5BF35D021"
+            BuildableName = "OrbitMacClient.app"
+            BlueprintName = "OrbitMacClient"
             ReferencedContainer = "container:Orbit.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -72,9 +72,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "2AF35535FAFFA7281A68A0A3"
-            BuildableName = "OrbitMac.app"
-            BlueprintName = "OrbitMac"
+            BlueprintIdentifier = "CE69EDA42063C2C5BF35D021"
+            BuildableName = "OrbitMacClient.app"
+            BlueprintName = "OrbitMacClient"
             ReferencedContainer = "container:Orbit.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

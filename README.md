@@ -4,6 +4,9 @@
 
 Orbit is an open source iPhone/iPad source editor and Mac build companion. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices. Orbit also hosts single-file JavaScript applets and Home Screen / Lock Screen widgets.
 
+Both apps share a glass iPhone-and-MacBook orbit icon. Artwork and export details
+are in [app icons](docs/design/app-icons.md).
+
 You need a Mac, an iPhone, and either a coding agent subscription/credits or enough development experience to configure the tools yourself. Orbit includes an MCP and setup/deploy skills, so an agent can follow this README end to end. Orbit does not require an AI provider, subscription, hosted backend or paid Apple membership.
 
 > Free Apple accounts are supported. Apple limits Personal Teams to three installed development apps per device, three registered devices and ten App IDs; profiles expire after seven days. Orbit itself uses one app slot. Orbit defaults to **every six days**, leaving a day for recovery. This works for compatible apps within Apple's limits—not every app or entitlement. A new build needs an awake, logged-in Mac and a reachable, trusted phone. Once cached on iPhone, the same installed build can be renewed without the Mac through the phone’s Refresh tab. [Apple account limits](https://developer.apple.com/help/account/basics/about-your-developer-account)

@@ -15,6 +15,27 @@ xcodebuild -project Orbit.xcodeproj -scheme Orbit \
 scripts/build_and_run.sh --build-only
 ```
 
+For app-icon changes, regenerate the project with XcodeGen and verify the iOS
+build contains `Assets.car` and declares `CFBundleIcons` / `AppIcon`. Also build
+the `OrbitMac` Xcode scheme and check its icon metadata. The script-built Mac
+bundle must declare `CFBundleIconFile = Orbit.icns`, contain that ICNS with all
+16–1024px representations, and still pass `codesign --verify --deep --strict`.
+Inspect both artwork masters and small-size exports. Home Screen and Dock visual
+acceptance is separate from asset compilation and packaging checks.
+
+App-icon verification (2026-10-28): bootstrap ran in a committed detached
+checkout. All 165 Swift tests passed (four optional fixtures skipped), as did
+14 Python tests, both Go race suites and helper vet. The iOS Simulator build
+passed with compiled assets and iPhone/iPad primary-icon metadata. The packaged
+Mac app passed signature verification; its declared ICNS round-tripped all ten
+16–1024px representations, and the packaged phone-source fixture passed.
+Both masters were inspected at 128px, and dimensions/opacity were checked for
+every export. The Mac Xcode scheme compiled its icon catalog and signed its app
+after separating the app/library target names; final product validation remains
+blocked by the existing flat macOS `COrbitNet.framework` layout (Xcode requires
+`Versions/Current/Resources/Info.plist`). No physical-device access, Apple sign-in,
+Home Screen/Dock acceptance, public notarization or marketplace listing was done.
+
 Swift tests cover document version/conflict handling, SourceKit jobs, detached checkouts, target cadence/restart persistence, trust, framing, exact device readback and retained installation evidence. Python tests exercise the stdio tool contract and real fragmented Unix-socket replies. Go tests exercise TLS identity, framing, relay protocol and synthetic Apple installation exchanges. Optional integration tests skip unless their fixture tools are explicitly supplied.
 
 `OrbitHostTests.testTargetIconsBackfillOlderCatalogAndSurviveRestart` covers legacy target icon migration, wire encoding, persistence and throttled lookup failures. `CodeEditorUITests.testTargetListDisplaysIconsAndMissingImageFallbacks` exercises the actual Apps controller with a thumbnail, absent image and invalid image; its screenshot attachment supports visual review without pairing a phone.

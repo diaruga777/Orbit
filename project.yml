@@ -56,6 +56,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).ios
         CODE_SIGN_ENTITLEMENTS: Apps/Orbit/Orbit.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: '1,2'
     dependencies:
       - target: OrbitShareExtension
@@ -129,14 +130,17 @@ targets:
         TEST_TARGET_NAME: Orbit
     dependencies:
       - target: Orbit
-  OrbitMac:
+  OrbitMacClient:
     type: application
     platform: macOS
-    sources: [Sources/OrbitMacApp]
+    sources: [Sources/OrbitMacApp, Apps/OrbitMac/Assets.xcassets]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).mac
+        PRODUCT_NAME: OrbitMac
+        PRODUCT_MODULE_NAME: OrbitMacClient
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Orbit Mac
         INFOPLIST_KEY_OrbitPhoneBundleIdentifier: $(ORBIT_BUNDLE_PREFIX).ios
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: Orbit connects to your phone to build and install your apps.
@@ -154,4 +158,4 @@ schemes:
   OrbitMac:
     build:
       targets:
-        OrbitMac: all
+        OrbitMacClient: all
