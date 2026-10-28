@@ -22,7 +22,9 @@ The client app icons live in `Apps/Orbit/Assets.xcassets` and
 The Mac packaging script converts the same Mac PNGs to `Orbit.icns` and declares
 `CFBundleIconFile`, so Xcode and packaged apps share their Dock/Finder artwork.
 The iOS master is opaque and square for system masking; the Mac artwork includes
-transparent padding and rounded corners. See [app icons](design/app-icons.md).
+transparent padding and rounded corners. Both use solid white device silhouettes
+on black, subtle glass edges on the devices, and a thin white orbit that tapers
+before the phone. See [app icons](design/app-icons.md).
 The `OrbitMac` Xcode scheme builds the `OrbitMacClient` app target, keeping its
 build intermediates separate from the `OrbitMac` package library.
 
