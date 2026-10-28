@@ -130,13 +130,15 @@ targets:
         TEST_TARGET_NAME: Orbit
     dependencies:
       - target: Orbit
-  OrbitMac:
+  OrbitMacClient:
     type: application
     platform: macOS
     sources: [Sources/OrbitMacApp, Apps/OrbitMac/Assets.xcassets]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).mac
+        PRODUCT_NAME: OrbitMac
+        PRODUCT_MODULE_NAME: OrbitMacClient
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Orbit Mac
@@ -156,4 +158,4 @@ schemes:
   OrbitMac:
     build:
       targets:
-        OrbitMac: all
+        OrbitMacClient: all
