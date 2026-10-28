@@ -17,6 +17,13 @@ Orbit is independent of Luna. It contains a source editor, a Mac executor and tr
 
 Data lives under `~/.orbit` on Mac (override with absolute `ORBIT_HOME`) and private Application Support on iOS. Pairing certificates and iroh keys are independent of signing certificates. The phone's installation authorization key is non-synchronizing and stays in Keychain. Removing an app or its state requires pairing again; no Luna identity is silently adopted.
 
+The client app icons live in `Apps/Orbit/Assets.xcassets` and
+`Apps/OrbitMac/Assets.xcassets`. Both Xcode targets select `AppIcon`.
+The Mac packaging script converts the same Mac PNGs to `Orbit.icns` and declares
+`CFBundleIconFile`, so Xcode and packaged apps share their Dock/Finder artwork.
+The iOS master is opaque and square for system masking; the Mac artwork includes
+transparent padding and rounded corners. See [app icons](design/app-icons.md).
+
 ## Mac setup and optional setup
 
 The active wizard has six steps: welcome, tools, folder access, Apple account,

@@ -15,6 +15,14 @@ xcodebuild -project Orbit.xcodeproj -scheme Orbit \
 scripts/build_and_run.sh --build-only
 ```
 
+For app-icon changes, regenerate the project with XcodeGen and verify the iOS
+build contains `Assets.car` and declares `CFBundleIcons` / `AppIcon`. Also build
+the `OrbitMac` Xcode scheme and check its icon metadata. The script-built Mac
+bundle must declare `CFBundleIconFile = Orbit.icns`, contain that ICNS with all
+16–1024px representations, and still pass `codesign --verify --deep --strict`.
+Inspect both artwork masters and small-size exports. Home Screen and Dock visual
+acceptance is separate from asset compilation and packaging checks.
+
 Swift tests cover document version/conflict handling, SourceKit jobs, detached checkouts, target cadence/restart persistence, trust, framing, exact device readback and retained installation evidence. Python tests exercise the stdio tool contract and real fragmented Unix-socket replies. Go tests exercise TLS identity, framing, relay protocol and synthetic Apple installation exchanges. Optional integration tests skip unless their fixture tools are explicitly supplied.
 
 `OrbitHostTests.testTargetIconsBackfillOlderCatalogAndSurviveRestart` covers legacy target icon migration, wire encoding, persistence and throttled lookup failures. `CodeEditorUITests.testTargetListDisplaysIconsAndMissingImageFallbacks` exercises the actual Apps controller with a thumbnail, absent image and invalid image; its screenshot attachment supports visual review without pairing a phone.

@@ -36,6 +36,10 @@ python3 tools/apple-adapter/notices/collect.py "$BUILD/apple-adapter-notices"
 STAGE="$(mktemp -d /tmp/orbit-app.XXXXXX)"; trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/Orbit Mac.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources/AppleAdapterNotices"
+# Use the same Dock artwork as the Xcode app target.
+mkdir -p "$STAGE/Orbit.iconset"
+cp "$ROOT/Apps/OrbitMac/Assets.xcassets/AppIcon.appiconset/"*.png "$STAGE/Orbit.iconset/"
+iconutil --convert icns "$STAGE/Orbit.iconset" --output "$APP/Contents/Resources/Orbit.icns"
 cp "$BUILD/OrbitMacApp" "$APP/Contents/MacOS/OrbitMacApp"
 cp "$BUILD/orbit-apple-adapter" "$APP/Contents/Helpers/"
 cp -R "$BUILD/apple-adapter-notices/." "$APP/Contents/Resources/AppleAdapterNotices/"
@@ -52,6 +56,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <key>CFBundleIdentifier</key><string>$PREFIX.mac</string>
 <key>OrbitPhoneBundleIdentifier</key><string>$PREFIX.ios</string>
 <key>CFBundleName</key><string>Orbit Mac</string>
+<key>CFBundleIconFile</key><string>Orbit.icns</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundlePackageType</key><string>APPL</string>
