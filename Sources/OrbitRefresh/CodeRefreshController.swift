@@ -35,6 +35,7 @@ import OrbitCore
     @objc private func toggleSetup() {
         reviewingSetup.toggle()
         navigationItem.leftBarButtonItem?.title = reviewingSetup ? "Guided setup" : "Setup details"
+        updateSetupHeader()
         tableView.reloadData()
     }
     public override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reload() }
@@ -46,11 +47,41 @@ import OrbitCore
                 pairing = try await engine.device.hasPairing()
                 certificate = try await engine.account.hasCertificate()
                 status = (try? await engine.readiness()) ?? [:]
+                updateSetupHeader()
                 tableView.reloadData()
                 if let status = try? await engine.readiness() { readinessChanged?(status) }
                 NotificationCenter.default.post(name: .codeRefreshStateChanged, object: nil)
             } catch { message(error.localizedDescription) }
         }
+    }
+    private func updateSetupHeader() {
+        guard let step = nextStep, !reviewingSetup else { tableView.tableHeaderView = nil; return }
+        let heading = UILabel()
+        heading.text = "Refresh on this iPhone"
+        heading.font = .preferredFont(forTextStyle: .largeTitle)
+        let detail = UILabel()
+        detail.text = [
+            "Keep your apps ready when your Mac is away. First, sign in to the Apple Account you use for your apps.",
+            "Next, import this iPhone’s pairing file from your Mac. It lets Orbit connect to Apple’s installation service on this phone.",
+            "Create a signing certificate to renew your apps. Already have one? You can import it in Setup details.",
+            "Save a copy of Orbit’s installed build. Future code changes still need your Mac.",
+            "Last, connect to Wi-Fi and turn on LocalDevVPN. Then check the connection before your first refresh."
+        ][step]
+        detail.font = .preferredFont(forTextStyle: .body)
+        detail.textColor = .secondaryLabel
+        for label in [heading, detail] { label.numberOfLines = 0; label.adjustsFontForContentSizeCategory = true }
+        let progress = UIProgressView(progressViewStyle: .default)
+        progress.progress = Float(step) / Float(keys.count)
+        progress.accessibilityLabel = "Setup progress"
+        progress.accessibilityValue = "Step \(step + 1) of \(keys.count)"
+        let stack = UIStackView(arrangedSubviews: [heading, detail, progress])
+        stack.axis = .vertical
+        stack.spacing = 20
+        stack.isLayoutMarginsRelativeArrangement = true
+        stack.directionalLayoutMargins = .init(top: 24, leading: 24, bottom: 24, trailing: 24)
+        let width = tableView.bounds.width
+        stack.frame = CGRect(origin: .zero, size: stack.systemLayoutSizeFitting(CGSize(width: width, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel))
+        tableView.tableHeaderView = stack
     }
     public override func numberOfSections(in tableView: UITableView) -> Int { 2 }
     public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? setupRows.count : apps.count }
