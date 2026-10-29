@@ -48,6 +48,10 @@ state; input uses a secure field with terminal echo disabled. Xcodes owns Apple
 download credentials in Keychain. Signing remains Xcode-owned: the wizard reads
 public Xcode team metadata and development certificate subjects, never account
 sessions or signing keys. Xcode’s native Accounts screen handles signing login.
+Team discovery merges current Xcode team caches (`IDEProvisioningTeams` and
+`IDEProvisioningTeamByIdentifier`) with the legacy team-manager cache. Available
+Xcode metadata needs no certificate; only an empty team cache falls back to a
+non-interactive public-certificate query, without requesting private keys.
 The wizard auto-selects a sole team, otherwise shows names, and generates a stable
 random bundle namespace in user state. Existing registered/installed identities
 are preserved, and a phone is rechecked natively before installation.

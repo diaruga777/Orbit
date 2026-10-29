@@ -57,6 +57,33 @@ final class OrbitSetupTests: XCTestCase {
         XCTAssertEqual(teams.count, 2)
         XCTAssertEqual(teams.first(where: { $0.id == "ABCDEFGHIJ" })?.name, "Alex (Personal Team)")
     }
+    func testSigningTeamsReadCurrentXcodeCachesWithoutCertificates() {
+        let personal: [String: Any] = ["teamID": "ABCDEFGHIJ", "teamName": "Alex", "isFreeProvisioningTeam": true, "teamType": "Personal Team"]
+        let company: [String: Any] = ["teamID": "1234567890", "teamName": "Company"]
+        // Current Xcode uses account-keyed arrays and an identifier-keyed index.
+        for key in ["IDEProvisioningTeams", "IDEProvisioningTeamByIdentifier"] {
+            let preferences: [String: Any] = [key: ["account@example.invalid": [personal, company]]]
+            let teams = OrbitSetup.signingTeams(inXcodePreferences: preferences)
+            XCTAssertEqual(teams.count, 2)
+            XCTAssertEqual(teams.first(where: { $0.id == "ABCDEFGHIJ" })?.name, "Alex (Personal Team)")
+        }
+    }
+    func testSigningTeamsMergeLegacyCachesAndIgnoreUnrelatedAccountData() {
+        let preferences: [String: Any] = [
+            "IDEProvisioningTeamManagerUserDefaultDictionary": ["legacy": [
+                ["teamID": "ABCDEFGHIJ", "name": "Old name"],
+                ["teamIdentifier": "1234567890", "name": "Company"]]],
+            "IDEProvisioningTeams": ["account@example.invalid": [
+                ["teamID": "ABCDEFGHIJ", "teamName": "Cached name"]]],
+            "IDEProvisioningTeamByIdentifier": ["ABCDEFGHIJ": [
+                ["teamID": "ABCDEFGHIJ", "teamName": "Alex", "isFreeProvisioningTeam": true],
+                ["teamID": "invalid", "teamName": "Ignore"]]],
+            "UnrelatedAccountData": ["teamID": "ZZZZZZZZZZ", "name": "Ignore me"]
+        ]
+        let teams = OrbitSetup.signingTeams(inXcodePreferences: preferences)
+        XCTAssertEqual(teams.map(\.name), ["Alex (Personal Team)", "Company"])
+        XCTAssertEqual(OrbitSetup.signingTeams(inXcodePreferences: [:]), [])
+    }
     func testFolderConsentChangesCloneDestinationAndIsLocalOnly() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

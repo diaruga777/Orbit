@@ -187,7 +187,10 @@ must verify the selected icon and dedicated launch on the intended phone.
 
 `OrbitSetupTests` covers migration from the retired steps, stable generated app
 identity, Desktop folder defaults/consent, local-only folder configuration, Xcode
-team metadata parsing and physical-phone readiness evidence. Python MCP tests run
+team metadata parsing and physical-phone readiness evidence. Team-cache regressions
+cover current Xcode account/identifier indexes without certificates, legacy cache
+merging, duplicate precedence, Personal Teams and exclusion of unrelated account
+data. These fixtures do not sign in to Apple or access a phone. Python MCP tests run
 the real loopback HTTP adapter with a synthetic Host RPC and check initialization,
 notifications, tools, token/Origin/Host rejection and payload limits.
 `OrbitSetupBannerUITests` checks both optional setup destinations and persistent

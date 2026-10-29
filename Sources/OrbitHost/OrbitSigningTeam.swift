@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import LocalAuthentication
 
 public struct OrbitSigningTeam: Identifiable, Equatable, Sendable {
     public var id: String
@@ -13,24 +14,44 @@ extension OrbitSetup {
     public func signingTeams() -> [OrbitSigningTeam] {
         let preferences = UserDefaults(suiteName: "com.apple.dt.Xcode")
         _ = preferences?.synchronize() // Reload after the user returns from Xcode Accounts.
-        var teams = Self.signingTeams(in: preferences?.dictionary(forKey: "IDEProvisioningTeamManagerUserDefaultDictionary") ?? [:])
+        let caches = Self.xcodeTeamCacheKeys.reduce(into: [String: Any]()) { values, key in
+            values[key] = preferences?.object(forKey: key)
+        }
+        let teams = Self.signingTeams(inXcodePreferences: caches)
+        // Xcode can know the team before a development certificate exists. Do not
+        // make account discovery depend on a Keychain identity/private-key lookup.
+        if !teams.isEmpty { return teams }
+        var certificateTeams: [OrbitSigningTeam] = []
         var items: CFTypeRef?
-        let query: [CFString: Any] = [kSecClass: kSecClassIdentity, kSecReturnRef: true, kSecMatchLimit: kSecMatchLimitAll]
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        let query: [CFString: Any] = [kSecClass: kSecClassCertificate, kSecReturnRef: true,
+                                    kSecMatchLimit: kSecMatchLimitAll, kSecUseAuthenticationContext: context]
         if SecItemCopyMatching(query as CFDictionary, &items) == errSecSuccess {
-            for identity in items as? [SecIdentity] ?? [] {
-                var certificate: SecCertificate?
-                guard SecIdentityCopyCertificate(identity, &certificate) == errSecSuccess, let certificate,
-                      let summary = SecCertificateCopySubjectSummary(certificate) as String?,
+            for certificate in items as? [SecCertificate] ?? [] {
+                guard let summary = SecCertificateCopySubjectSummary(certificate) as String?,
                       summary.hasPrefix("Apple Development:") || summary.hasPrefix("iPhone Developer:") else { continue }
-                // Development identity names end with the public ten-character team ID.
+                // The public certificate subject’s organizational unit holds the team ID.
                 guard let values = SecCertificateCopyValues(certificate, [kSecOIDOrganizationalUnitName] as CFArray, nil) as? [CFString: Any],
                       let property = values[kSecOIDOrganizationalUnitName] as? [CFString: Any],
                       let id = property[kSecPropertyKeyValue] as? String, OrbitSetupState.validTeam(id),
-                      !teams.contains(where: { $0.id == id }) else { continue }
-                teams.append(.init(id: id, name: summary.replacingOccurrences(of: "Apple Development: ", with: "")))
+                      !certificateTeams.contains(where: { $0.id == id }) else { continue }
+                certificateTeams.append(.init(id: id, name: summary.replacingOccurrences(of: "Apple Development: ", with: "")))
             }
         }
-        return teams.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        return certificateTeams.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private static let xcodeTeamCacheKeys = ["IDEProvisioningTeamManagerUserDefaultDictionary", "IDEProvisioningTeams", "IDEProvisioningTeamByIdentifier"]
+
+    /// Only inspect team caches, not Xcode's account/session preferences. The
+    /// identifier index takes precedence over older caches when names differ.
+    nonisolated static func signingTeams(inXcodePreferences preferences: [String: Any]) -> [OrbitSigningTeam] {
+        var teams: [String: OrbitSigningTeam] = [:]
+        for key in xcodeTeamCacheKeys {
+            for team in signingTeams(in: preferences[key] ?? [:]) { teams[team.id] = team }
+        }
+        return teams.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     public nonisolated static func signingTeams(in value: Any) -> [OrbitSigningTeam] {

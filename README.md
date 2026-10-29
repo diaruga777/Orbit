@@ -31,7 +31,8 @@ compatible with your macOS from the same release feed used by xcodes. Apple sign
 password prompts appear in a private interactive installer inside Orbit; replies
 and transcripts are never saved in setup/build logs. Xcodes owns its download
 credentials in Keychain. Add your signing account in Xcode’s own Accounts screen;
-Orbit detects it when you return. If more than one team is available, choose its
+Orbit detects its signing teams when you return, even before a development
+certificate exists. If more than one team is available, choose its
 name. Orbit generates and saves its phone app identifiers once, preserving them
 on resume and updates. Apple trust, Developer Mode, account and license prompts
 still need your attention.
