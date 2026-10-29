@@ -14,7 +14,10 @@ public enum OrbitAppletExport {
         let source = source ?? blank
         let script = try OrbitAppletDefinition.widgetScript(source)
         let fm = FileManager.default
-        guard let template = Bundle.module.url(forResource: "AppletHost", withExtension: nil) else { throw CodeFailure("The applet host template is missing.") }
+        let packaged = Bundle.main.resourceURL?.appendingPathComponent("Orbit_OrbitHost.bundle/AppletHost")
+        let template = packaged.flatMap { fm.fileExists(atPath: $0.path) ? $0 : nil }
+            ?? Bundle.module.url(forResource: "AppletHost", withExtension: nil)
+        guard let template else { throw CodeFailure("The applet host template is missing.") }
         // Stage beside the destination, so failed exports never leave a partial project.
         let stage = destination.deletingLastPathComponent().appendingPathComponent(".orbit-applet-" + UUID().uuidString)
         try fm.createDirectory(at: stage, withIntermediateDirectories: true)
