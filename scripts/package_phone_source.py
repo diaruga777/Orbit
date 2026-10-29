@@ -3,11 +3,38 @@
 import argparse
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+
+def add_native_payload(output, source, root):
+    source, root = Path(source), Path(root)
+    if source.is_symlink() or not source.is_dir():
+        raise RuntimeError('Run bootstrap before packaging: '+str(source))
+    boundary = source.resolve()
+    for file in sorted(source.rglob('*')):
+        name = file.relative_to(root).as_posix()
+        if file.is_symlink():
+            target = os.readlink(file)
+            try:
+                resolved = file.resolve(strict=True)
+                resolved.relative_to(boundary)
+                if os.path.isabs(target): raise ValueError('absolute link')
+            except (OSError, RuntimeError, ValueError) as error:
+                raise RuntimeError('Native payload contains an unsafe symlink: '+str(file)) from error
+            # Keep versioned macOS framework links relative and intact. rglob
+            # does not traverse directory links; their targets are archived once.
+            entry = zipfile.ZipInfo(name)
+            entry.create_system = 3
+            entry.external_attr = (stat.S_IFLNK | 0o777) << 16
+            output.writestr(entry, target)
+        elif file.is_file():
+            output.write(file, name)
+
 
 def package(destination):
     destination = Path(destination).resolve()
@@ -21,13 +48,7 @@ def package(destination):
     subprocess.run(['git','archive','--format=zip','-o',str(archive),'HEAD','--',*include],cwd=ROOT,check=True)
     with zipfile.ZipFile(archive,'a',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as output:
         for folder in ['Vendor/OrbitNet.xcframework','Vendor/DeviceGateway/IDevice.xcframework']:
-            source = ROOT/folder
-            if not source.is_dir():
-                raise RuntimeError('Run bootstrap before packaging: '+folder)
-            for file in sorted(source.rglob('*')):
-                if file.is_symlink():
-                    raise RuntimeError('Native payload contains a symlink: '+str(file))
-                if file.is_file(): output.write(file,file.relative_to(ROOT))
+            add_native_payload(output, ROOT/folder, ROOT)
     hasher = hashlib.sha256()
     with archive.open('rb') as file:
         while True:
