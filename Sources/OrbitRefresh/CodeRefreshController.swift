@@ -14,6 +14,12 @@ import OrbitCore
     private var certificate = false
     private var working = false
     private var work: Task<Void, Never>?
+    private var status: [String: Bool] = [:]
+    private var reviewingSetup = false
+    private let steps = [0, 1, 3, 4, 6]
+    private let keys = ["account", "pairing", "certificate", "cache", "connection"]
+    private var nextStep: Int? { keys.indices.first { status[keys[$0]] != true } }
+    private var setupRows: [Int] { reviewingSetup || nextStep == nil ? Array(0..<8) : [steps[nextStep!]] }
     private var importKind = "ipa"
     public init(engine: CodeRefreshEngine = .shared) { self.engine = engine; super.init(style: .insetGrouped); title = "Refresh" }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -21,7 +27,15 @@ import OrbitCore
         super.viewDidLoad()
         tableView.cellLayoutMarginsFollowReadableWidth = true
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Refresh All", style: .plain, target: self, action: #selector(refreshAll))
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 76
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Setup details", style: .plain, target: self, action: #selector(toggleSetup))
         reload()
+    }
+    @objc private func toggleSetup() {
+        reviewingSetup.toggle()
+        navigationItem.leftBarButtonItem?.title = reviewingSetup ? "Guided setup" : "Setup details"
+        tableView.reloadData()
     }
     public override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reload() }
     private func reload() {
@@ -31,6 +45,7 @@ import OrbitCore
                 team = try await engine.account.team()?.name
                 pairing = try await engine.device.hasPairing()
                 certificate = try await engine.account.hasCertificate()
+                status = (try? await engine.readiness()) ?? [:]
                 tableView.reloadData()
                 if let status = try? await engine.readiness() { readinessChanged?(status) }
                 NotificationCenter.default.post(name: .codeRefreshStateChanged, object: nil)
@@ -38,17 +53,24 @@ import OrbitCore
         }
     }
     public override func numberOfSections(in tableView: UITableView) -> Int { 2 }
-    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 8 : apps.count }
-    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? nil : "Cached Builds" }
+    public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? setupRows.count : apps.count }
+    public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? (nextStep.map { "Step \($0 + 1) of 5" } ?? "Refresh settings") : "Cached Builds" }
     public override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         section == 0 ? "Connect to Wi-Fi and LocalDevVPN to refresh. iOS decides when automatic refresh can run; open Orbit before your apps expire." : nil
     }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil); cell.accessoryType = .disclosureIndicator
         cell.detailTextLabel?.numberOfLines = 0
+        cell.textLabel?.numberOfLines = 0
+        cell.textLabel?.font = .preferredFont(forTextStyle: .headline)
+        cell.detailTextLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+        cell.directionalLayoutMargins = .init(top: 18, leading: 20, bottom: 18, trailing: 20)
         if indexPath.section == 0 {
-            cell.textLabel?.text = ["Apple Account", "Pairing File", "Signing Certificate", "Create Signing Certificate", "Cache Orbit", "Import Build", "Check Refresh Connection", "Sign Out"][indexPath.row]
-            cell.detailTextLabel?.text = [team ?? "Sign in", pairing ? "Saved on this phone" : "Import from your computer", certificate ? "Saved on this phone" : "Import a .p12 file", nil, nil, nil, nil, nil][indexPath.row]
+            let row = setupRows[indexPath.row]
+            cell.textLabel?.text = ["Apple Account", "Pairing File", "Signing Certificate", "Create Signing Certificate", "Cache Orbit", "Import Build", "Check Refresh Connection", "Sign Out"][row]
+            cell.detailTextLabel?.text = [team ?? "Sign in", pairing ? "Saved on this phone" : "Import from your computer", certificate ? "Saved on this phone" : "Import a .p12 file", "Create a certificate for this phone", "Save Orbit so you can renew it away from your Mac", "Add an .ipa file", "Turn on LocalDevVPN, then tap to check", "Remove your saved Apple account"][row]
         } else {
             let app = apps[indexPath.row]
             cell.textLabel?.text = app.name
@@ -61,7 +83,7 @@ import OrbitCore
         tableView.deselectRow(at: indexPath, animated: true)
         guard !working else { return }
         if indexPath.section == 1 { choose(apps[indexPath.row]); return }
-        switch indexPath.row {
+        switch setupRows[indexPath.row] {
         case 0: signIn()
         case 1: pick("pairing")
         case 2: pick("certificate")

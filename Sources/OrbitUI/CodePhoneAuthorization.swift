@@ -12,15 +12,19 @@ import OrbitCore
                 let mine = bindings.filter { $0.publicKey == identity.publicKey }
                 let devices = try await client.call(CodeRequest(.devices)).devices ?? []
                 guard !devices.isEmpty || !mine.isEmpty else { throw CodeFailure("Connect this phone to your Mac and check device trust in Xcode first.") }
-                let alert = UIAlertController(title: "Authorize This Phone", message: "Choose this phone while it’s connected to your Mac. Your Mac will verify it through Apple’s device connection.", preferredStyle: .actionSheet)
-                for device in devices {
-                    alert.addAction(UIAlertAction(title: device.name, style: .default) { _ in
-                        Task {
-                            do { try await authorize(deviceID: device.id, client: client); completed("This phone is authorized.") }
-                            catch { completed(error.localizedDescription) }
-                        }
-                    })
+                if mine.isEmpty {
+                    // Apple delivers the challenge into each candidate's sandbox.
+                    // Only this running app can sign it with our installation key.
+                    for device in devices {
+                        do {
+                            try await authorize(deviceID: device.id, client: client)
+                            completed("This phone is authorized.")
+                            return
+                        } catch { continue }
+                    }
+                    throw CodeFailure("Couldn’t verify this iPhone. Connect it to your Mac, unlock it, and try again.")
                 }
+                let alert = UIAlertController(title: "This iPhone is authorized", message: "Your Mac has verified this phone.", preferredStyle: .actionSheet)
                 for binding in mine {
                     alert.addAction(UIAlertAction(title: "Remove This Phone’s Authorization", style: .destructive) { _ in
                         Task {

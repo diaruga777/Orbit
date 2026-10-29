@@ -235,3 +235,5 @@ forms, API calls or secrets. Relative asset paths support the `/Orbit/` Pages
 base path. The isolated Pages workflow uploads only `website/`; source and
 release assets stay in GitHub’s repository and Releases services. See
 [website hosting](website.md).
+
+Refresh setup on iOS presents the next incomplete step with numbered progress. Setup details keeps certificate import and account maintenance available. Phone authorization probes native Apple challenge delivery and accepts only proof signed by the running client’s installation identity; no phone picker is shown.

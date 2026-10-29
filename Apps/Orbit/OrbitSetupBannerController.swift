@@ -18,9 +18,15 @@ import UIKit
         refresh.addAction(UIAction { [weak self] _ in self?.openRefreshSetup() }, for: .touchUpInside)
         let remote = UIButton(type: .system); remote.setTitle("Remote builds", for: .normal)
         remote.addAction(UIAction { [weak self] _ in self?.showRemoteSetup() }, for: .touchUpInside)
-        let actions = UIStackView(arrangedSubviews: [refresh, remote]); actions.spacing = 20; actions.distribution = .fillEqually
+        for button in [close, refresh, remote] {
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        }
+        close.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        refresh.configuration = .filled()
+        remote.configuration = .tinted()
+        let actions = UIStackView(arrangedSubviews: [refresh, remote]); actions.axis = .vertical; actions.spacing = 8; actions.distribution = .fillEqually
         banner.insetsLayoutMarginsFromSafeArea = false
-        banner.axis = .vertical; banner.spacing = 6; banner.isLayoutMarginsRelativeArrangement = true
+        banner.axis = .vertical; banner.spacing = 10; banner.isLayoutMarginsRelativeArrangement = true
         banner.directionalLayoutMargins = .init(top: 12, leading: 20, bottom: 12, trailing: 20)
         banner.backgroundColor = .secondarySystemBackground
         [heading, detail, actions].forEach(banner.addArrangedSubview)
