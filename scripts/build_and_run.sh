@@ -83,7 +83,7 @@ if [[ "$MODE" != --build-only && -d "$BUNDLE" ]]; then
  # A change of certificate must be intentional; preserving the designated
  # requirement keeps macOS file grants tied to the same installed client.
  REQ="$(codesign -d -r- "$BUNDLE" 2>&1 | sed -n 's/^designated => //p')"
- if [[ -n "$REQ" ]]; then codesign --verify --test-requirement "$REQ" "$APP"; fi
+ if [[ -n "$REQ" ]]; then codesign --verify --test-requirement "=$REQ" "$APP"; fi
  pkill -x OrbitMacApp >/dev/null 2>&1 || true
 fi
 mkdir -p "$(dirname "$BUNDLE")"
