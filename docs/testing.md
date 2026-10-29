@@ -376,3 +376,10 @@ certificate preserved. The running wizard showed its detected account,
 “Your Apple Account is ready” and an enabled Continue button. It was left on the
 account screen. No Apple account sign-in, physical installation/renewal, public
 notarization or marketplace acceptance was performed.
+
+The full Swift suite passed again after making packaged applet export independent
+of the build directory. The running signed app exported a complete committed
+fixture with its build resource bundles hidden. A final optional payload recheck
+could not compile after Xcode 26.2 was removed and the selected developer directory
+changed to standalone Command Line Tools; its C++ compiler could not find
+`<string>`. The earlier payload extraction/resume check passed with Xcode 26.2.
