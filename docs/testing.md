@@ -393,3 +393,14 @@ checks retain the underlying tool error; existing discovery fixtures cover USB,
 Wi-Fi, unavailable phones and Simulator exclusion. These tests never discover or
 access a physical phone. Local setup discovery and physical installation remain
 separate from automated validation.
+
+Phone-discovery verification (2026-10-30): bootstrap, the 170-test Swift suite
+(four optional fixtures skipped), 17 Python tests, both Go race suites and helper
+vet passed using Xcode 27.1. Both clients built and the packaged phone-source
+extraction/resume check passed. The Mac update retained its installed path, bundle
+ID and certificate; final signature verification passed after removing obsolete
+flat resources left by the old overlay updater. The updater now synchronizes the
+verified bundle exactly and verifies the installed copy. A separate interactive
+setup check showed the user's iPhone in the picker with standalone command-line
+tools still selected. Physical install/renewal and marketplace acceptance are not
+established by these automated checks.

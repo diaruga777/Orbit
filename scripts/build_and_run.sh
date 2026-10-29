@@ -87,8 +87,10 @@ if [[ "$MODE" != --build-only && -d "$BUNDLE" ]]; then
  pkill -x OrbitMacApp >/dev/null 2>&1 || true
 fi
 mkdir -p "$(dirname "$BUNDLE")"
-# ditto updates the same bundle path after the new app has passed verification.
-/usr/bin/ditto "$APP" "$BUNDLE"
+# Keep the installed path/identity, but exactly match the verified staged bundle.
+# Overlay copies retain obsolete resources when SwiftPM changes bundle layouts.
+/usr/bin/rsync -a --delete "$APP/" "$BUNDLE/"
+codesign --verify --deep --strict "$BUNDLE"
 case "$MODE" in
  --build-only) echo "$BUNDLE";;
  run) open -n "$BUNDLE";;

@@ -63,6 +63,9 @@ system-selected Xcode. Standalone Command Line Tools or a removed selection fall
 back to the running Xcode, Launch Services, then installed Xcode applications.
 The resolved directory is passed to child commands; system settings stay intact.
 Discovery failures retain bounded Xcode diagnostics instead of blaming the cable.
+Mac updates synchronize the verified bundle exactly at the existing installed path
+and verify it again afterward, removing obsolete resources across toolchain bundle
+layout changes while keeping the bundle identifier and signing requirement.
 
 Folder consent defaults to `~/Desktop/Orbit`, creates/tests the folder after an
 explicit action, and updates the Host’s project-root preference. GitHub imports
