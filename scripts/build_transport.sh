@@ -33,21 +33,38 @@ lipo -create "$WORK/macos-arm64.a" "$WORK/macos-amd64.a" -output "$WORK/macos.a"
 lipo -create "$WORK/sim-arm64.a" "$WORK/sim-amd64.a" -output "$WORK/sim.a"
 for platform in macos ios sim; do
  framework="$WORK/products/$platform/COrbitNet.framework"
- mkdir -p "$framework/Headers" "$framework/Modules"
  case "$platform" in
  macos) archive="$WORK/macos.a";;
  ios) archive="$WORK/ios-arm64.a";;
  sim) archive="$WORK/sim.a";;
  esac
- cp "$archive" "$framework/COrbitNet"
- cp orbitnet.h "$framework/Headers/"
+ if [ "$platform" = macos ]; then
+  version="$framework/Versions/A"
+  mkdir -p "$version/Headers" "$version/Modules" "$version/Resources"
+  cp "$archive" "$version/COrbitNet"
+  cp orbitnet.h "$version/Headers/"
+  ln -s A "$framework/Versions/Current"
+  ln -s Versions/Current/COrbitNet "$framework/COrbitNet"
+  ln -s Versions/Current/Headers "$framework/Headers"
+  ln -s Versions/Current/Modules "$framework/Modules"
+  ln -s Versions/Current/Resources "$framework/Resources"
+  info="$version/Resources/Info.plist"
+ else
+  mkdir -p "$framework/Headers" "$framework/Modules"
+  cp "$archive" "$framework/COrbitNet"
+  cp orbitnet.h "$framework/Headers/"
+  info="$framework/Info.plist"
+ fi
  cat > "$framework/Modules/module.modulemap" <<'MAP'
 framework module COrbitNet { umbrella header "orbitnet.h" export * }
 MAP
- cat > "$framework/Info.plist" <<'PLIST'
+ cat > "$info" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict><key>CFBundleIdentifier</key><string>org.orbit.transport</string><key>CFBundleExecutable</key><string>COrbitNet</string><key>CFBundleName</key><string>COrbitNet</string><key>CFBundlePackageType</key><string>FMWK</string><key>CFBundleVersion</key><string>1</string></dict></plist>
 PLIST
+ if [ "$platform" = macos ]; then
+  ln -s Versions/Current/Resources/Info.plist "$framework/Info.plist"
+ fi
 done
 rm -rf "$ROOT/Vendor/OrbitNet.xcframework"
 xcodebuild -create-xcframework -framework "$WORK/products/macos/COrbitNet.framework" \

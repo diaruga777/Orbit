@@ -4,6 +4,12 @@
 
 Run `scripts/bootstrap.sh` first. It generates `Vendor/OrbitNet.xcframework` from this checkout (Mac arm64/x86_64, iOS arm64, Simulator arm64/x86_64). The XCFramework is ignored by Git. CGo compilation flags distinguish each Apple platform in Go's build cache.
 
+The macOS `COrbitNet.framework` slice uses the versioned macOS framework layout:
+its binary, headers, modules and `Resources/Info.plist` live under `Versions/A`,
+with the standard `Versions/Current` and top-level framework symlinks. iOS and
+Simulator framework slices keep their flat platform-native layout. Xcode rejects
+a flat framework when validating the macOS client.
+
 ```sh
 swift test
 python3 -m unittest discover -s Tests/Python -v
