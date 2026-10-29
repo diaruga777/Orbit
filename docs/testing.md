@@ -355,3 +355,24 @@ The polling check passed again after the final scheduling safeguards. Fixtures
 used synthetic JSON; no live-source availability, physical-device background
 cadence, Apple sign-in, actual install/renewal, public notarization or marketplace
 acceptance is claimed.
+
+## Xcode account detection (2026-10-30)
+
+Team discovery covers current Xcode team indexes and legacy caches without
+requiring a development certificate. A local read-only probe detected the existing
+team in about 5 ms without signing in or accessing a phone. All 167 Swift tests
+passed (four optional fixtures skipped), as did 17 Python tests, both Go race
+suites and helper vet. Both clients built; the complete signed Mac setup bundle
+passed extraction/resume and signature verification. The update check accepted
+the existing designated requirement and rejected a mismatched identifier.
+
+The native payload packager preserves relative versioned-framework links and
+rejects links that escape the native archive, absolute paths, missing targets and
+cycles. A synthetic framework is extracted with the same macOS tool as setup to
+verify its links and contents. Initial concurrent client builds exhausted disk
+space; temporary outputs from this run were cleared and the builds then passed.
+The existing Mac review app was updated in place with its bundle ID and
+certificate preserved. The running wizard showed its detected account,
+“Your Apple Account is ready” and an enabled Continue button. It was left on the
+account screen. No Apple account sign-in, physical installation/renewal, public
+notarization or marketplace acceptance was performed.
