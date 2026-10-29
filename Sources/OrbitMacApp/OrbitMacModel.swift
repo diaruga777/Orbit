@@ -17,6 +17,10 @@ import UniformTypeIdentifiers
     @Published var query = ""
     @Published var results: [[String: Any]] = []
     @Published var inspection: [String: Any]?
+    @Published var detectedProjects: [String] = []
+    @Published var detectedSchemes: [String] = []
+    @Published var detecting = false
+    @Published var readingSchemes = false
     @Published var project = ""
     @Published var scheme = ""
     @Published var phone = ""
@@ -96,6 +100,40 @@ import UniformTypeIdentifiers
             else { await importScripts(urls) }
         }
         return true
+    }
+    func detectProjects() async {
+        guard !detecting else { return }
+        detecting = true
+        defer { detecting = false }
+        do { detectedProjects = try await rpc("projects_detect") as? [String] ?? [] }
+        catch { status = error.localizedDescription }
+    }
+    func chooseProject() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose an Xcode project or workspace"
+        panel.canChooseFiles = true; panel.canChooseDirectories = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "xcodeproj"), UTType(filenameExtension: "xcworkspace")].compactMap { $0 }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        inspectProject(url.path)
+    }
+    func inspectProject(_ path: String) {
+        project = path; scheme = ""; detectedSchemes = []
+        let alert = NSAlert(); alert.messageText = "Read this project’s app schemes?"
+        alert.informativeText = "Only open source you trust. Xcode can run project code on your Mac."
+        alert.addButton(withTitle: "Read Schemes"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        readingSchemes = true
+        Task {
+            defer { readingSchemes = false }
+            do {
+                let rows = try await rpc("project_apps", ["project": path, "trust": true]) as? [[String: Any]] ?? []
+                guard project == path else { return }
+                detectedSchemes = rows.compactMap { ($0["project"] as? [String: Any])?["scheme"] as? String }
+                scheme = detectedSchemes.first ?? ""
+                if detectedSchemes.isEmpty { status = "No runnable iOS app schemes found." }
+            } catch { status = error.localizedDescription }
+        }
     }
     func pair() { Task { await host?.openPairing(); pairing = (try? await server?.pairingCode()) ?? "" } }
     func search() { Task { do { results = try await rpc("repo_search", ["query": query]) as? [[String: Any]] ?? [] } catch { status = error.localizedDescription } } }

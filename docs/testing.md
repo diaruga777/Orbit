@@ -419,3 +419,17 @@ Swift suite passed on retry; the initial run hit an applet VM quota failure,
 which also passed individually. Both the iOS Simulator client and ad hoc Mac
 review bundle built. No Simulator visual walkthrough, physical phone access,
 Apple sign-in, installation/renewal or marketplace acceptance was performed.
+
+## Local project discovery
+
+`OrbitProjectDiscoveryTests` checks project/workspace detection, package boundaries, hidden/cache/dependency exclusion, symlink avoidance, deduplication and scan bounds using temporary inert directories. Manually verify automatic Mac and paired-phone lists, scan retry/offline errors, empty results, native Mac file selection, trust cancellation, multiple iOS schemes and registration. These checks require no physical deployment or Apple sign-in.
+
+Project-discovery verification (2026-10-30): bootstrap completed with the installed
+Xcode selected only for validation commands. The 172-test Swift suite passed
+with four optional fixtures skipped; all 17 Python tests, both Go race suites
+and helper vet passed. Both final clients built, the Mac review bundle passed
+signature verification, and the packaged phone-source extraction/resume fixture
+passed separately. A read-only home-folder probe found 30 projects, including
+Orbit, in about two seconds. Discovery and trust fixtures use inert temporary
+folders and never access phones. Interactive Mac/iOS picker acceptance, physical
+installation/renewal, public notarization and marketplace listing remain separate.

@@ -54,28 +54,53 @@ struct OrbitMacView: View {
                 }.padding().frame(maxWidth: .infinity, alignment: .leading)
             }.tabItem { Label("Apps", systemImage: "apps.iphone") }
             Form {
-                TextField("Project or workspace path", text: $model.project)
-                TextField("Scheme", text: $model.scheme)
+                Text(model.status).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                HStack {
+                    Button("Choose Project…", action: model.chooseProject)
+                    Button("Scan Again") { Task { await model.detectProjects() } }.disabled(model.detecting)
+                    if model.detecting { ProgressView().controlSize(.small) }
+                }
+                Text("Projects on this Mac").font(.headline)
+                if model.detectedProjects.isEmpty && !model.detecting { Text("No projects found. Choose a project to look elsewhere.").foregroundStyle(.secondary) }
+                ScrollView {
+                    VStack(alignment: .leading) {
+                        ForEach(model.detectedProjects, id: \.self) { path in
+                            Button { model.inspectProject(path) } label: {
+                                VStack(alignment: .leading) {
+                                    Text(URL(fileURLWithPath: path).lastPathComponent)
+                                    Text(path).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }.disabled(model.readingSchemes)
+                        }
+                    }
+                }.frame(maxHeight: 180)
+                if !model.project.isEmpty { Text(model.project).font(.caption).textSelection(.enabled) }
+                if model.readingSchemes { ProgressView("Reading app schemes…") }
+                Picker("iOS app scheme", selection: $model.scheme) {
+                    Text("Choose a scheme").tag("")
+                    ForEach(model.detectedSchemes, id: \.self) { Text($0).tag($0) }
+                }
                 TextField("Phone UDID", text: $model.phone)
                 TextField("Development team (optional)", text: $model.team)
                 TextField("Branch", text: $model.branch)
                 Toggle("Free Personal Team", isOn: $model.personal)
                 Toggle("Refresh Automatically", isOn: $model.scheduled)
                 TextField("Hours between refreshes", text: $model.hours)
-                Button("Add Local App") { model.add() }
+                Button("Add Local App") { model.add() }.disabled(model.scheme.isEmpty || model.readingSchemes)
                 Divider()
                 HStack { TextField("Search GitHub", text: $model.query).onSubmit(model.search); Button("Search", action: model.search) }
                 List(Array(model.results.enumerated()), id: \.offset) { _, result in
                     Button(result["repository"] as? String ?? "Repository") { model.inspect(result["repository"] as? String ?? "") }
                 }.frame(minHeight: 140)
                 if let info = model.inspection {
+                    TextField("GitHub app scheme", text: $model.scheme)
                     Text(info["compatible"] as? Bool == true ? "Xcode project found" : "No Xcode project found")
                     ForEach(info["projects"] as? [String] ?? [], id: \.self) { path in
                         Button(path) { model.project = path; model.branch = info["defaultBranch"] as? String ?? "main" }
                     }
                     Button("Clone and Add App") { model.add(repository: info["repository"] as? String) }.disabled(info["compatible"] as? Bool != true)
                 }
-            }.padding().tabItem { Label("Add App", systemImage: "plus") }
+            }.padding().task { await model.detectProjects() }.tabItem { Label("Add App", systemImage: "plus") }
             }
         }
         .toolbar { Button("Phone & Remote Setup") { showExtraSetup = true } }

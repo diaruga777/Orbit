@@ -237,3 +237,7 @@ release assets stay in GitHub’s repository and Releases services. See
 [website hosting](website.md).
 
 Refresh setup on iOS presents the next incomplete step with numbered progress. Setup details keeps certificate import and account maintenance available. Phone authorization probes native Apple challenge delivery and accepts only proof signed by the running client’s installation identity; no phone picker is shown.
+
+## Local project discovery
+
+Host `projects_detect` scans configured project roots and the Mac home folder using filesystem metadata only. It skips hidden folders, symlinks, caches, dependencies and package contents, deduplicates paths and bounds results to 500 projects and 100,000 entries. Inaccessible folders are skipped; Choose Project on Mac uses NSOpenPanel for other locations. Trusted paired phones can request the same scan. `project_apps` requires explicit source trust before invoking the existing Xcode runnable-iOS-app validation. Both clients select schemes from that response; registration revalidates the selection and existing committed-worktree build rules apply. Discovery does not build, install or fetch repositories.

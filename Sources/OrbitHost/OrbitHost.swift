@@ -70,6 +70,14 @@ public actor OrbitHost {
             let response = await service.handle(data, authenticatedPeerID: peer ?? "local-mac")
             return try JSONSerialization.jsonObject(with: response)
         case "installed_apps": return try object(await service.installedApps(deviceID: p["deviceID"] as? String))
+        case "projects_detect":
+            let roots = configuration.allowedRoots.map { URL(fileURLWithPath: $0) } + [FileManager.default.homeDirectoryForCurrentUser]
+            return await Task.detached { OrbitProjectDiscovery.scan(roots: roots) }.value
+        case "project_apps":
+            guard p["trust"] as? Bool == true else { throw CodeFailure("Only inspect source you trust. Xcode can run project code on your Mac.") }
+            let path = try required(p, "project")
+            guard path.hasPrefix("/"), ["xcodeproj", "xcworkspace"].contains(URL(fileURLWithPath: path).pathExtension) else { throw CodeFailure("Choose an Xcode project or workspace.") }
+            return try object(await decoded(CodeRequest(.apps, path: path)).apps ?? [])
         case "browse": return try browse(p)
         case "targets":
             await populateMissingTargetIcons { project in

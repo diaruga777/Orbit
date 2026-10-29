@@ -18,7 +18,7 @@ import OrbitRefresh
     override func viewDidLoad() {
         super.viewDidLoad(); tableView.cellLayoutMarginsFollowReadableWidth = true; search.searchResultsUpdater = self; search.searchBar.placeholder = "Search GitHub"
         navigationItem.searchController = search
-        navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: UIAction { [weak self] _ in self?.add() })
+        navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: UIAction { [weak self] _ in self?.detectProjects() })
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); refresh() }
@@ -83,7 +83,13 @@ import OrbitRefresh
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = tableView; alert.popoverPresentationController?.sourceRect = tableView.rectForRow(at: indexPath); present(alert, animated: true)
         }
     }
-    private func add(repository: String? = nil, project: String? = nil) {
+    private func detectProjects() {
+        let list = OrbitDetectedProjectsController(rpc: rpc) { [weak self] project, scheme in
+            self?.add(project: project, scheme: scheme)
+        }
+        navigationController?.pushViewController(list, animated: true)
+    }
+    private func add(repository: String? = nil, project: String? = nil, scheme: String? = nil) {
         Task { do {
             let devices = try await rpc("devices", [:]) as? [[String: Any]] ?? []
             guard !devices.isEmpty else { show("Connect your phone to Xcode on the Mac first."); return }
@@ -92,7 +98,8 @@ import OrbitRefresh
                 picker.addAction(UIAlertAction(title: device["name"] as? String, style: .default) { _ in
                     let alert = UIAlertController(title: "Add App", message: "Only add source you trust. Xcode builds can run scripts on your Mac.", preferredStyle: .alert)
                     for placeholder in ["Xcode project path", "App scheme", "Branch", "Team ID (optional)"] { alert.addTextField { $0.placeholder = placeholder; $0.autocapitalizationType = .none; $0.autocorrectionType = .no } }
-                    alert.textFields?[0].text = project; alert.textFields?[2].text = "main"
+                    alert.textFields?[0].text = project; alert.textFields?[1].text = scheme; alert.textFields?[2].text = "main"
+                    if scheme != nil { alert.textFields?[0].isEnabled = false; alert.textFields?[1].isEnabled = false }
                     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
                     alert.addAction(UIAlertAction(title: "Add App", style: .default) { _ in Task {
                         do {
@@ -111,4 +118,88 @@ import OrbitRefresh
         } catch { show(error.localizedDescription) } }
     }
     private func show(_ text: String) { let alert = UIAlertController(title: "Orbit", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true) }
+}
+
+
+/// Lists the paired Mac's projects, never the phone's local filesystem.
+@MainActor final class OrbitDetectedProjectsController: UITableViewController {
+    private let rpc: (String, [String: Any]) async throws -> Any
+    private let selected: (String, String) -> Void
+    private var projects: [String] = []
+    private var schemes: [String] = []
+    private var project: String?
+    private var loading = false
+    init(rpc: @escaping (String, [String: Any]) async throws -> Any, selected: @escaping (String, String) -> Void) {
+        self.rpc = rpc; self.selected = selected
+        super.init(style: .insetGrouped); title = "Projects on Your Mac"
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        refreshControl = UIRefreshControl()
+        refreshControl?.addTarget(self, action: #selector(scan), for: .valueChanged)
+        scan()
+    }
+    @objc private func scan() {
+        guard !loading else { return }
+        project = nil; schemes = []; projects = []; loading = true
+        title = "Projects on Your Mac"; tableView.reloadData()
+        tableView.backgroundView = message("Looking for projects on your Mac…")
+        Task {
+            defer { loading = false; refreshControl?.endRefreshing() }
+            do {
+                projects = try await rpc("projects_detect", [:]) as? [String] ?? []
+                tableView.backgroundView = projects.isEmpty ? message("No projects found. Choose a project in Orbit on your Mac, or pull to scan again.") : nil
+                tableView.reloadData()
+            } catch { tableView.backgroundView = message(error.localizedDescription) }
+        }
+    }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { project == nil ? projects.count : schemes.count }
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        if project == nil {
+            let path = projects[indexPath.row]
+            cell.textLabel?.text = URL(fileURLWithPath: path).lastPathComponent
+            cell.detailTextLabel?.text = path; cell.detailTextLabel?.numberOfLines = 2
+        } else { cell.textLabel?.text = schemes[indexPath.row] }
+        cell.accessoryType = .disclosureIndicator
+        return cell
+    }
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard !loading else { return }
+        if let project {
+            let scheme = schemes[indexPath.row]
+            navigationController?.popViewController(animated: false)
+            selected(project, scheme)
+            return
+        }
+        let path = projects[indexPath.row]
+        let alert = UIAlertController(title: "Read App Schemes?", message: "Only open source you trust. Xcode can run project code on your Mac.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Read Schemes", style: .default) { _ in
+            self.loading = true; self.title = "Reading App Schemes…"
+            self.tableView.backgroundView = self.message("Reading app schemes…")
+            Task {
+                defer { self.loading = false }
+                do {
+                    let rows = try await self.rpc("project_apps", ["project": path, "trust": true]) as? [[String: Any]] ?? []
+                    self.schemes = rows.compactMap { ($0["project"] as? [String: Any])?["scheme"] as? String }
+                    self.project = path; self.title = "Choose an iOS App"
+                    self.tableView.backgroundView = self.schemes.isEmpty ? self.message("No runnable iOS app schemes found. Pull to scan again.") : nil
+                    self.tableView.reloadData()
+                } catch {
+                    self.title = "Projects on Your Mac"; self.tableView.backgroundView = nil
+                    let errorAlert = UIAlertController(title: "Couldn’t Read Schemes", message: error.localizedDescription, preferredStyle: .alert)
+                    errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(errorAlert, animated: true)
+                }
+            }
+        })
+        present(alert, animated: true)
+    }
+    private func message(_ text: String) -> UILabel {
+        let label = UILabel(); label.text = text; label.numberOfLines = 0; label.textAlignment = .center; label.textColor = .secondaryLabel
+        return label
+    }
 }
