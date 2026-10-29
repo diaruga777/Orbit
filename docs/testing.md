@@ -404,3 +404,18 @@ verified bundle exactly and verifies the installed copy. A separate interactive
 setup check showed the user's iPhone in the picker with standalone command-line
 tools still selected. Physical install/renewal and marketplace acceptance are not
 established by these automated checks.
+
+## Guided refresh setup (2026-10-30)
+
+Refresh presents the next incomplete account, pairing, certificate, cache or
+connection stage with numbered progress and explanatory copy. Setup details
+retains import and maintenance actions. Banner controls have a minimum 44-point
+height; the dismiss control also has a minimum 44-point width. Phone authorization
+uses native challenge delivery and the running client's signing identity rather
+than asking the user to choose a phone.
+
+Bootstrap, Python MCP tests, both Go race suites and adapter vet passed. The full
+Swift suite passed on retry; the initial run hit an applet VM quota failure,
+which also passed individually. Both the iOS Simulator client and ad hoc Mac
+review bundle built. No Simulator visual walkthrough, physical phone access,
+Apple sign-in, installation/renewal or marketplace acceptance was performed.
