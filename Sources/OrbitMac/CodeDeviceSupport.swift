@@ -106,8 +106,13 @@ enum CodeDeviceSupport {
         // paired phone as available. Xcode opens that tunnel on demand for a
         // wireless build/install; requiring it here hides reachable phones.
         let status = try await CodeProcess().run("/usr/bin/xcrun", ["xcdevice", "list", "--timeout", "5"], directory: root.path, log: log, timeout: 30)
-        guard status == 0 else { throw CodeFailure("Could not list phones. Check Xcode and the device connection on the Mac.") }
+        try checkDeviceDiscoveryStatus(status, output: Data(contentsOf: log))
         return try parseDevices(Data(contentsOf: log))
+    }
+    static func checkDeviceDiscoveryStatus(_ status: Int32, output: Data) throws {
+        guard status == 0 else {
+            throw CodeFailure("Xcode couldn’t look for iPhones. Open Xcode and finish any setup prompts, then try again.\n" + String(decoding: output.suffix(2000), as: UTF8.self))
+        }
     }
     static func parseDevices(_ data: Data) throws -> [CodeDevice] {
         guard let devices = try parseJSONOutput(data) as? [[String: Any]] else {

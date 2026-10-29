@@ -56,6 +56,14 @@ The wizard auto-selects a sole team, otherwise shows names, and generates a stab
 random bundle namespace in user state. Existing registered/installed identities
 are preserved, and a phone is rechecked natively before installation.
 
+`CodeXcodeTools` resolves a full Xcode for both Mac process runners, so phone
+listing, readiness and deployment use the same selection policy. An explicit
+`DEVELOPER_DIR` is honored (and errors if unavailable), followed by a valid
+system-selected Xcode. Standalone Command Line Tools or a removed selection fall
+back to the running Xcode, Launch Services, then installed Xcode applications.
+The resolved directory is passed to child commands; system settings stay intact.
+Discovery failures retain bounded Xcode diagnostics instead of blaming the cable.
+
 Folder consent defaults to `~/Desktop/Orbit`, creates/tests the folder after an
 explicit action, and updates the Host’s project-root preference. GitHub imports
 use that selected folder. Existing target source paths remain durable.

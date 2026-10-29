@@ -1,11 +1,13 @@
 import Foundation
 import OrbitCore
+import OrbitMac
 
 public enum OrbitCommand {
     public static func run(_ executable: String, _ arguments: [String], directory: URL? = nil) async throws -> Data {
         try await Task.detached {
             let process = Process(); process.executableURL = URL(fileURLWithPath: executable); process.arguments = arguments
             process.currentDirectoryURL = directory
+            process.environment = try CodeXcodeTools.environment(for: executable)
             let file = FileManager.default.temporaryDirectory.appendingPathComponent("orbit-command-" + UUID().uuidString)
             FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600])
             let output = try FileHandle(forWritingTo: file); defer { try? output.close(); try? FileManager.default.removeItem(at: file) }

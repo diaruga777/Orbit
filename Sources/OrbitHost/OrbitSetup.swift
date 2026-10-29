@@ -103,7 +103,7 @@ public actor OrbitSetup {
     public func checkTools() async -> OrbitToolReadiness {
         var result = OrbitToolReadiness()
         do {
-            result.developerDirectory = String(decoding: try await OrbitCommand.run("/usr/bin/xcode-select", ["-p"]), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            result.developerDirectory = try CodeXcodeTools.developerDirectory()
             result.xcode = result.developerDirectory.contains(".app/Contents/Developer")
             guard result.xcode else { result.detail = "Install the full Xcode app to build iPhone apps."; return result }
             _ = try await OrbitCommand.run("/usr/bin/xcodebuild", ["-checkFirstLaunchStatus"]); result.firstLaunch = true

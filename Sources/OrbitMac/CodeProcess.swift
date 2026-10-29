@@ -31,7 +31,7 @@ public final class CodeProcess: @unchecked Sendable {
                 // Isolate the command tree so Cancel also stops xcodebuild and
                 // upload subprocesses launched by asc, without affecting Xcode.
                 p.arguments = ["-c", "import os,sys; os.setsid() if os.getpgrp() != os.getpid() else None; os.execv(sys.argv[1], sys.argv[1:])", executable] + arguments; p.currentDirectoryURL = URL(fileURLWithPath: directory)
-                var environment = ProcessInfo.processInfo.environment
+                var environment = try CodeXcodeTools.environment(for: executable)
                 environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:" + (environment["PATH"] ?? "")
                 p.environment = environment; p.standardOutput = output; p.standardError = output
                 try lock.withCriticalScope {

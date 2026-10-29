@@ -383,3 +383,13 @@ fixture with its build resource bundles hidden. A final optional payload recheck
 could not compile after Xcode 26.2 was removed and the selected developer directory
 changed to standalone Command Line Tools; its C++ compiler could not find
 `<string>`. The earlier payload extraction/resume check passed with Xcode 26.2.
+
+## Xcode selection and phone discovery
+
+`CodeXcodeToolsTests` uses temporary executable fixtures to cover standalone tools,
+a removed selection, renamed/beta Xcode apps, explicit override precedence and
+failure, and preservation of non-Apple command environments. Discovery failure
+checks retain the underlying tool error; existing discovery fixtures cover USB,
+Wi-Fi, unavailable phones and Simulator exclusion. These tests never discover or
+access a physical phone. Local setup discovery and physical installation remain
+separate from automated validation.

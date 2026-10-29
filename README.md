@@ -37,6 +37,10 @@ name. Orbit generates and saves its phone app identifiers once, preserving them
 on resume and updates. Apple trust, Developer Mode, account and license prompts
 still need your attention.
 
+Orbit uses the selected full Xcode for phone discovery and builds. If Command
+Line Tools or a removed Xcode is selected, it uses the open or installed Xcode
+without changing your Mac’s system selection.
+
 Phone selection, Developer Mode guidance, build/install and connection code share
 one page. Installation is complete only after installed-revision readback;
 pairing can also be finished later. Phone-only refresh and remote-network setup
