@@ -126,7 +126,8 @@ optional login and signing key are saved in one atomic Keychain envelope, with
 legacy migration after successful writes. Account/team changes clear incompatible
 keys; account mutations and installation reconciliation exclude overlapping work.
 Signing verifies certificate validity/team and preserves signed entitlements
-before upload.
+before upload. Imports acquire scoped file access and run after the picker
+dismisses; self replacement waits for background rather than temporary inactivity.
 Simulator-only injected services exercise the actual form without Apple sign-in,
 helper requests or refresh-secret access.
 

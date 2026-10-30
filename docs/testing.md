@@ -571,3 +571,24 @@ contacts Apple, reads real refresh secrets or accesses a phone. Validation also
 checks certificate team/lifetime and profile/signed-entitlement preservation.
 The default helper now uses SideStore’s listed Mac ADI service; a credential-free
 metadata probe establishes only endpoint availability, not account acceptance.
+
+Refresh-audit verification (2026-10-30): bootstrap generated native dependencies
+in a committed detached checkout. All 200 Swift checks passed (five optional
+checks skipped), all 17 Python MCP checks passed, both Go race suites and helper
+vet passed. The iOS Simulator client and complete ad hoc Mac review bundle built
+using the ignored local identity configuration. Strict bundle/helper signatures
+and six optional packaging/export checks passed, including phone-source
+extraction/resume. All nine final sign-in Simulator UI checks passed. The first
+UI run exposed Advanced settings interacting with the keyboard; expanding them
+now dismisses the keyboard and reveals the field, and tests identify the form’s
+scroll view explicitly. Credential-free metadata requests to both the old and
+new helper endpoints succeeded; the new default is the officially listed Mac
+ADI service and its identity is propagated into provisioning/authentication.
+
+The audit also fixed lost reusable ADI state, non-atomic account/key updates,
+certificate/team mismatches and expiry readiness, overlapping account/connection/
+reconciliation/import operations, silent capability changes after signing, file
+import access/error presentation, and self-refresh proceeding while merely
+inactive. Apple authentication, real pairing export/import, physical install/
+renewal, background reliability, public notarization and marketplace acceptance
+were not performed or established.
