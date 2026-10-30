@@ -96,6 +96,23 @@ Tokens rotate on adapter startup; clients must reload connection settings after 
 restart. External hosts may continue using stdio without token management. There
 is no OS-level MCP entitlement or automatic edit of another app’s configuration.
 
+## Phone refresh sign-in
+
+The iOS Refresh account flow uses a keyboard-aware scrollable UIKit form sheet,
+with Sign In fixed above the keyboard.
+It owns the sign-in task, inline validation/errors, verification continuations and
+team selection until the selected team is saved. Cancel cancels the task and
+resolves a pending verification request; in-flight work blocks swipe dismissal.
+An empty custom server resolves to SideStore’s officially listed HTTPS endpoint
+`https://ani.sidestore.io`. Advanced retains custom service support, and existing
+Keychain account records retain their service URL. Credentials go to Apple;
+remote anisette provisioning uses the existing SideSign provider. Provisioning
+blobs are reused only with the same service. No hosted Orbit service, server-list
+execution, automatic rotation or downloaded native implementation is introduced.
+The remember switch controls the existing ThisDeviceOnly password storage.
+Simulator-only injected services exercise the actual form without Apple sign-in,
+helper requests or refresh-secret access.
+
 ## Requests and jobs
 
 The local CLI uses a Unix socket inside the owner-only state directory. Remote peers use mutually authenticated TLS or pinned iroh endpoint keys and must be explicitly trusted by the Mac. Control frames begin with `ORBT`, followed by a four-byte big-endian JSON length; the 12 MiB cap is checked before payload allocation. Each RPC uses a fresh bounded exchange. Installation streams use their separate LCDF protocol and phone-key proof.

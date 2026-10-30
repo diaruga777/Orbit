@@ -64,6 +64,11 @@ import OrbitWire
         guard let scene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: scene); self.window = window
         #if DEBUG && targetEnvironment(simulator)
+        if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--refresh-sign-in-fixture"),
+           ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
+            window.rootViewController = CodeRefreshSignInPreview.make(scenario: ProcessInfo.processInfo.arguments[index + 1])
+            window.makeKeyAndVisible(); return
+        }
         if ProcessInfo.processInfo.arguments.contains("--target-icons-preview") {
             let icon = UIGraphicsImageRenderer(size: CGSize(width: 132, height: 132)).image { context in
                 UIColor.systemIndigo.setFill(); context.fill(CGRect(x: 0, y: 0, width: 132, height: 132))
