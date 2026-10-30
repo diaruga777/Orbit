@@ -51,14 +51,18 @@ final class OrbitPairingExportTests: XCTestCase {
         }
     }
     func testFailedAndUnsafeExportsAreRemovedAndTrustMessageIsPreserved() async throws {
-        for body in ["printf partial > \"$3\"; echo 'Unlock your iPhone and tap Trust.' >&2; exit 1", "printf fixture > \"$3\"; chmod 644 \"$3\""] {
+        for (body, expected) in [
+            ("printf partial > \"$3\"; echo 'Unlock your iPhone and tap Trust.' >&2; exit 1", "Trust"),
+            ("printf fixture > \"$3\"; chmod 644 \"$3\"", "saved safely"),
+            ("exit 1", "helper stopped")
+        ] {
             let (root, bundle) = try fixture(body)
             defer { try? FileManager.default.removeItem(at: root) }
             do {
                 _ = try await OrbitPairingExport.export(deviceID: "fixture-phone", root: root, bundleURL: bundle)
                 XCTFail("Unsafe/failed export was accepted")
             } catch {
-                XCTAssertTrue(error.localizedDescription.contains(body.contains("exit 1") ? "Trust" : "saved safely"))
+                XCTAssertTrue(error.localizedDescription.contains(expected))
             }
             XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("SetupPairing").path).isEmpty)
         }

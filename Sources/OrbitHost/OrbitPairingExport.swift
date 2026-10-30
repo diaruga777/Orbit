@@ -3,7 +3,7 @@ import OrbitCore
 
 /// Local setup action only. No RPC exposes this method or the resulting keys.
 public enum OrbitPairingExport {
-    public static let missingHelperMessage = "This copy of Orbit Mac is missing its pairing helper. Update or reinstall Orbit Mac, then try again. There’s nothing to set up on your iPhone first."
+    public static let missingHelperMessage = "This copy of Orbit Mac is missing its pairing helper. Update or reinstall Orbit Mac, then try again. You don’t need to sign in on iPhone first."
 
     public static func helper(in bundleURL: URL) throws -> URL {
         let helper = bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter")
@@ -20,7 +20,12 @@ public enum OrbitPairingExport {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             // Pairing material goes directly to this private file, never stdout.
             do { _ = try await OrbitCommand.run(helper.path, ["--export-pairing", deviceID, file.path]) }
-            catch let error as CodeFailure { throw error }
+            catch let error as CodeFailure {
+                guard !error.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw CodeFailure("The pairing helper stopped before exporting the file. Try again, or update Orbit Mac if it keeps happening.")
+                }
+                throw error
+            }
             catch { throw CodeFailure(missingHelperMessage) }
             let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
             guard attributes[.type] as? FileAttributeType == .typeRegular,
