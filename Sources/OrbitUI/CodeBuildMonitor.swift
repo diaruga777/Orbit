@@ -5,8 +5,9 @@ import OrbitCore
 
 /// Owns the startup lease and job polling independently of the selected tab or modal.
 @MainActor public final class CodeBuildMonitor {
-    static let changed = Notification.Name("CodeBuildMonitor.changed")
+    public static let changed = Notification.Name("CodeBuildMonitor.changed")
     private let client: CodeClient
+    private let status: ((String) async throws -> CodeJob)?
     private let defaults: UserDefaults
     private let peerID: () -> String
     private var peer = ""
@@ -29,10 +30,10 @@ import OrbitCore
     private var didHandOff: Bool { job.map { defaults.string(forKey: handoffKey) == $0.id } ?? false }
     public var needsConnection: Bool { isStarting || acknowledgingInstall || (job?.state == .running && !monitoringStopped && !didHandOff) }
     private var identifier: String { (Bundle.main.bundleIdentifier ?? "org.example.orbit.ios") + ".remote-build" }
-    var fraction: Double { reportedFraction }
-    func fraction(for value: CodeJob) -> Double { job?.id == value.id ? fraction : value.progressFraction() }
-    var stage: String { isStarting ? "Starting on your Mac…" : (job?.progressStage ?? "Build") }
-    var backgroundMessage: String {
+    public var fraction: Double { reportedFraction }
+    public func fraction(for value: CodeJob) -> Double { job?.id == value.id ? fraction : value.progressFraction() }
+    public var stage: String { isStarting ? "Starting on your Mac…" : (job?.progressStage ?? "Build") }
+    public var backgroundMessage: String {
         if isStarting { return "Keep Orbit open while the build starts." }
         if let handoff = job?.installHandoff {
             return handoff.acknowledged
@@ -46,8 +47,8 @@ import OrbitCore
         return "You can leave Orbit while your Mac builds."
     }
 
-    init(client: CodeClient, defaults: UserDefaults, peerID: @escaping () -> String) {
-        self.client = client; self.defaults = defaults; self.peerID = peerID
+    init(client: CodeClient, defaults: UserDefaults, peerID: @escaping () -> String, status: ((String) async throws -> CodeJob)? = nil) {
+        self.status = status; self.client = client; self.defaults = defaults; self.peerID = peerID
         BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { [weak self] task in
             guard let task = task as? BGContinuedProcessingTask else { task.setTaskCompleted(success: false); return }
             Task { @MainActor in
@@ -73,7 +74,7 @@ import OrbitCore
     }
     deinit { timer?.invalidate() }
 
-    func begin(title: String) throws {
+    public func begin(title: String) throws {
         guard !isStarting, job?.state != .running else { throw CodeFailure("A build is already running. Wait for it or cancel it first.") }
         self.title = title; peer = peerID(); job = nil; reportedFraction = 0; isStarting = true; startingAt = Date()
         monitoringStopped = false; disconnected = false
@@ -84,13 +85,13 @@ import OrbitCore
         requestBackgroundMonitoring()
         publish()
     }
-    func endStarting(peer origin: String) {
+    public func endStarting(peer origin: String) {
         guard peer == origin else { return }
         isStarting = false; endLease()
         if job == nil { complete(success: false) }
         publish()
     }
-    func accept(_ received: CodeJob) {
+    public func accept(_ received: CodeJob) {
         guard peer == peerID() else { return }
         // A late status reply must not resurrect a completed job.
         if job?.id == received.id, job?.state != .running, received.state == .running { return }
@@ -104,7 +105,7 @@ import OrbitCore
         else if value.installHandoff != nil { prepareForInstall(value) }
     }
     /// Reattach status monitoring without starting another Mac build.
-    func observe(_ value: CodeJob) {
+    public func observe(_ value: CodeJob) {
         guard !isStarting else { return }
         if job?.id == value.id, peer == peerID() { accept(value) }
         else if job?.state != .running, value.state == .running {
@@ -120,15 +121,14 @@ import OrbitCore
         do { try BGTaskScheduler.shared.submit(request); requested = true }
         catch { requested = false }
     }
-    @objc private func activated() {
+    @objc public func activated() {
         if peer != peerID() { job = nil; isStarting = false; complete(success: false); peer = peerID() }
         monitoringStopped = false
         if job?.shouldMonitorInBackground == true, !requested, !didHandOff { requestBackgroundMonitoring() }
         Task {
             let origin = peerID(), key = "Code.activeJob." + peerID()
             if job == nil, let id = defaults.string(forKey: key) {
-                var request = CodeRequest(.job); request.jobID = id
-                if let value = try? await client.call(request).job, origin == peerID() {
+                if let value = try? await loadStatus(id), origin == peerID() {
                     if value.state != .running, defaults.string(forKey: key) == id { defaults.removeObject(forKey: key) }
                     observe(value)
                 }
@@ -144,9 +144,8 @@ import OrbitCore
               UIApplication.shared.applicationState == .active || continued != nil || acknowledgingInstall else { return }
         polling = true; defer { polling = false }
         let origin = peer
-        var request = CodeRequest(.job); request.jobID = job.id
         do {
-            guard let value = try await client.call(request).job else { throw CodeFailure("The Mac returned no build status.") }
+            let value = try await loadStatus(job.id)
             guard origin == peerID(), self.job?.id == value.id else { return }
             accept(value)
         } catch {
@@ -155,6 +154,16 @@ import OrbitCore
             continued?.updateTitle(title, subtitle: "Mac unreachable · progress paused")
             NotificationCenter.default.post(name: Self.changed, object: self)
         }
+    }
+    private func loadStatus(_ id: String) async throws -> CodeJob {
+        if let status { return try await status(id) }
+        var request = CodeRequest(.job); request.jobID = id
+        guard let job = try await client.call(request).job else { throw CodeFailure("The Mac returned no build status.") }
+        return job
+    }
+    public func show(_ value: CodeJob, from controller: UIViewController, console: Bool = false) {
+        observe(value)
+        controller.present(UINavigationController(rootViewController: CodeLogController(job: value, showConsole: console, monitor: self)), animated: true)
     }
     private func publish() {
         if !disconnected {

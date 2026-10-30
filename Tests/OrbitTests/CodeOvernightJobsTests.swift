@@ -10,6 +10,28 @@ final class CodeOvernightJobsTests: XCTestCase {
     private func artifact(_ target: CodeOvernightTarget) -> CodeBuildArtifact {
         CodeBuildArtifact(id: UUID().uuidString, jobID: "compile", target: target, bundleID: "com.example.fixture", version: "1.0", build: "42", commit: "abc", digest: "digest", signingAuthority: "team", byteCount: 32)
     }
+    func testRetainedSelfUpdateAcknowledgementPersistsAcrossRestart() async throws {
+        let directory = root(); defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try CodeOvernightStore(root: directory.appendingPathComponent("Overnight"))
+        var ready = CodeOvernightJob(requestID: "self-update", invocationID: "phone", target: target())
+        ready.state = .waitingForPhone; ready.artifact = artifact(target())
+        ready.monitorBundleID = ready.artifact?.bundleID; ready.installHandoff = CodeInstallHandoff()
+        try store.save(ready)
+        let builds = try CodeJobs(root: directory.appendingPathComponent("Jobs"))
+        let service = try CodeOvernightService(root: directory, builds: builds)
+        do { _ = try await service.acknowledgeInstall(ready.id, token: "wrong"); XCTFail("Wrong token released update") } catch { }
+        XCTAssertEqual(store.jobs().first?.installHandoff?.acknowledged, false)
+        let acknowledged = try await service.acknowledgeInstall(ready.id, token: ready.installHandoff?.token)
+        XCTAssertEqual(acknowledged?.installHandoff?.acknowledged, true)
+        XCTAssertEqual(acknowledged?.state, .running)
+        XCTAssertEqual(try CodeOvernightStore(root: directory.appendingPathComponent("Overnight")).jobs().first?.installHandoff?.acknowledged, true)
+        let restored = try CodeOvernightService(root: directory, builds: builds)
+        let repeated = try await restored.acknowledgeInstall(ready.id, token: ready.installHandoff?.token)
+        XCTAssertEqual(repeated?.installHandoff, acknowledged?.installHandoff)
+        XCTAssertEqual(repeated?.state, .running, "Acknowledgement does not prove installation")
+        let unknown = try await restored.acknowledgeInstall("direct-job", token: "token")
+        XCTAssertNil(unknown, "Direct jobs must continue to use the original build gate")
+    }
     func testAcceptedAndInterruptedInstallsReconcileWithoutRecreatingProcesses() async throws {
         let directory = root(); defer { try? FileManager.default.removeItem(at: directory) }
         let store = try CodeOvernightStore(root: directory.appendingPathComponent("Overnight"))

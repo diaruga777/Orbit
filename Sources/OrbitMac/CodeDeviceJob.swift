@@ -26,6 +26,7 @@ extension CodeJobs {
                   let product = app["FULL_PRODUCT_NAME"], product.hasSuffix(".app") else {
                 throw CodeFailure("Choose a runnable iOS app scheme in the row menu.")
             }
+            try CodeOrbitIdentity.verify(bundleID: bundle, project: buildProject)
             var localApp: [String: String]?
             if CodeDeviceSigning.team(app) == nil {
                 // Git worktrees omit ignored local signing configuration. Resolve
@@ -129,6 +130,7 @@ struct CodeDeviceCheckout {
         let repo = URL(fileURLWithPath: repository).resolvingSymlinksInPath().path
         guard source.hasPrefix(repo + "/"), !branch.isEmpty else { throw CodeFailure("The project must be inside a Git repository with a main branch.") }
         let revision = try await CodeDeviceSupport.git(["rev-parse", "--verify", "--end-of-options", branch + "^{commit}"], directory: repo, root: root, process: process)
+        var selected = try CodeOrbitIdentity.resolve(project)
         let directory = root.appendingPathComponent("Checkout-" + name)
         do {
             _ = try await CodeDeviceSupport.git(["worktree", "add", "--detach", directory.path, revision], directory: repo, root: root, process: process)
@@ -136,8 +138,18 @@ struct CodeDeviceCheckout {
             _ = try? await CodeDeviceSupport.git(["worktree", "remove", "--force", directory.path], directory: repo, root: root)
             throw error
         }
-        var selected = project
         selected.path = directory.appendingPathComponent(String(source.dropFirst(repo.count + 1))).path
+        do {
+            if let prefix = selected.bundlePrefix, let team = selected.developmentTeam, let bundle = selected.iosBundleID,
+               FileManager.default.fileExists(atPath: directory.appendingPathComponent("Config/Orbit.xcconfig").path) {
+                let local = directory.appendingPathComponent("Config/Local.xcconfig")
+                try Data("ORBIT_BUNDLE_PREFIX = \(prefix)\nDEVELOPMENT_TEAM = \(team)\nORBIT_IOS_BUNDLE_IDENTIFIER = \(bundle)\n".utf8).write(to: local, options: .atomic)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: local.path)
+            }
+        } catch {
+            _ = try? await CodeDeviceSupport.git(["worktree", "remove", "--force", directory.path], directory: repo, root: root)
+            throw error
+        }
         return Self(directory: directory, revision: revision, repository: repo, project: selected)
     }
     func remove(root: URL) async {

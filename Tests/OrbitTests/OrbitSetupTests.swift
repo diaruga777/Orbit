@@ -122,6 +122,31 @@ final class OrbitSetupTests: XCTestCase {
         result["deviceProperties"] = ["developerModeStatus": "enabled"]
         XCTAssertFalse(OrbitSetup.phoneReady(["result": result], expected: "phone"))
     }
+    func testPrivateSourceConfigurationPreservesBundleWhenTeamChanges() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("PhoneSource/revision")
+        try FileManager.default.createDirectory(at: source.appendingPathComponent("Config"), withIntermediateDirectories: true)
+        try Data().write(to: source.appendingPathComponent("Config/Orbit.xcconfig"))
+        let setup = OrbitSetup(root: root)
+        var state = OrbitSetupState(); state.bundlePrefix = "dev.test.orbit"; state.teamID = "ABCDEFGHIJ"
+        try await setup.configureSource(source, state: state)
+        let file = source.appendingPathComponent("Config/Local.xcconfig")
+        var config = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(config.contains("ORBIT_IOS_BUNDLE_IDENTIFIER = dev.test.orbit.ios"))
+        config = config.replacingOccurrences(of: "dev.test.orbit.ios", with: "dev.test.existing")
+        try Data(config.utf8).write(to: file)
+        state.teamID = "KLMNOPQRST"
+        try await setup.configureSource(source, state: state)
+        let updated = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(updated.contains("DEVELOPMENT_TEAM = KLMNOPQRST"))
+        XCTAssertTrue(updated.contains("ORBIT_IOS_BUNDLE_IDENTIFIER = dev.test.existing"))
+        state.bundlePrefix = "dev.test.changed"
+        do { try await setup.configureSource(source, state: state); XCTFail("Changed identity must not replace setup config") } catch { }
+        let developer = root.appendingPathComponent("DeveloperCheckout")
+        try await setup.configureSource(developer, state: state)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: developer.appendingPathComponent("Config/Local.xcconfig").path))
+    }
     func testPersonalNamespaceSurvivesProjectArgumentsWithoutShell() {
         XCTAssertTrue(OrbitSetupState.validTeam("ABCDEFGHIJ")); XCTAssertFalse(OrbitSetupState.validTeam("someone"))
         XCTAssertTrue(OrbitSetupState.validPrefix("dev.orbit.my-app")); XCTAssertFalse(OrbitSetupState.validPrefix("dev.orbit.;touch"))

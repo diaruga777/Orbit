@@ -314,3 +314,25 @@ The Mac app picker groups runnable aliases by project, app name and bundle ID,
 preferring the scheme named after the app. UI-test aliases such as LunaMusicUI
 therefore stay out of the primary app menu while remaining selectable as a Build
 scheme in Advanced. Apps exposed only through a custom scheme remain available.
+
+## Apps build feedback and self-build identity
+
+Apps and Project share `CodeBuildMonitor`, restored from Luna Code's stage/task
+progress, console, durable job reattachment, reconnect handling and
+`BGContinuedProcessingTask` system Live Activity. Apps polls the shared Host
+catalog and includes the monitoring client's bundle ID in retained install-only
+jobs. Native and authorized remote installation still use the existing pipeline. Self-installation waits for the phone's acknowledgement after ending
+the activity. Successful compilation alone never completes installation.
+Scheduled retained jobs expose their compilation snapshot alongside their durable
+installation state, translated by `CodeJob.targetStatus` for the same UI.
+Retained artifacts remain available for phone refresh, retries and reconciliation.
+
+Orbit's detached checkout resolves its bundle prefix, exact phone bundle ID and
+team from the original ignored `Config/Local.xcconfig`, overriding stale catalog
+values. Only those validated settings enter a private ignored checkout config;
+source stays committed and the source checkout stays intact. Other projects keep
+their own signing rules. `ORBIT_IOS_BUNDLE_IDENTIFIER` defaults to the existing
+prefix-plus-`.ios` convention; an explicit local value preserves an existing
+phone app's exact identity and controls extension IDs and shared Keychain access.
+The Mac ID stays prefix-plus-`.mac`. The setup wizard creates local config only
+inside its private extracted source; source/developer checkouts own theirs.

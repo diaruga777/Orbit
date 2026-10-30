@@ -1,6 +1,48 @@
 import XCTest
 
 final class CodeEditorUITests: XCTestCase {
+    func testAppsBuildShowsLiveProgressConsoleAndCompletion() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview"]
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15)); row.tap()
+        app.buttons["Build and Install"].tap()
+        let progress = app.progressIndicators["CodeBuildProgress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 8))
+        let first = progress.value as? String
+        XCTAssertTrue(app.staticTexts["Compile Feature.swift"].exists)
+        app.buttons["Show Console"].tap()
+        XCTAssertTrue(app.textViews["CodeBuildConsole"].value as? String == "Compile Feature.swift\nFixture build output\n")
+        app.buttons["Hide Console"].tap()
+        expectation(for: NSPredicate { _, _ in progress.value as? String != first }, evaluatedWith: nil)
+        waitForExpectations(timeout: 6)
+        attach("Apps live build progress", app)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.progressIndicators["OrbitTargetProgress:fixture"].exists)
+        expectation(for: NSPredicate { _, _ in row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Installed on your phone")).count > 0 }, evaluatedWith: nil)
+        waitForExpectations(timeout: 20)
+        attach("Apps confirmed completion", app)
+    }
+    func testAppsBuildFailureIsVisibleAfterDismissingProgress() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-build-failure", "--target-build-disconnect"]
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15)); row.tap()
+        app.buttons["Build and Install"].tap()
+        XCTAssertTrue(app.progressIndicators["CodeBuildProgress"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["CodeBuildStatus"].waitForExistence(timeout: 3))
+        expectation(for: NSPredicate { _, _ in app.staticTexts["CodeBuildStatus"].label.contains("Reconnecting") }, evaluatedWith: nil)
+        waitForExpectations(timeout: 7)
+        app.buttons["Done"].tap()
+        expectation(for: NSPredicate { _, _ in row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fixture compilation failed")).count > 0 }, evaluatedWith: nil)
+        waitForExpectations(timeout: 20)
+        attach("Apps failure after reconnect", app)
+    }
+
     func testTargetListDisplaysIconsAndMissingImageFallbacks() {
         let app = XCUIApplication()
         app.launchArguments = ["--target-icons-preview"]
@@ -227,7 +269,7 @@ final class CodeEditorUITests: XCTestCase {
         app.buttons["CodeRun:Sample"].tap()
         XCTAssertTrue(app.staticTexts["Build Completed"].waitForExistence(timeout: 20))
         app.buttons["Done"].tap()
-        XCTAssertTrue(row.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "abc12345")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "abc12345")).firstMatch.waitForExistence(timeout: 5))
         let copy = row.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " ")
         XCTAssertFalse(copy.contains("Preview iPhone")); XCTAssertFalse(copy.contains("main"))
         attach("Build history and overnight switch", app)
@@ -236,7 +278,7 @@ final class CodeEditorUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         XCTAssertEqual(toggle.value as? String, "1")
-        XCTAssertTrue(row.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "abc12345")).firstMatch.exists)
+        XCTAssertTrue(row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "abc12345")).firstMatch.exists)
     }
 
     func testLaunchAfterInstallIsPerSchemeAndPersistsAcrossDiscoveryAndRelaunch() {

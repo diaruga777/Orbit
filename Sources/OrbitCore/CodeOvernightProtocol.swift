@@ -94,6 +94,8 @@ public struct CodeOvernightJob: Codable, Equatable, Sendable {
     public var builtAt: Date?
     public var installedAt: Date?
     public var synchronizedAt: Date?
+    public var monitorBundleID: String?
+    public var installHandoff: CodeInstallHandoff?
     public var compilationJobID: String?
     public var artifact: CodeBuildArtifact?
     public var installs: [CodeInstallAttempt] = []
@@ -133,6 +135,7 @@ public struct CodeOvernightInvocation: Codable, Equatable, Sendable {
     }
 }
 public struct CodeOvernightSubmission: Codable, Equatable, Sendable {
+    public var monitorBundleID: String?
     public var invocationID: String
     public var target: CodeOvernightTarget
     public var localDay: String

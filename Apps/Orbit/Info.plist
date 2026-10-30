@@ -44,7 +44,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Orbit connects to your Mac to edit files and build apps.</string>
 	<key>OrbitWidgetKeychainGroup</key>
-	<string>$(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios</string>
+	<string>$(AppIdentifierPrefix)$(ORBIT_IOS_BUNDLE_IDENTIFIER)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

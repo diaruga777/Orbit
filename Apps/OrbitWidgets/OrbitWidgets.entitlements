@@ -4,7 +4,7 @@
 <dict>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios</string>
+		<string>$(AppIdentifierPrefix)$(ORBIT_IOS_BUNDLE_IDENTIFIER)</string>
 	</array>
 </dict>
 </plist>

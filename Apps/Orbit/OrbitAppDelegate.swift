@@ -69,6 +69,10 @@ import OrbitWire
             window.rootViewController = CodeRefreshSignInPreview.make(scenario: ProcessInfo.processInfo.arguments[index + 1])
             window.makeKeyAndVisible(); return
         }
+        if ProcessInfo.processInfo.arguments.contains("--target-build-preview") {
+            window.rootViewController = try? OrbitTargetBuildPreview.make()
+            window.makeKeyAndVisible(); return
+        }
         if ProcessInfo.processInfo.arguments.contains("--target-icons-preview") {
             let icon = UIGraphicsImageRenderer(size: CGSize(width: 132, height: 132)).image { context in
                 UIColor.systemIndigo.setFill(); context.fill(CGRect(x: 0, y: 0, width: 132, height: 132))
@@ -106,10 +110,13 @@ import OrbitWire
                     return CodeBrowserItem(path: path, name: name, directory: directory)
                 }
                 return CodeBrowserPage(items: items, next: (result["next"] as? NSNumber)?.int64Value)
-            }, pairing: { OrbitConnectionController(connection: connection) }, peerID: { connection.peerID })
+            }, pairing: { OrbitConnectionController(connection: connection) }, peerID: { connection.peerID }, jobStatus: { id in
+                try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: await connection.rpc("job", ["id": id])))
+            })
+            environment.builds.activated()
             let project = CodeWorkspaceController(environment: environment)
             project.tabBarItem = UITabBarItem(title: "Project", image: UIImage(systemName: "curlybraces"), tag: 0)
-            let apps = UINavigationController(rootViewController: OrbitTargetsController(connection: connection))
+            let apps = UINavigationController(rootViewController: OrbitTargetsController(connection: connection, monitor: environment.builds))
             apps.tabBarItem = UITabBarItem(title: "Apps", image: UIImage(systemName: "apps.iphone"), tag: 2)
             let settings = UINavigationController(rootViewController: OrbitConnectionController(connection: connection))
             settings.tabBarItem = UITabBarItem(title: "Mac", image: UIImage(systemName: "desktopcomputer"), tag: 3)

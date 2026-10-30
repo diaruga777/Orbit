@@ -4,18 +4,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODE="${1:-run}"
 cd "$ROOT"
 [[ -d Vendor/OrbitNet.xcframework ]] || ./scripts/build_transport.sh
-# Read the checked-in default and ignored override without executing either file.
-PREFIX="$(python3 - <<'PY'
-from pathlib import Path
-value='org.example.orbit'
-for name in ['Config/Orbit.xcconfig','Config/Local.xcconfig']:
- if Path(name).exists():
-  for line in Path(name).read_text().splitlines():
-   if line.startswith('ORBIT_BUNDLE_PREFIX = '): value=line.split('=',1)[1].split('//',1)[0].strip()
-if not value or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-' for c in value): raise SystemExit('Invalid ORBIT_BUNDLE_PREFIX')
-print(value)
-PY
-)"
+# Both app paths use the user's ignored identity; never build sample identifiers.
+PREFIX="$(python3 scripts/local_identity.py --field prefix)"
+PHONE_ID="$(python3 scripts/local_identity.py --field phone)"
 IDENTITY="${ORBIT_MAC_SIGNING_IDENTITY:-}"
 BUNDLE="${ORBIT_MAC_APP_PATH:-$HOME/Applications/Orbit Mac.app}"
 if [[ -z "$IDENTITY" && "$MODE" != --build-only ]]; then
@@ -53,7 +44,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>OrbitMacApp</string>
 <key>CFBundleIdentifier</key><string>$PREFIX.mac</string>
-<key>OrbitPhoneBundleIdentifier</key><string>$PREFIX.ios</string>
+<key>OrbitPhoneBundleIdentifier</key><string>$PHONE_ID</string>
 <key>CFBundleName</key><string>Orbit Mac</string>
 <key>CFBundleIconFile</key><string>Orbit.icns</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>

@@ -209,7 +209,7 @@ public actor OrbitHost {
             try saveTargets(); return try object(targets[index])
         case "build":
             let index = try index(p)
-            return try await start(index, launch: p["launch"] as? Bool ?? false)
+            return try await start(index, launch: p["launch"] as? Bool ?? false, monitorBundleID: p["monitorBundleID"] as? String)
         case "job": return try await job(required(p, "id"))
         case "cancel":
             let id = try required(p, "id")
@@ -358,14 +358,16 @@ public actor OrbitHost {
             var value = try object(job) as? [String: Any] ?? [:]
             if let compilation = job.compilationJobID {
                 var poll = CodeRequest(.job); poll.jobID = compilation
-                value["log"] = try await decoded(poll).job?.log ?? ""
+                let compilation = try await decoded(poll).job
+                value["log"] = compilation?.log ?? ""
+                value["compilation"] = try object(compilation)
             }
             return value
         }
         var poll = CodeRequest(.job); poll.jobID = id
         return try object(await decoded(poll).job)
     }
-    private func start(_ index: Int, launch: Bool = false) async throws -> Any {
+    private func start(_ index: Int, launch: Bool = false, monitorBundleID: String? = nil) async throws -> Any {
         let target = targets[index], id = target.id
         if let jobID = target.jobID { return try await job(jobID) }
         var branch = target.branch
@@ -378,11 +380,12 @@ public actor OrbitHost {
         if let pending = target.pendingRequest { request = pending }
         else if launch {
             request = CodeRequest(.runOnDevice); request.project = target.project
-            request.deviceBuild = CodeDeviceBuild(branch: branch, deviceID: target.deviceID)
+            request.deviceBuild = CodeDeviceBuild(branch: branch, deviceID: target.deviceID, monitorBundleID: monitorBundleID)
         } else {
             request = CodeRequest(.overnightSubmit)
             let identity = CodeOvernightTarget(peerID: "orbit-mac", deviceID: target.deviceID, project: target.project, branch: branch, generation: id)
             request.overnight = CodeOvernightSubmission(invocationID: request.id, target: identity, localDay: ISO8601DateFormatter().string(from: Date()))
+            request.overnight?.monitorBundleID = monitorBundleID
         }
         guard let i = targets.firstIndex(where: { $0.id == id }) else { throw CodeFailure("Target was removed.") }
         targets[i].lastAttempt = Date(); targets[i].pendingRequest = request; try saveTargets()

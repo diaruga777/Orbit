@@ -136,7 +136,7 @@ ORBIT_BUNDLE_PREFIX = com.yourname.orbit
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 ```
 
-Use your own unique reverse-DNS prefix and your team identifier from Xcode. The resulting apps are `com.yourname.orbit.ios` and `com.yourname.orbit.mac`. Neither app requires App Groups, iCloud or Luna’s premium system. The iOS app and widget extension explicitly share the containing app’s Keychain access group; it is separate from Luna’s identities. No developer account or team ID is included in the repository. If building for Simulator first, leave the team unset.
+Use your own unique reverse-DNS prefix and your team identifier from Xcode. The resulting apps are `com.yourname.orbit.ios` and `com.yourname.orbit.mac`. To keep an existing phone identity exactly, add `ORBIT_IOS_BUNDLE_IDENTIFIER = your.existing.bundle` to the same ignored file; its Share and Widget extensions follow that identifier. Detached self-builds use this local identity too and stop if it is missing or still uses sample values. Neither app requires App Groups, iCloud or Luna’s premium system. The iOS app and widget extension explicitly share the containing app’s Keychain access group; it is separate from Luna’s identities. No developer account or team ID is included in the repository. Use the same local identity for Xcode, Simulator validation and builds started from Orbit.
 
 Open `Orbit.xcodeproj`. Select the **Orbit** scheme and your phone, then Run. Xcode uses automatic development signing. The phone may ask you to trust your development certificate in Settings → General → VPN & Device Management. Keep the app installed; reinstalling from scratch can discard its local drafts and pairing identity.
 
@@ -217,6 +217,8 @@ bin/orbit job JOB_ID
 Keep your app's bundle identifiers unique and configure its entitlements for your team in the source project. An Orbit target's `--team` is an optional build-setting override, applied to the whole build so extensions use the same team. Orbit does not globally rewrite an application's bundle ID or silently remove unsupported capabilities. Free Personal Teams cannot sign capabilities such as App Groups, iCloud or push notifications; choose another app or adapt its source, or use a paid team when needed. [Apple capabilities](https://developer.apple.com/help/account/reference/supported-capabilities-ios)
 
 **Commit the source you want to install.** Orbit builds a detached Git worktree from the selected branch; unsaved/uncommitted edits in the source editor or an agent's working tree are not part of that revision. Local targets use that local branch as-is. Targets cloned by Orbit fetch the chosen GitHub branch before each fresh build without changing the checkout's active branch.
+
+In iOS **Apps**, **Build and Install** opens live progress with the current stage, completed build tasks and a console. Close it to keep watching progress in the app row or Project tab. The system build Live Activity continues monitoring while iOS permits background processing; reconnect status appears if the Mac goes away. Self-updates finish that activity before replacing Orbit, and installation is complete only after the Mac verifies it.
 
 On iOS, Play defaults to **Build & Install**. Enable **Launch After Install** in a
 scheme's row menu to open the app too. Each scheme keeps its own preference,

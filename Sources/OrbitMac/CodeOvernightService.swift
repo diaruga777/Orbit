@@ -8,6 +8,7 @@ public actor CodeOvernightService {
     private let phoneBundleID: String?
     private let installedApps: CodeInstalledAppStore
     private let store: CodeOvernightStore
+    private let installGate = CodeInstallHandoffGate()
     private let builds: CodeJobs
     private let artifacts: CodeArtifactStore
     private let installer: any CodeArtifactInstalling
@@ -57,7 +58,8 @@ public actor CodeOvernightService {
         if let existing = store.jobs().first(where: { Self.sameDestination($0.target, submission.target) && ([.accepted, .building].contains($0.state) || $0.hasActionableArtifact) }) {
             return existing
         }
-        let job = CodeOvernightJob(requestID: request.id, invocationID: submission.invocationID, target: submission.target)
+        var job = CodeOvernightJob(requestID: request.id, invocationID: submission.invocationID, target: submission.target)
+        job.monitorBundleID = submission.monitorBundleID
         try store.save(job) // Required durable acknowledgement boundary.
         workers[job.id] = Task { await self.compile(job.id) }
         return job
@@ -71,6 +73,17 @@ public actor CodeOvernightService {
         }
         return job
     }
+    public func acknowledgeInstall(_ id: String, token: String?) async throws -> CodeJob? {
+        guard let original = store.jobs().first(where: { $0.id == id }) else { return nil }
+        guard let pending = original.installHandoff, pending.token == token else { throw CodeFailure("This update is no longer ready to install. Refresh the build status.") }
+        _ = await installGate.prepare(id, restoring: pending)
+        guard var job = store.jobs().first(where: { $0.id == id }), job.state != .cancelled else { throw CancellationError() }
+        guard var handoff = job.installHandoff, handoff.token == token else { throw CodeFailure("This update is no longer ready to install. Refresh the build status.") }
+        handoff.acknowledged = true; job.installHandoff = handoff
+        job.revision += 1; try store.save(job)
+        _ = try await installGate.acknowledge(id, token: token)
+        return job.monitoring()
+    }
     public func cancel(_ id: String) async throws -> CodeOvernightJob {
         guard var job = store.jobs().first(where: { $0.id == id }) else { throw CodeFailure("Unknown overnight job.") }
         if let compilation = job.compilationJobID, job.state == .building { _ = try await builds.cancel(compilation) }
@@ -82,6 +95,7 @@ public actor CodeOvernightService {
             job.installs[i].state = .unknownCompletion; job.installs[i].endedAt = Date()
         }
         job.revision += 1; try store.save(job)
+        await installGate.cancel(id)
         return job
     }
     private func recover() async throws {
@@ -155,6 +169,20 @@ public actor CodeOvernightService {
                 job.revision += 1; try store.save(job); return
             }
             try Task.checkCancellation()
+            if job.monitorBundleID == artifact.bundleID, job.installHandoff?.acknowledged != true {
+                job.installHandoff = await installGate.prepare(id, restoring: job.installHandoff)
+                job.revision += 1; try store.save(job)
+                do { try await installGate.wait(id) }
+                catch {
+                    await installGate.cancel(id)
+                    if var current = store.jobs().first(where: { $0.id == id }), current.state != .cancelled {
+                        current.installHandoff = nil; current.state = .waitingForPhone
+                        current.error = CodeOvernightError(.interrupted, stage: "handoff", recovery: error.localizedDescription)
+                        current.revision += 1; try store.save(current)
+                    }
+                    return
+                }
+            }
             guard let latest = store.jobs().first(where: { $0.id == id }), latest.state != .cancelled else { return }
             job = latest
             var attempt = CodeInstallAttempt(artifactID: artifact.id, provider: .native)

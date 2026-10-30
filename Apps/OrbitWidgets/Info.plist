@@ -24,6 +24,6 @@
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
 	<key>OrbitWidgetKeychainGroup</key>
-	<string>$(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios</string>
+	<string>$(AppIdentifierPrefix)$(ORBIT_IOS_BUNDLE_IDENTIFIER)</string>
 </dict>
 </plist>

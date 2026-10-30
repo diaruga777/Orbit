@@ -1,0 +1,41 @@
+import Foundation
+import OrbitCore
+
+/// Carry the user's ignored Orbit identity into a committed detached checkout.
+/// Other apps retain their own signing and bundle settings.
+public enum CodeOrbitIdentity {
+    static func verify(bundleID: String, project: CodeProject) throws {
+        if let expected = project.iosBundleID, expected != bundleID {
+            throw CodeFailure("This Orbit revision doesn’t use your configured phone bundle ID. Update the selected branch before building it.")
+        }
+    }
+    public static func resolve(_ project: CodeProject) throws -> CodeProject {
+        let root = URL(fileURLWithPath: project.root)
+        guard URL(fileURLWithPath: project.path).lastPathComponent == "Orbit.xcodeproj",
+              FileManager.default.fileExists(atPath: root.appendingPathComponent("Config/Orbit.xcconfig").path) else { return project }
+        let file = root.appendingPathComponent("Config/Local.xcconfig")
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else {
+            throw CodeFailure("Set Orbit’s identity in Config/Local.xcconfig on your Mac before building.")
+        }
+        var values: [String: String] = [:]
+        for line in text.components(separatedBy: .newlines) {
+            let parts = line.components(separatedBy: "//")[0].split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            if parts.count == 2 { values[parts[0]] = parts[1] }
+        }
+        let prefix = values["ORBIT_BUNDLE_PREFIX"] ?? ""
+        let team = values["DEVELOPMENT_TEAM"] ?? ""
+        let bundle = values["ORBIT_IOS_BUNDLE_IDENTIFIER"] ?? prefix + ".ios"
+        func validID(_ value: String) -> Bool {
+            value.split(separator: ".", omittingEmptySubsequences: false).count >= 3 &&
+            value.split(separator: ".", omittingEmptySubsequences: false).allSatisfy { !$0.isEmpty && $0.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") } } &&
+            !["org.example.", "com.yourname."].contains(where: value.hasPrefix)
+        }
+        guard validID(prefix), validID(bundle), team.count == 10, team != "YOUR_TEAM_ID",
+              team.allSatisfy({ $0.isASCII && ($0.isUppercase || $0.isNumber) }) else {
+            throw CodeFailure("Replace the sample bundle prefix and development team in Config/Local.xcconfig before building Orbit.")
+        }
+        var value = project
+        value.bundlePrefix = prefix; value.developmentTeam = team; value.iosBundleID = bundle
+        return value
+    }
+}

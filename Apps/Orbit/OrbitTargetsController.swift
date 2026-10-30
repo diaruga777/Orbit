@@ -1,28 +1,96 @@
 import UIKit
 import OrbitCore
 import OrbitRefresh
+import OrbitUI
 
 @MainActor final class OrbitTargetsController: UITableViewController, UISearchResultsUpdating {
     private let rpc: (String, [String: Any]) async throws -> Any
+    private let monitor: CodeBuildMonitor?
+    private let peerID: () -> String
+    private var jobs: [String: CodeJob] = [:]
+    private var starting: String?
+    private var poll: Timer?
+    private var refreshing = false
+    private var peer = ""
     private var apps: [[String: Any]] = []
     private var repositories: [[String: Any]] = []
     private var searchTask: Task<Void, Never>?
     private let search = UISearchController(searchResultsController: nil)
-    convenience init(connection: OrbitPhoneConnection) {
-        self.init(rpc: { method, params in try await connection.rpc(method, params) })
+    convenience init(connection: OrbitPhoneConnection, monitor: CodeBuildMonitor) {
+        self.init(rpc: { method, params in try await connection.rpc(method, params) }, monitor: monitor, peerID: { connection.peerID })
     }
-    init(rpc: @escaping (String, [String: Any]) async throws -> Any) {
-        self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
+    init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }) {
+        self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
     }
     required init?(coder: NSCoder) { fatalError() }
+    deinit { poll?.invalidate(); searchTask?.cancel() }
     override func viewDidLoad() {
         super.viewDidLoad(); tableView.cellLayoutMarginsFollowReadableWidth = true; search.searchResultsUpdater = self; search.searchBar.placeholder = "Search GitHub"
         navigationItem.searchController = search
+        tableView.accessibilityIdentifier = "OrbitTargets"
+        if let monitor { NotificationCenter.default.addObserver(self, selector: #selector(buildChanged), name: CodeBuildMonitor.changed, object: monitor) }
+        poll = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.viewIfLoaded?.window != nil, UIApplication.shared.applicationState == .active else { return }
+                await self.refreshTargets(showError: false)
+            }
+        }
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: UIAction { [weak self] _ in self?.detectProjects() })
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); refresh() }
-    @objc private func refresh() { Task { defer { refreshControl?.endRefreshing() }; do { apps = try await rpc("targets", [:]) as? [[String: Any]] ?? []; tableView.reloadData() } catch { show(error.localizedDescription) } } }
+    @objc private func refresh() { Task { await refreshTargets(showError: true) } }
+    private func refreshTargets(showError: Bool) async {
+        guard !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false; refreshControl?.endRefreshing() }
+        let origin = peerID()
+        if peer != origin { peer = origin; jobs = [:]; apps = []; starting = nil }
+        do {
+            let rows = try await rpc("targets", [:]) as? [[String: Any]] ?? []
+            guard origin == peerID() else { return }
+            apps = rows; tableView.reloadData()
+            for row in rows {
+                guard let id = (row["jobID"] ?? row["lastJobID"]) as? String else { continue }
+                if jobs[id]?.state != .running, jobs[id] != nil { continue }
+                let value = try await fetchJob(id)
+                guard origin == peerID() else { return }
+                jobs[id] = value
+                monitor?.observe(value)
+            }
+            tableView.reloadData()
+        } catch { if showError, origin == peerID(), presentedViewController == nil { show(error.localizedDescription) } }
+    }
+    private func fetchJob(_ id: String) async throws -> CodeJob {
+        try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: await rpc("job", ["id": id])))
+    }
+    @objc private func buildChanged() {
+        if let job = monitor?.job { jobs[job.id] = job }
+        guard !searching else { return }
+        for cell in tableView.visibleCells {
+            guard let index = tableView.indexPath(for: cell), apps.indices.contains(index.row) else { continue }
+            configure(cell, row: apps[index.row])
+        }
+        tableView.beginUpdates(); tableView.endUpdates()
+    }
+    private func build(_ row: [String: Any]) {
+        guard let monitor, let id = row["id"] as? String else { return }
+        let origin = peerID()
+        do { try monitor.begin(title: "Build & Install · " + (row["name"] as? String ?? "App")) }
+        catch { show(error.localizedDescription); return }
+        starting = id; buildChanged()
+        Task {
+            defer { if origin == peerID() { starting = nil; monitor.endStarting(peer: origin); buildChanged() } }
+            do {
+                let result = try await rpc("build", ["id": id, "monitorBundleID": Bundle.main.bundleIdentifier ?? ""])
+                let job = try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: result))
+                guard origin == peerID() else { return }
+                if let index = apps.firstIndex(where: { $0["id"] as? String == id }) { apps[index]["jobID"] = job.id }
+                jobs[job.id] = job; monitor.accept(job)
+                monitor.show(job, from: self)
+            } catch { if origin == peerID() { show(error.localizedDescription) } }
+        }
+    }
     func updateSearchResults(for searchController: UISearchController) {
         searchTask?.cancel()
         let query = searchController.searchBar.text ?? ""
@@ -32,22 +100,38 @@ import OrbitRefresh
     private var searching: Bool { !(search.searchBar.text ?? "").isEmpty }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { searching ? repositories.count : apps.count }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        let cell = searching ? UITableViewCell(style: .subtitle, reuseIdentifier: nil) : OrbitTargetCell()
         let row = searching ? repositories[indexPath.row] : apps[indexPath.row]
-        var content = cell.defaultContentConfiguration()
-        content.text = row[searching ? "repository" : "name"] as? String
-        content.secondaryText = searching ? row["description"] as? String : (row["failure"] as? String ?? ((row["enabled"] as? Bool == true) ? "Refreshes every \(row["intervalHours"] ?? 144) hours" : "Manual builds"))
-        content.textProperties.numberOfLines = 2; content.secondaryTextProperties.numberOfLines = 2
-        if !searching {
-            content.image = (row["iconPNG"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
-            content.imageProperties.maximumSize = CGSize(width: 44, height: 44)
-            content.imageProperties.reservedLayoutSize = CGSize(width: 44, height: 44)
-            content.imageProperties.cornerRadius = 10
-            content.imageProperties.tintColor = .secondaryLabel
+        if searching {
+            var content = cell.defaultContentConfiguration()
+            content.text = row["repository"] as? String; content.secondaryText = row["description"] as? String
+            cell.contentConfiguration = content
+        } else {
+            configure(cell, row: row)
         }
-        cell.contentConfiguration = content
-        if !searching { cell.accessibilityIdentifier = "OrbitTarget:" + (row["id"] as? String ?? "") }
         cell.accessoryType = .disclosureIndicator; return cell
+    }
+    private func configure(_ cell: UITableViewCell, row: [String: Any]) {
+        let id = row["id"] as? String ?? ""
+        let job = ((row["jobID"] ?? row["lastJobID"]) as? String).flatMap { jobs[$0] }
+        let busy = starting == id || job?.state == .running
+        let fraction = starting == id ? monitor?.fraction ?? 0 : job.map { monitor?.fraction(for: $0) ?? $0.progressFraction() } ?? 0
+        guard let cell = cell as? OrbitTargetCell else { return }
+        cell.name.text = row["name"] as? String
+        let schedule = (row["enabled"] as? Bool == true) ? "Refreshes every \(row["intervalHours"] ?? 144) hours" : "Manual builds"
+        let status: String?
+        if starting == id { status = "Starting on your Mac…" }
+        else if let job {
+            status = job.state == .running
+                ? "\(Int(fraction * 100))% estimated · " + job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
+                : job.state == .succeeded ? "Installed on your phone" : job.failureMessage ?? "Build " + job.state.rawValue
+        } else { status = row["failure"] as? String }
+        cell.detail.text = [schedule, status].compactMap { $0 }.joined(separator: "\n")
+        cell.icon.image = (row["iconPNG"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
+        cell.accessibilityIdentifier = "OrbitTarget:" + id
+        cell.progress.isHidden = !busy; cell.progress.progress = Float(fraction)
+        cell.progress.accessibilityIdentifier = "OrbitTargetProgress:" + id
+        cell.progress.accessibilityValue = "\(Int(fraction * 100)) percent estimated"
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
@@ -64,10 +148,19 @@ import OrbitRefresh
         } else {
             let app = apps[indexPath.row], id = app["id"] as? String ?? ""
             let alert = UIAlertController(title: app["name"] as? String, message: nil, preferredStyle: .actionSheet)
-            alert.addAction(UIAlertAction(title: "Build and Install", style: .default) { _ in Task { do { let job = try await self.rpc("build", ["id": id]) as? [String: Any] ?? [:]; self.show("Build started. Job: \(job["id"] ?? "")"); self.refresh() } catch { self.show(error.localizedDescription) } } })
+            alert.addAction(UIAlertAction(title: "Build and Install", style: .default) { _ in self.build(app) })
+            if let jobID = app["jobID"] as? String, jobs[jobID]?.state == .running {
+                alert.addAction(UIAlertAction(title: "Cancel Build", style: .destructive) { _ in Task {
+                    do {
+                        _ = try await self.rpc("cancel", ["id": jobID])
+                        let job = try await self.fetchJob(jobID); self.jobs[jobID] = job
+                        self.monitor?.observe(job); self.tableView.reloadData()
+                    } catch { self.show(error.localizedDescription) }
+                } })
+            }
             let enabled = app["enabled"] as? Bool == true
             alert.addAction(UIAlertAction(title: enabled ? "Pause Refreshes" : "Refresh Every Six Days", style: .default) { _ in Task { do { _ = try await self.rpc("schedule", ["id": id, "enabled": !enabled, "intervalHours": 144]); self.refresh() } catch { self.show(error.localizedDescription) } } })
-            if let jobID = (app["jobID"] ?? app["lastJobID"]) as? String { alert.addAction(UIAlertAction(title: "View Build Log", style: .default) { _ in Task { do { let job = try await self.rpc("job", ["id": jobID]) as? [String: Any] ?? [:]; self.show((job["state"] as? String ?? "") + "\n" + (job["log"] as? String ?? "")) } catch { self.show(error.localizedDescription) } } }) }
+            if let jobID = (app["jobID"] ?? app["lastJobID"]) as? String { alert.addAction(UIAlertAction(title: "View Build Log", style: .default) { _ in Task { do { let job = try await self.fetchJob(jobID); if let monitor = self.monitor { monitor.show(job, from: self) } else { self.show(job.log) } } catch { self.show(error.localizedDescription) } } }) }
             if let jobID = (app["lastJobID"] ?? app["jobID"]) as? String {
                 alert.addAction(UIAlertAction(title: "Cache for Mac-Free Refresh", style: .default) { _ in Task {
                     do {
@@ -202,4 +295,32 @@ import OrbitRefresh
         let label = UILabel(); label.text = text; label.numberOfLines = 0; label.textAlignment = .center; label.textColor = .secondaryLabel
         return label
     }
+}
+
+/// Keep progress in the layout as the row grows for stages and Dynamic Type.
+@MainActor private final class OrbitTargetCell: UITableViewCell {
+    let icon = UIImageView()
+    let name = UILabel()
+    let detail = UILabel()
+    let progress = UIProgressView(progressViewStyle: .default)
+    init() {
+        super.init(style: .default, reuseIdentifier: nil)
+        name.font = .preferredFont(forTextStyle: .body); name.numberOfLines = 2
+        detail.font = .preferredFont(forTextStyle: .subheadline); detail.textColor = .secondaryLabel; detail.numberOfLines = 0
+        name.adjustsFontForContentSizeCategory = true; detail.adjustsFontForContentSizeCategory = true
+        icon.contentMode = .scaleAspectFit; icon.tintColor = .secondaryLabel
+        icon.layer.cornerRadius = 10; icon.clipsToBounds = true
+        progress.isAccessibilityElement = true; progress.accessibilityLabel = "Build progress"; progress.isHidden = true
+        let body = UIStackView(arrangedSubviews: [name, detail, progress]); body.axis = .vertical; body.spacing = 6
+        let row = UIStackView(arrangedSubviews: [icon, body]); row.spacing = 14; row.alignment = .center
+        row.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(row)
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 44), icon.heightAnchor.constraint(equalToConstant: 44),
+            row.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+            row.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
+            row.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor)
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:)") }
 }

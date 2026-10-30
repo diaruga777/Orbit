@@ -25,13 +25,14 @@ public struct CodeProject: Codable, Equatable, Sendable {
     public var appID: String
     public var developmentTeam: String?
     public var bundlePrefix: String?
+    public var iosBundleID: String?
     public var minimumProfileHours: Int?
     public var groupID: String
     public init(path: String, scheme: String = "", appID: String = "", groupID: String = "") {
         self.path = path; self.scheme = scheme; self.appID = appID; self.groupID = groupID
     }
     public var root: String { URL(fileURLWithPath: path).deletingLastPathComponent().path }
-    public var xcodeArguments: [String] { [path.hasSuffix(".xcworkspace") ? "-workspace" : "-project", path, "-scheme", scheme] + (developmentTeam.map { ["DEVELOPMENT_TEAM=" + $0] } ?? []) + (bundlePrefix.map { ["ORBIT_BUNDLE_PREFIX=" + $0] } ?? []) }
+    public var xcodeArguments: [String] { [path.hasSuffix(".xcworkspace") ? "-workspace" : "-project", path, "-scheme", scheme] + (developmentTeam.map { ["DEVELOPMENT_TEAM=" + $0] } ?? []) + (bundlePrefix.map { ["ORBIT_BUNDLE_PREFIX=" + $0] } ?? []) + (iosBundleID.map { ["ORBIT_IOS_BUNDLE_IDENTIFIER=" + $0] } ?? []) }
 }
 public struct CodePosition: Codable, Equatable, Sendable {
     public var line: Int

@@ -21,7 +21,8 @@ public struct CodeBrowserPage: Sendable {
     public let pairing: () -> UIViewController
     public let peerID: () -> String
     public let defaults: UserDefaults
-    public lazy var builds = CodeBuildMonitor(client: client, defaults: defaults, peerID: peerID)
+    private let jobStatus: ((String) async throws -> CodeJob)?
+    public lazy var builds = CodeBuildMonitor(client: client, defaults: defaults, peerID: peerID, status: jobStatus)
     public var session: CodeSessionStore { CodeSessionStore(defaults: defaults) }
     var projectChanged: (() -> Void)?
     public var project: CodeProject? {
@@ -30,8 +31,8 @@ public struct CodeBrowserPage: Sendable {
     }
     public init(client: CodeClient, drafts: CodeDraftStore, defaults: UserDefaults = .standard,
                 browse: @escaping (String?, Int64, Bool) async throws -> CodeBrowserPage,
-                pairing: @escaping () -> UIViewController, peerID: @escaping () -> String) {
-        self.client = client; self.drafts = drafts; self.defaults = defaults
+                pairing: @escaping () -> UIViewController, peerID: @escaping () -> String, jobStatus: ((String) async throws -> CodeJob)? = nil) {
+        self.jobStatus = jobStatus; self.client = client; self.drafts = drafts; self.defaults = defaults
         self.browse = browse; self.pairing = pairing; self.peerID = peerID
     }
 }

@@ -188,6 +188,22 @@ public actor OrbitSetup {
         try Data("ready".utf8).write(to: target.appendingPathComponent(".orbit-source-ready"), options: .atomic)
         return target
     }
+    public func configureSource(_ source: URL, state: OrbitSetupState) throws {
+        // Only the wizard's private extracted snapshot is configured here.
+        // An existing developer checkout owns its ignored identity already.
+        guard source.standardizedFileURL.path.hasPrefix(root.appendingPathComponent("PhoneSource").standardizedFileURL.path + "/") else { return }
+        guard OrbitSetupState.validTeam(state.teamID), OrbitSetupState.validPrefix(state.bundlePrefix) else { throw CodeFailure("Choose your Apple Account first.") }
+        let file = source.appendingPathComponent("Config/Local.xcconfig")
+        var bundle = state.bundlePrefix + ".ios"
+        if FileManager.default.fileExists(atPath: file.path) {
+            let existing = try CodeOrbitIdentity.resolve(CodeProject(path: source.appendingPathComponent("Orbit.xcodeproj").path))
+            guard existing.bundlePrefix == state.bundlePrefix else { throw CodeFailure("Keep Orbit’s existing bundle prefix to preserve phone data.") }
+            bundle = existing.iosBundleID ?? bundle
+        }
+        // Account changes update the team while preserving the phone identity.
+        try Data("ORBIT_BUNDLE_PREFIX = \(state.bundlePrefix)\nDEVELOPMENT_TEAM = \(state.teamID)\nORBIT_IOS_BUNDLE_IDENTIFIER = \(bundle)\n".utf8).write(to: file, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+    }
     public func exportMCP(app: URL) throws -> URL {
         let directory = root.appendingPathComponent("AgentSetup"); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent("orbit-mcp.json")

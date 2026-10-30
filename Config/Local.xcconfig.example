@@ -1,2 +1,4 @@
 ORBIT_BUNDLE_PREFIX = com.yourname.orbit
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
+// Optional: keep an existing phone app identity exactly.
+// ORBIT_IOS_BUNDLE_IDENTIFIER = com.yourname.orbit

@@ -3,9 +3,9 @@ import OrbitCore
 
 actor CodeInstallHandoffGate {
     private var pending: [String: CodeInstallHandoff] = [:]
-    func prepare(_ id: String) -> CodeInstallHandoff {
+    func prepare(_ id: String, restoring: CodeInstallHandoff? = nil) -> CodeInstallHandoff {
         if let existing = pending[id] { return existing }
-        let value = CodeInstallHandoff(); pending[id] = value; return value
+        let value = restoring ?? CodeInstallHandoff(); pending[id] = value; return value
     }
     func acknowledge(_ id: String, token: String?) throws -> CodeInstallHandoff {
         guard var value = pending[id], value.token == token else { throw CodeFailure("This update is no longer ready to install. Refresh the build status.") }

@@ -33,6 +33,6 @@
 		<string>$(PRODUCT_MODULE_NAME).OrbitShareController</string>
 	</dict>
 	<key>OrbitWidgetKeychainGroup</key>
-	<string>$(AppIdentifierPrefix)$(ORBIT_BUNDLE_PREFIX).ios</string>
+	<string>$(AppIdentifierPrefix)$(ORBIT_IOS_BUNDLE_IDENTIFIER)</string>
 </dict>
 </plist>

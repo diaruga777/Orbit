@@ -43,7 +43,7 @@ def package(destination):
     # Only reviewed, committed files. Never include Local.xcconfig, credentials,
     # user state, derived data, or the publisher's signing material.
     files = subprocess.check_output(['git','ls-tree','-r','--name-only','HEAD'],cwd=ROOT,text=True).splitlines()
-    include = [name for name in files if name.startswith(('Apps/Orbit/', 'Apps/OrbitWidgets/', 'Apps/OrbitShare/', 'Apps/OrbitUITests/', 'Tests/', 'Orbit.xcodeproj/', 'Sources/', 'Vendor/DeviceGateway/')) or name in {'Package.swift','Package.resolved','Config/Orbit.xcconfig','.gitignore','LICENSE','THIRD_PARTY_NOTICES.md'}]
+    include = [name for name in files if name.startswith(('Apps/Orbit/', 'Apps/OrbitWidgets/', 'Apps/OrbitShare/', 'Apps/OrbitUITests/', 'Tests/', 'Orbit.xcodeproj/', 'Sources/', 'Vendor/DeviceGateway/')) or name in {'Package.swift','Package.resolved','Config/Orbit.xcconfig','scripts/local_identity.py','.gitignore','LICENSE','THIRD_PARTY_NOTICES.md'}]
     archive = destination / 'OrbitPhoneSource.zip'
     subprocess.run(['git','archive','--format=zip','-o',str(archive),'HEAD','--',*include],cwd=ROOT,check=True)
     with zipfile.ZipFile(archive,'a',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as output:

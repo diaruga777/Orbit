@@ -32,6 +32,7 @@
 		8CC6A67CF3911AC0B897BFEA /* OrbitAddAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E34F5AFAB2EB47AA1BC9E6CF /* OrbitAddAppView.swift */; };
 		94904093FEB14238BE70B4AA /* OrbitExpiryNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C5B39631C8DF45F113C9D5 /* OrbitExpiryNotifications.swift */; };
 		98B54526E6246FCC92CBDAD7 /* OrbitConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E795D3B6424F9FD7842AB186 /* OrbitConnectionsView.swift */; };
+		99C2308D252FCFD77BA22DA6 /* OrbitTargetBuildPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E9AED1C6F9FF84C40D4B6B /* OrbitTargetBuildPreview.swift */; };
 		9C0EEC097E9F0AF319575CCF /* OrbitWidgetsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 513842FABB3361E949EB9EFB /* OrbitWidgetsUITests.swift */; };
 		B63D30665E36011EF11BF121 /* OrbitMacView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE2F5EF6144BD46114C604C /* OrbitMacView.swift */; };
 		C31003C286B425BF85F7198C /* OrbitAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98699AB088CAE924C1A6654 /* OrbitAppDelegate.swift */; };
@@ -116,6 +117,7 @@
 		B74C6BC763E00FD91024D63A /* OrbitUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OrbitUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB883B048565FCA0E44625B3 /* OrbitWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OrbitWidgets.entitlements; sourceTree = "<group>"; };
 		C74A71B7B16ED08F635982F0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C7E9AED1C6F9FF84C40D4B6B /* OrbitTargetBuildPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitTargetBuildPreview.swift; sourceTree = "<group>"; };
 		C98699AB088CAE924C1A6654 /* OrbitAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitAppDelegate.swift; sourceTree = "<group>"; };
 		D0CBC0277730C6F98099B56B /* OrbitAppletsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitAppletsUITests.swift; sourceTree = "<group>"; };
 		D717F3AA06972F02E3F822C0 /* OrbitMacWidgetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitMacWidgetsView.swift; sourceTree = "<group>"; };
@@ -178,6 +180,7 @@
 				09C5B39631C8DF45F113C9D5 /* OrbitExpiryNotifications.swift */,
 				97811297AE1EF362A94D4E75 /* OrbitPhoneConnection.swift */,
 				B6A1017F61EB39265701512C /* OrbitSetupBannerController.swift */,
+				C7E9AED1C6F9FF84C40D4B6B /* OrbitTargetBuildPreview.swift */,
 				601832D585E8C37FEC6368AA /* OrbitTargetsController.swift */,
 			);
 			name = Orbit;
@@ -337,6 +340,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1ED43C45F010E6E18A4680AC /* Build configuration list for PBXNativeTarget "Orbit" */;
 			buildPhases = (
+				E0E0D106F2C5644D079FD125 /* Validate local Orbit identity */,
 				1A83EACBC247740EBC0E6135 /* Sources */,
 				744EABC5C142532226634E12 /* Resources */,
 				AC23419267EB092E8D8A05AB /* Frameworks */,
@@ -363,6 +367,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E46B78AF653E9646011CE111 /* Build configuration list for PBXNativeTarget "OrbitMacClient" */;
 			buildPhases = (
+				963045D646424B6C6346E562 /* Validate local Orbit identity */,
 				EE36EF0558862184B859D14D /* Sources */,
 				AF6ED792692D0C12260D5949 /* Resources */,
 				7DF41E1E955852C8F9604F26 /* Frameworks */,
@@ -496,6 +501,44 @@
 			shellPath = /bin/sh;
 			shellScript = "\"$SRCROOT/scripts/build_apple_adapter.sh\" --xcode";
 		};
+		963045D646424B6C6346E562 /* Validate local Orbit identity */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate local Orbit identity";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "python3 \"$SRCROOT/scripts/local_identity.py\"";
+		};
+		E0E0D106F2C5644D079FD125 /* Validate local Orbit identity */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate local Orbit identity";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "python3 \"$SRCROOT/scripts/local_identity.py\"";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -507,6 +550,7 @@
 				94904093FEB14238BE70B4AA /* OrbitExpiryNotifications.swift in Sources */,
 				803B9A0FA4910B40D7679C2B /* OrbitPhoneConnection.swift in Sources */,
 				57A297359E56B8F9E1827699 /* OrbitSetupBannerController.swift in Sources */,
+				99C2308D252FCFD77BA22DA6 /* OrbitTargetBuildPreview.swift in Sources */,
 				E50FF19E34CB6F0C2593C386 /* OrbitTargetsController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -591,7 +635,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_BUNDLE_PREFIX).ios.widgets";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_IOS_BUNDLE_IDENTIFIER).widgets";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -608,7 +652,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Orbit Mac";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Orbit connects to your phone to build and install your apps.";
-				INFOPLIST_KEY_OrbitPhoneBundleIdentifier = "$(ORBIT_BUNDLE_PREFIX).ios";
+				INFOPLIST_KEY_OrbitPhoneBundleIdentifier = "$(ORBIT_IOS_BUNDLE_IDENTIFIER)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -631,7 +675,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_BUNDLE_PREFIX).ios.share";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_IOS_BUNDLE_IDENTIFIER).share";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -649,7 +693,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_BUNDLE_PREFIX).ios";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_IOS_BUNDLE_IDENTIFIER)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -666,7 +710,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_BUNDLE_PREFIX).ios.widgets";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_IOS_BUNDLE_IDENTIFIER).widgets";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -745,7 +789,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_BUNDLE_PREFIX).ios";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_IOS_BUNDLE_IDENTIFIER)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -761,7 +805,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Orbit Mac";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Orbit connects to your phone to build and install your apps.";
-				INFOPLIST_KEY_OrbitPhoneBundleIdentifier = "$(ORBIT_BUNDLE_PREFIX).ios";
+				INFOPLIST_KEY_OrbitPhoneBundleIdentifier = "$(ORBIT_IOS_BUNDLE_IDENTIFIER)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -801,7 +845,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_BUNDLE_PREFIX).ios.share";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ORBIT_IOS_BUNDLE_IDENTIFIER).share";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";

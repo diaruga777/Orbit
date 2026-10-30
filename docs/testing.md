@@ -592,3 +592,31 @@ import access/error presentation, and self-refresh proceeding while merely
 inactive. Apple authentication, real pairing export/import, physical install/
 renewal, background reliability, public notarization and marketplace acceptance
 were not performed or established.
+
+## Apps progress and Orbit identity
+
+`CodeOrbitIdentityTests` rejects missing/sample identities, preserves exact phone
+IDs and overrides stale catalog values without changing other projects.
+`CodeTargetJobTests` verifies real compilation detail survives Host payloads and
+waiting/installing/uncertain jobs stay below completion until installation is
+confirmed. The Apps Simulator fixture drives the production controller and shared
+monitor through startup, changing progress/task counts, console, dismissed
+progress, reconnect and failure/success. It never connects to a Mac, Apple
+account or physical phone. Physical Live Activity delivery/background lifetime
+and replacing an installed Orbit require separate acceptance.
+
+Build-feedback verification (2026-10-31): bootstrap ran in a detached committed
+checkout. All 207 Swift checks passed (five optional fixtures skipped), all 19
+Python MCP/configuration checks passed, both Go race suites and helper vet
+passed. The iOS Simulator app, native arm64 Xcode Mac app and separate ad hoc
+Mac review package built with ignored local identity settings. Built phone and
+extension identifiers and their shared Keychain metadata matched the configured
+exact phone identity. Both Mac bundles passed strict signature verification;
+packaged phone-source extraction/resume passed. Seven Simulator UI checks passed:
+Apps progress/console/completion, reconnect/failure, background startup, legacy
+progress estimates, actual build task detail, self-update recovery and app icons.
+The progress, completion and failure captures were reviewed. An initial standard
+cell layout hid the progress bar; the final stack layout and regression checks
+cover it. No physical phone access, Apple sign-in, actual installation/renewal,
+physical Live Activity delivery, public notarization or marketplace acceptance
+was performed.
