@@ -475,8 +475,22 @@ credential validation without networking. `OrbitRefreshSignInUITests` drives the
 actual UIKit sheet through an inert Simulator-only service: blank server with
 Remember enabled, missing credentials, failed sign-in/retry, invalid custom URL
 and clearing it, Apple verification with a rejected code, team-save retry,
-verification failure recovery/cancel, and the largest accessibility text with the
-keyboard open. Screenshot attachments capture the form and verification states.
+verification failure recovery/cancel, cancellation during verification, no signing
+teams, and the largest accessibility text during password entry. Screenshot attachments capture the form and verification states.
 The fixture never authenticates with Apple, contacts anisette services, reads
 refresh secrets or installs on a phone. Real account sign-in and renewal remain
 separate physical acceptance.
+
+Refresh sign-in verification (2026-10-30): bootstrap generated transport/native
+sources in a detached committed checkout. All 179 Swift tests passed (four
+optional fixtures skipped), along with 17 Python MCP tests, both Go race suites
+and helper vet. Both clients built with the ignored local identity configuration;
+the separate ad hoc Mac review bundle passed signature verification and its
+packaged phone-source extraction/resume fixture passed. All nine final Simulator
+form tests passed. The first form iteration missed a tap while the keyboard and
+scroll position changed; fixing Sign In above the keyboard resolved that check.
+Reviewed the default form, error, Apple verification and largest-text captures.
+A credential-free request to the default helper’s v3 metadata endpoint succeeded;
+this does not establish Apple account authentication. No Apple sign-in, physical
+installation/renewal, background acceptance, public notarization or marketplace
+listing was performed.

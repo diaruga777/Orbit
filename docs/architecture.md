@@ -98,7 +98,8 @@ is no OS-level MCP entitlement or automatic edit of another app’s configuratio
 
 ## Phone refresh sign-in
 
-The iOS Refresh account flow uses a keyboard-aware scrollable UIKit form sheet.
+The iOS Refresh account flow uses a keyboard-aware scrollable UIKit form sheet,
+with Sign In fixed above the keyboard.
 It owns the sign-in task, inline validation/errors, verification continuations and
 team selection until the selected team is saved. Cancel cancels the task and
 resolves a pending verification request; in-flight work blocks swipe dismissal.
