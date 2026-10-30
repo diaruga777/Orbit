@@ -551,3 +551,11 @@ covered local selection, dark appearance, GitHub, background discovery,
 registration progress and the Apps confirmation. Physical registration/install/
 renewal, live GitHub download acceptance, public notarization and marketplace
 listing were not performed.
+
+After integrating the concurrent Add App changes, all 187 Swift checks passed
+(five optional fixtures skipped), along with all 17 Python checks. Both final
+client builds passed, as did both Mac bundles’ helper/full signature checks and
+the packaged source/resume check. The current Mac app received the missing helper
+at its existing path with its signing requirement verified; a concurrent Xcode
+rebuild then updated that same path. Its active debug session was left in place.
+No real pairing record was exported during validation.
