@@ -624,3 +624,19 @@ was performed.
 ## Signing failure recovery
 
 `CodeBuildFailureTests` covers simultaneous missing-account and Time Sensitive Notifications profile failures, individual account/capability errors, alternate Xcode wording, unrelated credential warnings during compiler failures, private-detail exclusion and bounded reads of large logs. These fixtures never access Apple credentials, provisioning caches or devices. A successful signed Luna build still requires an authenticated Xcode account and a profile that includes its requested capabilities.
+
+Signing-recovery verification (2026-10-31): bootstrap generated native dependencies
+in a committed detached checkout. All 212 Swift checks passed (five optional
+fixtures skipped), all 19 Python checks passed, both Go race suites and helper
+vet passed. The beta Xcode default Swift Build test runner stalled in an existing
+async widget test; `swift test --build-system native` completed the suite, and the
+final diagnostic revision passed the same full suite. The iOS Simulator client
+and complete development-signed Mac package built with the ignored local identity.
+The Mac package passed strict signature and existing designated-requirement checks,
+and replaced the idle running client at its existing path with the same bundle ID
+and certificate. The restarted local Host answered status with all six targets.
+Luna's source and intentional notification entitlement were preserved. Its signed
+build remains blocked by the reported missing Xcode account token and profile
+capability mismatch until the user repairs Xcode sign-in/signing. No Apple sign-in,
+physical-device access, installation/renewal, notarization or marketplace acceptance
+was performed.
