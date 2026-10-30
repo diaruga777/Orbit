@@ -6,7 +6,9 @@ Run `scripts/bootstrap.sh` first. It generates `Vendor/OrbitNet.xcframework` fro
 
 The macOS `COrbitNet.framework` slice uses the versioned macOS framework layout:
 its binary, headers, modules and `Resources/Info.plist` live under `Versions/A`,
-with the standard `Versions/Current` and top-level framework symlinks. iOS and
+with the standard `Versions/Current` and top-level binary/resource symlinks.
+Its Info.plist stays under the versioned Resources directory; a root-level
+Info.plist symlink is rejected by strict macOS code-signature verification. iOS and
 Simulator framework slices keep their flat platform-native layout. Xcode rejects
 a flat framework when validating the macOS client.
 

@@ -74,6 +74,7 @@ final class OrbitPairingExportTests: XCTestCase {
         let bundle = URL(fileURLWithPath: path)
         let helper = try OrbitPairingExport.helper(in: bundle)
         _ = try await OrbitCommand.run("/usr/bin/codesign", ["--verify", "--strict", helper.path])
+        _ = try await OrbitCommand.run("/usr/bin/codesign", ["--verify", "--deep", "--strict", bundle.path])
         XCTAssertTrue(FileManager.default.fileExists(atPath: bundle.appendingPathComponent("Contents/Resources/AppleAdapterNotices/modules.json").path))
         do {
             // Invalid arguments return before reading any actual pairing record.

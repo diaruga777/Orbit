@@ -62,9 +62,6 @@ MAP
 <?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict><key>CFBundleIdentifier</key><string>org.orbit.transport</string><key>CFBundleExecutable</key><string>COrbitNet</string><key>CFBundleName</key><string>COrbitNet</string><key>CFBundlePackageType</key><string>FMWK</string><key>CFBundleVersion</key><string>1</string></dict></plist>
 PLIST
- if [ "$platform" = macos ]; then
-  ln -s Versions/Current/Resources/Info.plist "$framework/Info.plist"
- fi
 done
 rm -rf "$ROOT/Vendor/OrbitNet.xcframework"
 xcodebuild -create-xcframework -framework "$WORK/products/macos/COrbitNet.framework" \
