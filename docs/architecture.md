@@ -36,7 +36,21 @@ changing existing source, signing identifiers or durable installation job IDs.
 Phone-only refresh is not required by the wizard. A dismissible banner in both
 clients links to phone refresh and remote building after setup. Local Wi-Fi stays
 the default; the Mac’s Phone & Remote Setup sheet explicitly enables the existing
-iroh transport and explains native installation authorization and restart/re-pair.
+iroh transport immediately and shows startup errors and phone sync progress.
+Connection options also configures local Wi-Fi, Tailscale and explicit Syncthing
+relay URLs without a CLI. Tailscale clients/account and private relay hosting
+remain user-owned external prerequisites.
+
+The server serializes live listener changes, starts replacements before retiring
+old remote listeners, and keeps the local listener available. Host configuration
+is saved after activation succeeds. Authenticated `connection_routes` exchanges
+carry per-transport Mac pins and enroll phone transport aliases under the original
+trusted account. Control and Apple reverse streams resolve those aliases to the
+same account, preserving installation bindings; `forget` removes all aliases.
+Phone snapshots persist separately from the original pairing and sync on activation
+and every ten seconds while active. Offline phones retain their last authenticated
+snapshot until reachable again; updated routes replace retired routes after sync.
+No new trust window or public identity lookup substitutes for authentication.
 
 `OrbitToolInstaller` runs the upstream Homebrew/xcodes installer through a private
 pseudo-terminal inside the wizard. It installs missing full Xcode and Python,

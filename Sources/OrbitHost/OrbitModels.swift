@@ -1,5 +1,6 @@
 import Foundation
 import OrbitCore
+import OrbitWire
 
 public struct OrbitTarget: Codable, Identifiable, Sendable {
     public var id: String
@@ -37,6 +38,8 @@ public struct OrbitConfiguration: Codable, Sendable {
     public var relay: String?
     public var address: String?
     public var trustedPeers: [String] = []
+    /// Transport keys introduced over an already authenticated phone connection.
+    public var peerAliases: [String: String]?
     public var allowedRoots: [String] = []
     public init() {}
 }
@@ -44,5 +47,21 @@ public enum OrbitPaths {
     public static var root: URL {
         if let path = ProcessInfo.processInfo.environment["ORBIT_HOME"], path.hasPrefix("/") { return URL(fileURLWithPath: path) }
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".orbit", isDirectory: true)
+    }
+}
+
+extension OrbitConfiguration {
+    func validateConnection(requireAddress: Bool = false) throws {
+        guard ["local", "tailscale", "syncthing", "dumbpipe"].contains(provider) else { throw CodeFailure("Choose a connection type.") }
+        guard requireAddress else { return }
+        if provider == "tailscale" {
+            guard let address, case .tcp = OrbitPeerAddress(syncthingURL: address) else { throw CodeFailure("Enter your Mac’s tcp:// address from Tailscale.") }
+        }
+        if provider == "syncthing" {
+            guard let relay, let url = URLComponents(string: relay), url.scheme == "relay", let host = url.host, !host.isEmpty,
+                  url.queryItems?.contains(where: { $0.name == "id" && !($0.value ?? "").isEmpty }) == true else {
+                throw CodeFailure("Enter a relay:// address including its certificate ID.")
+            }
+        }
     }
 }

@@ -37,7 +37,7 @@ import UniformTypeIdentifiers
             do {
                 let host = try OrbitHost(); self.host = host
                 let server = OrbitServer(host: host, root: OrbitPaths.root); self.server = server
-                server.approve = { peer in await MainActor.run {
+                await server.setApproval { peer in await MainActor.run {
                     NSApp.activate(ignoringOtherApps: true)
                     let alert = NSAlert(); alert.messageText = "Connect this phone to Orbit?"
                     alert.informativeText = "It can edit files, add app targets, and run builds using your Mac’s tools and signing account. Compare this phone ID before accepting.\n\n" + peer

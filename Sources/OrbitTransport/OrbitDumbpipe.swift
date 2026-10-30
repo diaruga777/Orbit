@@ -33,6 +33,11 @@ public actor OrbitDumbpipe {
         do { endpoint = try await binding!.value; binding = nil; return try DeviceID(bytes: endpoint!.id().toBytes()) }
         catch { binding = nil; throw error }
     }
+    public func stop() async throws {
+        let current = endpoint
+        endpoint = nil
+        try await current?.close()
+    }
     public func dial(endpoint id: String, expecting expected: DeviceID) async throws -> any BEPByteStream {
         _ = try await start()
         let remote = try EndpointId.fromString(s: id)

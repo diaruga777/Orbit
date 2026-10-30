@@ -6,6 +6,19 @@ import OrbitWire
 import OrbitTransport
 
 public actor OrbitHost {
+    private var applyConnections: (@Sendable (OrbitConfiguration) async throws -> [String])?
+    private var connectionCodes: [String] = []
+    private var connectionError: String?
+    private var configuringConnections = false
+    private var syncedPeers: Set<String> = []
+    public func installConnectionHandler(_ handler: @escaping @Sendable (OrbitConfiguration) async throws -> [String]) async {
+        applyConnections = handler
+        do { connectionCodes = try await handler(configuration); connectionError = nil }
+        catch { connectionError = error.localizedDescription }
+    }
+    public func canonicalPeer(_ peer: String) -> String {
+        configuration.peerAliases?[peer] ?? peer
+    }
     private let stateLock: OrbitStateLock
     public let root: URL
     public private(set) var service: CodeService
@@ -40,7 +53,7 @@ public actor OrbitHost {
             installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"))
     }
     public func openPairing() { pairingUntil = Date().addingTimeInterval(300) }
-    public func isTrusted(_ peer: String) -> Bool { configuration.trustedPeers.contains(peer) }
+    public func isTrusted(_ peer: String) -> Bool { configuration.trustedPeers.contains(canonicalPeer(peer)) }
     public func trust(_ peer: String) throws {
         guard Date() < pairingUntil else { throw CodeFailure("Open pairing on your Mac first.") }
         if !configuration.trustedPeers.contains(peer) { configuration.trustedPeers.append(peer); try saveConfiguration() }
@@ -54,7 +67,7 @@ public actor OrbitHost {
                   let method = request["method"] as? String else { throw CodeFailure("Invalid Orbit request.") }
             let p = request["params"] as? [String: Any] ?? [:]
             if let peer, !isTrusted(peer) { throw CodeFailure("Approve this phone in Orbit Mac.") }
-            let result = try await dispatch(method, p, peer: peer)
+            let result = try await dispatch(method, p, peer: peer.map { canonicalPeer($0) })
             return try JSONSerialization.data(withJSONObject: ["result": result], options: [.sortedKeys, .fragmentsAllowed])
         } catch { return (try? JSONSerialization.data(withJSONObject: ["error": error.localizedDescription])) ?? Data() }
     }
@@ -194,26 +207,59 @@ public actor OrbitHost {
         case "repo_search": return try await OrbitGitHub.search(try required(p, "query"))
         case "repo_inspect": return try await OrbitGitHub.inspect(try required(p, "repository"))
         case "repo_add": return try await importRepository(p)
+        case "connection_status":
+            return ["provider": configuration.provider, "ready": !connectionCodes.isEmpty && connectionError == nil,
+                    "error": connectionError ?? "", "phones": configuration.trustedPeers.count,
+                    "syncedPhones": syncedPeers.count]
+        case "connection_routes":
+            guard let peer else { throw CodeFailure("Use a paired phone to sync connections.") }
+            guard !configuringConnections else { throw CodeFailure("Connection setup is still finishing. Try again shortly.") }
+            if let alias = p["transportPeerID"] as? String {
+                let alias = try DeviceID(string: alias).description
+                guard alias == peer || (!configuration.trustedPeers.contains(alias) && (configuration.peerAliases?[alias] == nil || configuration.peerAliases?[alias] == peer)) else {
+                    throw CodeFailure("That connection belongs to another paired phone.")
+                }
+                if alias != peer {
+                    var aliases = configuration.peerAliases ?? [:]
+                    guard aliases.filter({ $0.value == peer }).count < 4 || aliases[alias] != nil else { throw CodeFailure("Too many phone transport identities.") }
+                    aliases[alias] = peer
+                    let previous = configuration.peerAliases
+                    configuration.peerAliases = aliases
+                    do { try saveConfiguration() } catch { configuration.peerAliases = previous; throw error }
+                }
+            }
+            if p["receivedCodes"] as? [String] == connectionCodes { syncedPeers.insert(peer) }
+            return try object(OrbitConnectionRoutes(provider: configuration.provider, pairingCodes: connectionCodes, accountPeerID: peer))
         case "configure":
-            // Network routes are local preferences. A paired phone can select
-            // them too, but changing trust or filesystem roots stays on the Mac.
-            let provider = p["provider"] as? String ?? configuration.provider
-            guard ["local", "tailscale", "syncthing", "dumbpipe"].contains(provider) else { throw CodeFailure("Unknown pipe provider.") }
-            if provider == "syncthing" {
-                guard let relay = p["relay"] as? String, URL(string: relay)?.scheme == "relay" else { throw CodeFailure("Provide an explicit relay:// address.") }
-                configuration.relay = relay
+            guard !configuringConnections else { throw CodeFailure("Connection setup is already running.") }
+            var next = configuration
+            next.provider = p["provider"] as? String ?? next.provider
+            try next.validateConnection()
+            if next.provider == "syncthing" { next.relay = p["relay"] as? String ?? next.relay }
+            if next.provider == "tailscale" { next.address = p["address"] as? String ?? next.address }
+            try next.validateConnection(requireAddress: true)
+            guard let applyConnections else { throw CodeFailure("Connections are still starting. Try again shortly.") }
+            configuringConnections = true
+            defer { configuringConnections = false }
+            let previous = configuration
+            let codes = try await applyConnections(next)
+            // An actor can receive phone syncs while the listener starts. Preserve trust changes.
+            next.trustedPeers = configuration.trustedPeers; next.peerAliases = configuration.peerAliases
+            configuration.provider = next.provider; configuration.address = next.address; configuration.relay = next.relay
+            do { try saveConfiguration() }
+            catch {
+                configuration.provider = previous.provider; configuration.address = previous.address; configuration.relay = previous.relay
+                _ = try? await applyConnections(previous)
+                throw error
             }
-            if provider == "tailscale" {
-                guard let address = p["address"] as? String, OrbitPeerAddress(syncthingURL: address) != nil else { throw CodeFailure("Provide a tcp:// address for this pipe.") }
-                configuration.address = address
-            }
-            configuration.provider = provider; try saveConfiguration()
-            return ["configuration": try object(configuration), "restartRequired": true]
+            if codes != connectionCodes { syncedPeers.removeAll() }
+            connectionCodes = codes; connectionError = nil
+            return ["configuration": try object(configuration), "restartRequired": false]
         case "pairing_open":
             guard peer == nil else { throw CodeFailure("Open pairing from the Mac.") }; openPairing(); return ["seconds": 300]
         case "forget":
             guard peer == nil else { throw CodeFailure("Remove phone access from the Mac.") }
-            configuration.trustedPeers.removeAll(); pairingUntil = .distantPast
+            configuration.trustedPeers.removeAll(); configuration.peerAliases = nil; syncedPeers.removeAll(); pairingUntil = .distantPast
             try await service.revokeEndpointAuthorizations(); try saveConfiguration(); return ["forgotten": true]
         default: throw CodeFailure("Unknown Orbit method: \(method)")
         }

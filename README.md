@@ -165,17 +165,20 @@ Orbit owns application-level trust independently of the pipe. A route is never p
 
 Detailed commands, private relay setup and troubleshooting: **[Pipes](docs/pipes.md)**.
 
-With Orbit Mac running, configure your choice using the [CLI](#connect-your-agent):
+In Orbit Mac, open **Phone & Remote Setup → Build away from home**. Click
+**Enable Remote Connections** for automatic internet connections, or expand
+**Connection options** to choose Local Wi-Fi, Tailscale or a private Syncthing
+relay. Enter a tailnet address or relay URL there if needed. Changes take effect
+immediately, including when running from Xcode; status and errors appear in the
+sheet. No CLI or restart is required.
 
-```sh
-bin/orbit configure --provider local
-# Or one of:
-bin/orbit configure --provider tailscale --address tcp://YOUR-MAC.YOUR-TAILNET.ts.net:49210
-bin/orbit configure --provider syncthing --relay 'relay://YOUR-RELAY:22067/?id=RELAY_CERTIFICATE_ID'
-bin/orbit configure --provider dumbpipe
-```
-
-Restart Orbit Mac after changing its provider. In its window, click **Connect a Phone**, copy the pairing code, and paste it into the iPhone app's **Mac → Connect a Mac**. Compare the phone ID displayed on both devices before approving on the Mac. The pairing window lasts five minutes. Syncthing relay enrollment starts with direct pairing; after approval copy the relay route as described in the pipe guide.
+For your first phone, click **Connect a Phone**, copy the code, and paste it into
+the iPhone app’s **Mac → Connect a Mac**. Compare the phone ID on both devices
+before approving on the Mac. Pairing lasts five minutes. After that, connection
+changes sync automatically while Orbit is open and connected. Keep an offline
+phone on the same Wi-Fi until the sheet shows it updated before leaving home.
+Both clients need the route-sync update; their existing pairing is preserved.
+CLI configuration remains available for automation in [Pipes](docs/pipes.md).
 
 For native USB/Wi-Fi deployment, you can use only the Mac client and CLI/MCP and skip installing the Orbit iOS client, leaving all three free-account app slots available for your own apps. The iOS client adds source editing, remote control and phone-side forwarding.
 

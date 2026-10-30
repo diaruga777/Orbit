@@ -2,13 +2,36 @@
 
 All choices carry authenticated app requests. Signing remains on your Mac. A pipe does not bypass Apple's USB/network pairing, Developer Mode, provisioning or device limits.
 
+## Set up in Orbit Mac
+
+Open **Phone & Remote Setup → Build away from home**. **Enable Remote Connections**
+starts the built-in iroh listener immediately, including in Xcode-built apps.
+Progress, errors and the number of updated phones appear in the sheet. No restart
+or replacement pairing code is needed. Keep Orbit open on the paired phone on the
+same Wi-Fi until it receives the update, then use it from another network. An
+offline phone receives the update on its next connection; both clients must
+include automatic route sync. Updating an older client preserves its saved pairing.
+
+**Connection options** includes Local Wi-Fi, Automatic (iroh), Tailscale and a
+private Syncthing relay. Tailscale needs its own clients/account; enter the Mac’s
+`tcp://` tailnet address in Orbit. For Syncthing, enter a full `relay://` URL with
+its certificate ID from a relay you run or trust. Orbit manages its connection to
+the relay; deploying a relay server remains an optional infrastructure task. The
+CLI commands below are alternatives for automation, never required app setup.
+
+Route changes travel over the existing authenticated connection. Each transport
+keeps its own pinned identity; phone aliases retain the original account and
+installation authorizations. Forgetting phones revokes all linked transport keys.
+Local-only mode closes the Mac’s remote listener and turns off public discovery.
+Initial pairing still requires explicit approval and identity comparison.
+
 ## Local Wi-Fi only
 
 ```sh
 bin/orbit configure --provider local
 ```
 
-Restart Orbit Mac, open its pairing window, and copy the direct pairing code. Allow TCP 49210 through the Mac firewall for Orbit and permit Local Network access. Both devices must be on the same LAN; guest-network client isolation can prevent access. Orbit does not announce to a public discovery service or register a relay in this mode. No extra account is needed. Changing network addresses may require copying a fresh code; certificate identity stays the same.
+Choose Local Wi-Fi and apply. For an unpaired phone, open the pairing window and copy the initial code. Allow TCP 49210 through the Mac firewall for Orbit and permit Local Network access. Both devices must be on the same LAN; guest-network client isolation can prevent access. Orbit does not announce to a public discovery service or register a relay in this mode. No extra account is needed. Changing network addresses may require copying a fresh code; certificate identity stays the same.
 
 ## Tailscale
 
@@ -18,7 +41,7 @@ Install the separate [Tailscale clients](https://tailscale.com/download) on Mac 
 bin/orbit configure --provider tailscale --address tcp://YOUR-MAC.YOUR-TAILNET.ts.net:49210
 ```
 
-Restart Orbit Mac and pair with that code. The code pins Orbit's TLS certificate in addition to Tailscale's network authentication. Orbit never assumes `100.x` is proof of a particular phone. USB or native Xcode Wi-Fi deployment is still a separate connection; remote installation needs the phone forwarding path described in the architecture guide.
+Apply in Connection options; existing paired phones receive the route automatically. The code pins Orbit's TLS certificate in addition to Tailscale's network authentication. Orbit never assumes `100.x` is proof of a particular phone. USB or native Xcode Wi-Fi deployment is still a separate connection; remote installation needs the phone forwarding path described in the architecture guide.
 
 ## Syncthing relay
 
@@ -41,7 +64,12 @@ First pair the phone and Mac directly on your LAN. Then:
 bin/orbit configure --provider syncthing --relay 'relay://RELAY-HOST:22067/?id=RELAY_CERTIFICATE_ID'
 ```
 
-Restart the Mac app. Its listener owns the relay registration; phones initiate relay sessions. The relay cannot approve a new phone. To use the relay from iPhone, replace the `address=` query item in the saved pairing code with that explicit `relay://…` URL (URL-encode it), retaining the Mac's `device=` identity. The Mac's **Copy Pairing Code** includes this route after the provider has been configured. Paste the new code in **Mac → Connect a Mac**. Traffic stays encrypted end to end with the existing pinned identity.
+Apply the relay in Connection options. Its listener owns the relay registration;
+phones initiate relay sessions. The relay cannot approve a new phone. Existing
+phones receive the route with its pinned Mac identity automatically; no URL
+editing or replacement code is needed.
+
+Traffic stays encrypted end to end with the existing pinned identity.
 
 A third-party relay can observe connection metadata and availability. Configure only an operator you chose; Orbit never picks one from a public pool for you.
 
@@ -51,7 +79,7 @@ A third-party relay can observe connection metadata and availability. Configure 
 bin/orbit configure --provider dumbpipe
 ```
 
-Restart Orbit Mac and pair using its `dumbpipe://…` route. Orbit includes the native [iroh FFI](https://github.com/n0-computer/iroh-ffi), the stream primitive used by [dumbpipe](https://github.com/n0-computer/dumbpipe). The iPhone does not spawn a CLI or need a Rust toolchain. Selecting this provider enables iroh's N0 discovery and relay preset; local-only mode does not start it.
+Enable Automatic (iroh) in Connection options. Existing phones receive its pinned `dumbpipe://…` route automatically. Orbit includes the native [iroh FFI](https://github.com/n0-computer/iroh-ffi), the stream primitive used by [dumbpipe](https://github.com/n0-computer/dumbpipe). The iPhone does not spawn a CLI or need a Rust toolchain. Selecting this provider enables iroh's N0 discovery and relay preset; local-only mode does not start it.
 
 The endpoint ID is pinned in the pairing code. Orbit uses ALPN `orbit/1` and its own bounded RPC/install framing. It is not wire-compatible with the desktop CLI's default dumbpipe handshake/tickets; this is a native dumbpipe-style provider. The upstream CLI supports `--custom-alpn` for custom protocols, but pointing a default CLI tunnel at Orbit's owner-only control socket is unsupported. Do not expose that local socket over an unauthenticated tunnel.
 

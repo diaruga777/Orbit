@@ -4,13 +4,18 @@ import OrbitCore
 import OrbitWire
 import OrbitTransport
 
-public final class OrbitServer: @unchecked Sendable {
+public actor OrbitServer {
     public let host: OrbitHost
     public let transport: OrbitGoTransport
     public var approve: @Sendable (String) async -> Bool = { _ in false }
     private var dumbpipeID: DeviceID?
     private let root: URL
     private var listeners: [OrbitGoListener] = []
+    private var remoteListener: OrbitGoListener?
+    private var remoteRelay: String?
+    private var remoteTask: Task<Void, Never>?
+    private var applying = false
+    public func setApproval(_ value: @escaping @Sendable (String) async -> Bool) { approve = value }
     public init(host: OrbitHost, root: URL) {
         self.root = root; self.host = host; transport = OrbitGoTransport(configuration: .init(stateDirectory: root.appendingPathComponent("Identity")))
     }
@@ -23,24 +28,58 @@ public final class OrbitServer: @unchecked Sendable {
         let listener = try await transport.listen(bindAddress: config.listen)
         listeners.append(listener)
         Task { await accept(listener) }
-        if config.provider == "syncthing", let address = config.relay, let url = URL(string: address) {
-            let relay = try await transport.relayListener(url: url); listeners.append(relay)
+        await host.installConnectionHandler { [self] config in try await self.applyConnections(config) }
+    }
+    private func applyConnections(_ config: OrbitConfiguration) async throws -> [String] {
+        guard !applying else { throw CodeFailure("Connection setup is already running.") }
+        applying = true
+        defer { applying = false }
+        try config.validateConnection(requireAddress: true)
+        // Start the replacement before dropping the old listener. Failure keeps the old route usable.
+        var relay: OrbitGoListener?
+        if config.provider == "syncthing", let address = config.relay {
+            if remoteRelay == address { relay = remoteListener }
+            else { relay = try await transport.relayListener(url: URL(string: address)!) }
+        }
+        var remoteID: DeviceID?
+        if config.provider == "dumbpipe" {
+            remoteID = try await OrbitDumbpipe.shared.start(secretURL: root.appendingPathComponent("Identity/iroh.key"))
+        }
+        if remoteRelay != config.relay || config.provider != "syncthing" {
+            remoteListener?.close(); remoteListener = nil; remoteRelay = nil
+        }
+        if let relay, remoteListener == nil {
+            remoteListener = relay; remoteRelay = config.relay
             Task { await self.accept(relay, pairingAllowed: false) }
         }
-        if config.provider == "dumbpipe" {
-            dumbpipeID = try await OrbitDumbpipe.shared.start(secretURL: root.appendingPathComponent("Identity/iroh.key"))
-            Task { try? await OrbitDumbpipe.shared.accept { await self.serve($0, pairingAllowed: true) } }
+        if let remoteID {
+            dumbpipeID = remoteID
+            if remoteTask == nil {
+                remoteTask = Task { try? await OrbitDumbpipe.shared.accept { await self.serve($0, pairingAllowed: true) } }
+            }
+        } else if dumbpipeID != nil {
+            remoteTask?.cancel(); remoteTask = nil; dumbpipeID = nil
+            try await OrbitDumbpipe.shared.stop()
         }
+        let identity = try transport.identity()
+        let local = await listeners.first?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
+        var codes: [String] = []
+        if let remoteID {
+            codes.append(OrbitPairingCode(deviceID: remoteID, addresses: [.dumbpipe(endpoint: remoteID.bytes.map { String(format: "%02x", $0) }.joined())]).text)
+        }
+        var routes: [OrbitPeerAddress] = []
+        if config.provider == "tailscale", let address = config.address, let route = OrbitPeerAddress(syncthingURL: address) { routes.append(route) }
+        if config.provider == "syncthing", let address = config.relay, let route = OrbitPeerAddress(syncthingURL: address) { routes.append(route) }
+        routes += local
+        if !routes.isEmpty { codes.append(OrbitPairingCode(deviceID: identity, addresses: routes).text) }
+        return codes
     }
     public func pairingCode() async throws -> String {
         let config = await host.configuration
         if let dumbpipeID { return OrbitPairingCode(deviceID: dumbpipeID, addresses: [.dumbpipe(endpoint: dumbpipeID.bytes.map { String(format: "%02x", $0) }.joined())]).text }
-        let routes: [OrbitPeerAddress]
-        if config.provider == "tailscale" || config.provider == "dumbpipe", let address = config.address, let route = OrbitPeerAddress(syncthingURL: address) { routes = [route] }
-        else if config.provider == "syncthing", let address = config.relay, let route = OrbitPeerAddress(syncthingURL: address) { routes = [route] }
-        else if let listener = listeners.first { routes = await listener.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) }
-        else { routes = [] }
-        return OrbitPairingCode(deviceID: try transport.identity(), addresses: routes).text
+        let local = await listeners.first?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
+        let route = (config.provider == "syncthing" ? config.relay : config.address).flatMap(OrbitPeerAddress.init(syncthingURL:))
+        return OrbitPairingCode(deviceID: try transport.identity(), addresses: (config.provider != "local" ? route.map { [$0] } ?? [] : []) + local).text
     }
     private func accept(_ listener: OrbitGoListener, pairingAllowed: Bool = true) async {
         do {
@@ -68,14 +107,14 @@ public final class OrbitServer: @unchecked Sendable {
                 let first = try await CodeInstallFrame.read(from: install)
                 guard first.kind == .reverseProof, first.payload.count <= 4096 else { return }
                 let proof = try JSONDecoder().decode(CodeReverseStreamProof.self, from: first.payload)
-                try await hub.accept(proof, stream: install, peer: peer.device.description)
+                try await hub.accept(proof, stream: install, peer: await host.canonicalPeer(peer.device.description))
                 transferred = true; timer.cancel()
                 // Hub retains the stream until its authenticated flow finishes.
                 return
             }
             guard try await routed.stream.read(exactly: 4) == OrbitRPC.magic else { return }
             let request = try await OrbitRPC.read(from: routed.stream)
-            let response = await host.handle(request, peer: peer.device.description)
+            let response = await host.handle(request, peer: await host.canonicalPeer(peer.device.description))
             try await OrbitRPC.write(response, to: routed.stream)
         } catch { /* Peer gets an EOF; no request contents go to global logs. */ }
     }

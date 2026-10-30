@@ -58,7 +58,7 @@ import UIKit
         }
     }
     private func showRemoteSetup() {
-        let alert = UIAlertController(title: "Build away from home", message: "In Orbit Mac, open Phone & Remote Setup and enable remote connections. Reopen Orbit Mac, create a new connection code, and paste it in this phone’s Mac tab.\n\nKeep your Mac awake with Orbit running. Authorize this phone by cable first so Apple installations can work remotely too.", preferredStyle: .alert)
+        let alert = UIAlertController(title: "Build away from home", message: "In Orbit Mac, open Phone & Remote Setup and enable remote connections. Your saved connection updates automatically while Orbit is open and connected. No new code needed.\n\nKeep your Mac awake with Orbit running. Authorize this phone by cable first so Apple installations can work remotely too.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Open Mac Tab", style: .default) { [weak self] _ in self?.destinationIndex = self?.destinations.firstIndex { $0.tabBarItem.tag == 3 } ?? 0 })
         alert.addAction(UIAlertAction(title: "Later", style: .cancel)); present(alert, animated: true)
     }

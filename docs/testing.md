@@ -433,3 +433,20 @@ passed separately. A read-only home-folder probe found 30 projects, including
 Orbit, in about two seconds. Discovery and trust fixtures use inert temporary
 folders and never access phones. Interactive Mac/iOS picker acceptance, physical
 installation/renewal, public notarization and marketplace listing remain separate.
+
+## Live remote connection setup
+
+`OrbitConnectionTests` covers live activation before configuration persistence,
+activation failure rollback, local/remote transitions, authenticated route exchange,
+per-transport pins, alias ownership and collision rejection, restart persistence,
+revocation, backwards-compatible configuration and Tailscale/relay validation.
+Fixtures use inert addresses and injected listeners; they never contact a phone,
+Apple account, public discovery or a relay service.
+
+Interactive acceptance: in an Xcode-built Mac app, open Phone & Remote Setup,
+enable remote connections and check immediate status/progress. Verify automatic
+route sync on an already paired updated iOS client, offline-phone catch-up, both
+clients restarting, local Wi-Fi fallback, switching back to local-only, and
+Tailscale/private-relay errors. Existing Apple installation authorization must
+survive transport changes. Internet reachability and physical installations need
+separate physical acceptance; unit tests do not establish them.
