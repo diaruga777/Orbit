@@ -97,3 +97,15 @@ public final class CodeBuildCatalog {
         return devices.count == 1 ? devices[0] : nil
     }
 }
+
+extension CodeBuildApp {
+    /// Registration chooses an app first. Keep runnable aliases available in
+    /// Advanced without presenting UI-test schemes as extra apps.
+    public var registrationIdentity: String { project.path + "\u{0}" + name + "\u{0}" + bundleID }
+    public static func registrationChoices(_ apps: [CodeBuildApp]) -> [CodeBuildApp] {
+        let groups = Dictionary(grouping: apps, by: \.registrationIdentity)
+        return groups.values.compactMap { variants in
+            variants.first { $0.project.scheme == $0.name } ?? variants.sorted { $0.project.scheme < $1.project.scheme }.first
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+}

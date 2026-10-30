@@ -274,3 +274,8 @@ account and 144-hour Personal Team cadence. Successful registration merges the
 returned durable target into Apps and selects that tab with a success banner.
 Target-list responses return immediately; legacy icon backfill runs independently
 with the existing five-minute failure throttle.
+
+The Mac app picker groups runnable aliases by project, app name and bundle ID,
+preferring the scheme named after the app. UI-test aliases such as LunaMusicUI
+therefore stay out of the primary app menu while remaining selectable as a Build
+scheme in Advanced. Apps exposed only through a custom scheme remain available.

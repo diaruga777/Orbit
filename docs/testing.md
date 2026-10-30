@@ -471,7 +471,7 @@ marketplace listing was performed.
 ## Mac Add App
 
 `CodeProjectPreviewTests` exercises inert app detection, library/test/extension/
-Mac exclusions, explicit Run aliases, metadata edits, branch defaults and nested
+Mac exclusions, explicit Run aliases, metadata edits, canonical app choices with alternate schemes, branch defaults and nested
 workspace references without Xcode or devices. Catalog tests also reject an
 automatic library scheme whose build settings include an app dependency.
 Desktop acceptance should check cached previews on entry/relaunch, rescan,

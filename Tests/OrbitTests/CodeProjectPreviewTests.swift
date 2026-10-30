@@ -38,6 +38,17 @@ final class CodeProjectPreviewTests: XCTestCase {
         // No Xcode project process, package resolution, script, build or device is needed.
     }
 
+    func testAppPickerPrefersCanonicalSchemeAndKeepsAliasesAvailableForAdvanced() {
+        let app = CodeBuildApp(project: CodeProject(path: "/Apps.xcodeproj", scheme: "Music"), name: "Music", bundleID: "example.music")
+        var uiTests = app; uiTests.project.scheme = "MusicUI"
+        var custom = app; custom.name = "Reader"; custom.bundleID = "example.reader"; custom.project.scheme = "Read Debug"
+        let choices = CodeBuildApp.registrationChoices([uiTests, custom, app])
+        XCTAssertEqual(choices.map(\.project.scheme), ["Music", "Read Debug"])
+        XCTAssertEqual(uiTests.registrationIdentity, app.registrationIdentity)
+        XCTAssertNotEqual(custom.registrationIdentity, app.registrationIdentity)
+        XCTAssertEqual(CodeBuildApp.registrationChoices([uiTests]).first?.project.scheme, "MusicUI", "An alias-only app must remain available")
+    }
+
     func testWorkspaceResolvesNestedProjectReferencesAndInvalidMetadataIsEmpty() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

@@ -37,6 +37,15 @@ import UniformTypeIdentifiers
     private var inspectionRevision = 0
     private let previewURL = OrbitPaths.root.appendingPathComponent("project-previews-v1.json")
     var selectedApps: [CodeBuildApp] { previews[project] ?? [] }
+    var appChoices: [CodeBuildApp] { CodeBuildApp.registrationChoices(selectedApps) }
+    var selectedChoice: String {
+        guard let app = selectedApp else { return "" }
+        return appChoices.first { $0.registrationIdentity == app.registrationIdentity }?.project.scheme ?? ""
+    }
+    var schemeVariants: [CodeBuildApp] {
+        guard let app = selectedApp else { return [] }
+        return selectedApps.filter { $0.registrationIdentity == app.registrationIdentity }
+    }
     var selectedApp: CodeBuildApp? { selectedApps.first { $0.project.scheme == scheme } }
     var canAdd: Bool {
         !adding && !readingSchemes && selectedApp != nil && !project.isEmpty && !phone.isEmpty &&
@@ -180,7 +189,7 @@ import UniformTypeIdentifiers
         let revision = inspectionRevision
         project = path; addError = ""; addedName = ""
         let cached = previews[path] ?? []
-        scheme = cached.first?.project.scheme ?? ""
+        scheme = CodeBuildApp.registrationChoices(cached).first?.project.scheme ?? ""
         branch = cached.first?.branch ?? "main"
         readingSchemes = true
         Task {
@@ -189,7 +198,7 @@ import UniformTypeIdentifiers
                 let rows = try await preview(path)
                 guard revision == inspectionRevision else { return }
                 previews[path] = rows
-                if !rows.contains(where: { $0.project.scheme == scheme }) { scheme = rows.first?.project.scheme ?? "" }
+                if !rows.contains(where: { $0.project.scheme == scheme }) { scheme = CodeBuildApp.registrationChoices(rows).first?.project.scheme ?? "" }
                 branch = rows.first?.branch ?? "main"
                 if !detectedProjects.contains(path) { detectedProjects.insert(path, at: 0) }
                 savePreviews()
@@ -211,7 +220,7 @@ import UniformTypeIdentifiers
                 let result = try await rpc("project_apps", ["project": path, "trust": true])
                 let rows = try JSONDecoder().decode([CodeBuildApp].self, from: JSONSerialization.data(withJSONObject: result))
                 guard revision == inspectionRevision else { return }
-                previews[path] = rows; scheme = rows.first?.project.scheme ?? ""
+                previews[path] = rows; scheme = CodeBuildApp.registrationChoices(rows).first?.project.scheme ?? ""
                 if rows.isEmpty { addError = "Xcode couldn’t find an iPhone app in this project." }
             } catch { if revision == inspectionRevision { addError = error.localizedDescription } }
         }

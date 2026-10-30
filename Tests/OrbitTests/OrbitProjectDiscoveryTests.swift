@@ -9,6 +9,8 @@ final class OrbitProjectDiscoveryTests: XCTestCase {
         let data = await host.handle(Data(#"{"method":"project_apps","params":{"project":"/unused/App.xcodeproj"}}"#.utf8))
         let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         XCTAssertTrue((result?["error"] as? String ?? "").contains("trust"))
+        let download = await host.handle(Data(#"{"method":"repo_prepare","params":{"repository":"demo/App"}}"#.utf8))
+        XCTAssertTrue(((try JSONSerialization.jsonObject(with: download) as? [String: Any])?["error"] as? String ?? "").contains("trust"))
         let denied = await host.handle(Data(#"{"method":"projects_detect"}"#.utf8), peer: "unknown")
         XCTAssertNotNil((try JSONSerialization.jsonObject(with: denied) as? [String: Any])?["error"])
     }

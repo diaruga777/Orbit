@@ -25,6 +25,11 @@ struct OrbitAddAppView: View {
                 phoneSelection
                 DisclosureGroup("Advanced", isExpanded: $advanced) {
                     VStack(alignment: .leading, spacing: 14) {
+                        if model.schemeVariants.count > 1 {
+                            Picker("Build scheme", selection: $model.scheme) {
+                                ForEach(model.schemeVariants, id: \.project.scheme) { Text($0.project.scheme).tag($0.project.scheme) }
+                            }
+                        }
                         TextField("Branch", text: $model.branch)
                         Picker("Signing account", selection: $model.team) {
                             Text("Use project settings").tag("")
@@ -110,10 +115,10 @@ struct OrbitAddAppView: View {
             if !model.selectedApps.isEmpty {
                 HStack(spacing: 14) {
                     OrbitAppThumbnail(data: model.selectedApp?.iconPNG, size: 52)
-                    Picker("App to add", selection: $model.scheme) {
-                        ForEach(model.selectedApps, id: \.project.scheme) { app in
+                    Picker("App to add", selection: Binding(get: { model.selectedChoice }, set: { model.scheme = $0 })) {
+                        ForEach(model.appChoices, id: \.project.scheme) { app in
                             Label {
-                                Text(app.name == app.project.scheme ? app.name : "\(app.name) · \(app.project.scheme)")
+                                Text(app.name)
                             } icon: {
                                 if let data = app.iconPNG, let image = NSImage(data: data) { Image(nsImage: image).resizable().frame(width: 20, height: 20) }
                                 else { Image(systemName: "app") }
