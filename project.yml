@@ -145,6 +145,11 @@ targets:
         INFOPLIST_KEY_OrbitPhoneBundleIdentifier: $(ORBIT_BUNDLE_PREFIX).ios
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: Orbit connects to your phone to build and install your apps.
         ENABLE_APP_SANDBOX: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      - name: Bundle Apple installation and pairing helper
+        script: '"$SRCROOT/scripts/build_apple_adapter.sh" --xcode'
+        basedOnDependencyAnalysis: false
     dependencies:
       - package: Orbit
         product: OrbitHost

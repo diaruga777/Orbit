@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	adapter "orbit/apple-adapter"
 )
@@ -120,23 +121,30 @@ func load(path string) (request, error) {
 
 // Explicit local setup action only; never serialize pairing secrets to stdout.
 func exportPairing(args []string) error {
-	if len(args) != 2 || !filepath.IsAbs(args[1]) {
-		return errors.New("expected a phone UDID and a new absolute output path")
+	return exportPairingWith(args, adapter.ExportMacPairRecord)
+}
+
+func exportPairingWith(args []string, read func(context.Context, string) ([]byte, error)) error {
+	if len(args) != 2 || args[0] == "" || !filepath.IsAbs(args[1]) {
+		return errors.New("Choose your iPhone in Orbit Mac before exporting its pairing file.")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	data, err := adapter.ExportMacPairRecord(ctx, args[0])
+	data, err := read(ctx, args[0])
 	if err != nil {
-		return err
+		return errors.New("This iPhone’s pairing file isn’t available on this Mac. Unlock your iPhone, connect it by cable, and tap Trust, then try again. You don’t need to sign in on iPhone first.")
 	}
 	file, err := os.OpenFile(args[1], os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return err
+		return errors.New("Couldn’t save the pairing file on this Mac. Check access to Orbit’s setup folder and try again.")
 	}
 	defer file.Close()
-	if _, err = file.Write(data); err != nil {
-		os.Remove(args[1])
-		return err
+	if _, err = file.Write(data); err == nil {
+		err = file.Sync()
 	}
-	return file.Sync()
+	if err != nil {
+		os.Remove(args[1])
+		return errors.New("Couldn’t finish saving the pairing file. Try exporting it again.")
+	}
+	return nil
 }

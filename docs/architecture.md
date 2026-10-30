@@ -96,6 +96,15 @@ Tokens rotate on adapter startup; clients must reload connection settings after 
 restart. External hosts may continue using stdio without token management. There
 is no OS-level MCP entitlement or automatic edit of another app’s configuration.
 
+Both the Xcode Mac target and the complete app packager use
+`scripts/build_apple_adapter.sh` to build the Apple helper and include its dependency
+notices. Xcode signs the embedded helper with its resolved app signing identity
+before signing the enclosing app. Pairing export preflights the bundled executable
+before creating private output; missing components explain Mac app repair, while
+missing Apple trust records explain cable/unlock/Trust. Failed or unsafe outputs
+are removed. Export is a local UI action, never an RPC, and requires no prior
+phone sign-in or LocalDevVPN connection.
+
 ## Phone refresh sign-in
 
 The iOS Refresh account flow uses a keyboard-aware scrollable UIKit form sheet,

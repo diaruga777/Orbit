@@ -8,7 +8,11 @@ In the iPhone Refresh tab:
 
 1. Connect to Wi-Fi and install/enable LocalDevVPN.
 2. Import this phone’s pairing plist. The Mac wizard can explicitly export its
-   existing record for manual AirDrop/import. This contains private pairing keys;
+   existing record for manual AirDrop/import. On Mac, choose Export iPhone Pairing
+   File after the phone has trusted that Mac (connect by cable, unlock and tap
+   Trust if needed). No iOS Apple sign-in or LocalDevVPN setup is needed for
+   export. A missing-helper message means the Mac app needs updating/reinstalling.
+   This contains private pairing keys;
    keep it private and delete the exported copy after importing. No pairing key is
    sent through Orbit’s control RPC or agent tools.
 3. Sign in to your Apple Account. Orbit uses SideStore’s public anisette helper

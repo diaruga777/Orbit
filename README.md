@@ -83,7 +83,7 @@ exact polling is not guaranteed. See [widgets](docs/widgets/README.md).
 
 Cache a build in Apps → Cache for Mac-Free Refresh, or cache Orbit itself in the
 Refresh tab. Sign in with your Apple Account (no server address needed), then set up the team, certificate, pairing file and
-LocalDevVPN once; then renew cached installed revisions without the Mac. New code
+LocalDevVPN once; then renew cached installed revisions without the Mac. Export the pairing file in Orbit Mac after your iPhone has trusted that Mac; iOS sign-in and LocalDevVPN aren’t needed for the export. New code
 still needs a Mac build. See [phone refresh](docs/local-refresh.md).
 
 While phone-only refresh setup is unfinished, Orbit asks to allow notifications
@@ -148,7 +148,7 @@ ORBIT_MAC_SIGNING_IDENTITY='EXACT APPLE DEVELOPMENT CERTIFICATE NAME OR SHA-1' \
   ./scripts/build_and_run.sh
 ```
 
-The script builds, signs and installs `~/Applications/Orbit Mac.app`, then opens it. Keep the same certificate, bundle ID and installed path between updates so macOS file-access permissions persist. `--build-only` produces a separate `dist/Orbit Mac.app` for inspection and never replaces the installed app. Xcode's **OrbitMac** scheme also builds the client; use the script for the bundled remote installer.
+The script builds, signs and installs `~/Applications/Orbit Mac.app`, then opens it. Keep the same certificate, bundle ID and installed path between updates so macOS file-access permissions persist. `--build-only` produces a separate `dist/Orbit Mac.app` for inspection and never replaces the installed app. Xcode's **OrbitMac** scheme also bundles the native Apple helper for pairing-file export and remote installation. Use the script for the complete setup/source/plugin resources.
 
 Allow Local Network access on both devices. Grant the Mac app access to source folders when macOS asks. If projects live under Desktop/Documents or other protected locations, access depends on macOS permissions. Move projects to a normal development folder if that is more convenient.
 

@@ -494,3 +494,18 @@ A credential-free request to the default helper’s v3 metadata endpoint succeed
 this does not establish Apple account authentication. No Apple sign-in, physical
 installation/renewal, background acceptance, public notarization or marketplace
 listing was performed.
+
+
+## Mac pairing-file export
+
+`OrbitPairingExportTests` uses inert local executables to check missing/non-runnable
+helpers, missing phone selection, exact selected-phone arguments, independent
+private exports and cleanup after helper/permission failures. Go CLI tests inject
+synthetic readers to check trust recovery, sanitized diagnostics, bounded export,
+0600 creation and refusal to overwrite. No test reads an actual pairing record.
+
+After building each Mac app path, set `ORBIT_TEST_PAIRING_APP` to that bundle and
+run `swift test --filter OrbitPairingExportTests`. This checks the embedded helper’s
+signature, dependency notices and invalid-argument recovery before any daemon
+access. Also verify the enclosing bundle signature. Physical export, manual
+AirDrop/import and LocalDevVPN renewal remain separate acceptance steps.

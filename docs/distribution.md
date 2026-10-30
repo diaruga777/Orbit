@@ -67,8 +67,12 @@ checks Gatekeeper, then signs/notarizes/staples the final DMG. It stops on failu
 Host `dist/Orbit-release.dmg` only after those checks and physical acceptance.
 Signing and notary credentials never enter the repository or DMG.
 
-The Xcode OrbitMac scheme remains useful for development compilation; use the
-packaging/build script for the complete setup/source/helper/plugin resources.
+The Xcode OrbitMac scheme builds and embeds the signed Apple helper and its
+notices too, using the same helper builder as the packaging script. Source builds
+require Go/Python on the Mac; Xcode searches the standard Homebrew paths. Building
+fails with setup guidance if those tools or the resolved signing identity are
+missing. Both active Mac architectures are supported when Xcode builds a universal
+app. Use the packaging/build script for complete setup/source/plugin resources.
 
 The bundled wizard uses Homebrew’s upstream `xcodesorg/made/xcodes` package for
 Xcode installation. It exposes the upstream interactive prompts in Orbit, and

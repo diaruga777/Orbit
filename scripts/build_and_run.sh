@@ -31,8 +31,7 @@ fi
 if [[ "$MODE" == --build-only ]]; then BUNDLE="$ROOT/dist/Orbit Mac.app"; fi
 swift build --product OrbitMacApp
 BUILD="$(swift build --show-bin-path)"
-go -C tools/apple-adapter build -trimpath -o "$BUILD/orbit-apple-adapter" ./cmd/orbit-apple-adapter
-python3 tools/apple-adapter/notices/collect.py "$BUILD/apple-adapter-notices"
+"$ROOT/scripts/build_apple_adapter.sh" "$BUILD/orbit-apple-adapter" "$BUILD/apple-adapter-notices"
 STAGE="$(mktemp -d /tmp/orbit-app.XXXXXX)"; trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/Orbit Mac.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources/AppleAdapterNotices"

@@ -363,6 +363,7 @@
 				EE36EF0558862184B859D14D /* Sources */,
 				AF6ED792692D0C12260D5949 /* Resources */,
 				7DF41E1E955852C8F9604F26 /* Frameworks */,
+				7830D749F559D373F334F93B /* Bundle Apple installation and pairing helper */,
 			);
 			buildRules = (
 			);
@@ -466,6 +467,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		7830D749F559D373F334F93B /* Bundle Apple installation and pairing helper */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Apple installation and pairing helper";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/scripts/build_apple_adapter.sh\" --xcode";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1A83EACBC247740EBC0E6135 /* Sources */ = {
@@ -572,6 +595,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Orbit Mac";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Orbit connects to your phone to build and install your apps.";
@@ -724,6 +748,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Orbit Mac";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Orbit connects to your phone to build and install your apps.";

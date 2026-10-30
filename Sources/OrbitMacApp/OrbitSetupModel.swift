@@ -166,13 +166,10 @@ import OrbitCore
     }
     func exportPairing() {
         perform {
-            let directory = OrbitPaths.root.appendingPathComponent("SetupPairing/" + UUID().uuidString)
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let file = directory.appendingPathComponent("iPhone.mobiledevicepairing")
-            let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter")
-            _ = try await OrbitCommand.run(helper.path, ["--export-pairing", self.state.deviceID, file.path])
+            self.message = "Exporting your iPhone’s pairing file…"
+            let file = try await OrbitPairingExport.export(deviceID: self.state.deviceID, root: OrbitPaths.root)
             NSWorkspace.shared.activateFileViewerSelecting([file])
-            self.message = "AirDrop this file to your iPhone, then import it in Orbit → Refresh → Pairing File. It contains device pairing keys; keep it private and delete the exported copy after importing."
+            self.message = "Pairing file ready. AirDrop it to your iPhone, then open Orbit → Refresh → Pairing File to import it. Keep it private and delete the exported copy afterward."
         }
     }
     func checkConnection(_ model: OrbitMacModel) {
