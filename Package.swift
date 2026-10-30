@@ -17,7 +17,7 @@ let package = Package(
     dependencies: [
         .package(path: "Vendor/DeviceGateway"),
         .package(url: "https://github.com/SideStore/SideSign.git", revision: "752d1ef602aa792a432ffa1e71646dc1ecf7363c"),
-        .package(url: "https://github.com/mahee96/AnisetteKit.git", revision: "db8b41022697b6c19be8a5f01a1ce834145a2a26"),
+        .package(url: "https://github.com/mahee96/AnisetteKit.git", branch: "main"),
         .package(url: "https://github.com/n0-computer/iroh-ffi.git", exact: "1.1.0"),
         .package(url: "https://github.com/simonbs/Runestone.git", exact: "0.5.2"),
         .package(url: "https://github.com/simonbs/TreeSitterLanguages.git", exact: "0.1.9"),
