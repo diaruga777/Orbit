@@ -6,6 +6,11 @@ import OrbitCore
 public enum CodeProjectPreview {
     public static func apps(path: String) -> [CodeBuildApp] {
         let container = URL(fileURLWithPath: path)
+        return projectContainers(path: path).flatMap { preview(project: $0, container: container) }
+            .sorted { $0.project.scheme < $1.project.scheme }
+    }
+    static func projectContainers(path: String) -> [URL] {
+        let container = URL(fileURLWithPath: path)
         let projects: [URL]
         if container.pathExtension == "xcworkspace" {
             let reader = WorkspaceProjects(base: container.deletingLastPathComponent())
@@ -14,7 +19,7 @@ public enum CodeProjectPreview {
             }
             projects = reader.projects
         } else { projects = [container] }
-        return projects.flatMap { preview(project: $0, container: container) }.sorted { $0.project.scheme < $1.project.scheme }
+        return projects
     }
 
     private static func preview(project: URL, container: URL) -> [CodeBuildApp] {

@@ -51,6 +51,11 @@ final class CodeProjectPreviewTests: XCTestCase {
         let rows = CodeProjectPreview.apps(path: workspace.path)
         XCTAssertEqual(rows.map(\.project.scheme), ["Reader"])
         XCTAssertEqual(rows.first?.project.path, workspace.path)
+        let schemes = project.appendingPathComponent("xcshareddata/xcschemes")
+        try FileManager.default.createDirectory(at: schemes, withIntermediateDirectories: true)
+        try Data(#"<Scheme><LaunchAction><BuildableProductRunnable><BuildableReference BlueprintName="Reader"/></BuildableProductRunnable></LaunchAction></Scheme>"#.utf8).write(to: schemes.appendingPathComponent("Reading.xcscheme"))
+        XCTAssertEqual(CodeProjectPreview.apps(path: workspace.path).map(\.project.scheme), ["Reader", "Reading"])
+        XCTAssertEqual(try CodeDeviceSupport.runnableTarget(path: workspace.path, scheme: "Reading"), "Reader")
         try Data("broken".utf8).write(to: project.appendingPathComponent("project.pbxproj"))
         XCTAssertTrue(CodeProjectPreview.apps(path: workspace.path).isEmpty)
     }

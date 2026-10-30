@@ -18,7 +18,7 @@ struct OrbitAddAppView: View {
                 Picker("Source", selection: Binding(get: { model.addSource }, set: { model.changeSource($0) })) {
                     Text("On This Mac").tag("local")
                     Text("GitHub").tag("github")
-                }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 320)
+                }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 320).disabled(model.downloading || model.inspectingRepository)
 
                 if model.addSource == "local" { localProjects } else { githubProjects }
                 if !model.project.isEmpty { appSelection }
@@ -122,7 +122,8 @@ struct OrbitAddAppView: View {
                     }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else if !model.readingSchemes {
-                Text("No iPhone apps found in this project. Try another project or workspace.").foregroundStyle(.secondary)
+                Text("No iPhone apps in the preview. Some projects need Xcode to read their settings.").foregroundStyle(.secondary)
+                Button("Check with Xcode…", action: model.inspectWithXcode)
             }
         }
     }

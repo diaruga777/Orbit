@@ -39,7 +39,7 @@ import UniformTypeIdentifiers
     var selectedApps: [CodeBuildApp] { previews[project] ?? [] }
     var selectedApp: CodeBuildApp? { selectedApps.first { $0.project.scheme == scheme } }
     var canAdd: Bool {
-        !adding && !readingSchemes && !scheme.isEmpty && !project.isEmpty && !phone.isEmpty &&
+        !adding && !readingSchemes && selectedApp != nil && !project.isEmpty && !phone.isEmpty &&
         (Int(hours).map { (1...(personal ? 144 : 8760)).contains($0) } ?? false) && !branch.trimmingCharacters(in: .whitespaces).isEmpty
     }
     @Published var detecting = false
@@ -142,11 +142,14 @@ import UniformTypeIdentifiers
             detectedProjects = Array(Set(paths + (project.isEmpty ? [] : [project]))).sorted()
             for path in detectedProjects {
                 let rows = try await preview(path)
-                previews[path] = rows
+                if !(project == path && readingSchemes) { previews[path] = rows }
             }
             let cache = previews.filter { detectedProjects.contains($0.key) }
             if let data = try? JSONEncoder().encode(cache) { try? data.write(to: previewURL, options: .atomic) }
         } catch { addError = error.localizedDescription }
+    }
+    private func savePreviews() {
+        if let data = try? JSONEncoder().encode(previews) { try? data.write(to: previewURL, options: .atomic) }
     }
     private func preview(_ path: String) async throws -> [CodeBuildApp] {
         let rows = try await rpc("project_preview", ["project": path])
@@ -188,10 +191,33 @@ import UniformTypeIdentifiers
                 previews[path] = rows
                 if !rows.contains(where: { $0.project.scheme == scheme }) { scheme = rows.first?.project.scheme ?? "" }
                 branch = rows.first?.branch ?? "main"
+                if !detectedProjects.contains(path) { detectedProjects.insert(path, at: 0) }
+                savePreviews()
+            } catch { if revision == inspectionRevision { addError = error.localizedDescription } }
+        }
+    }
+    func inspectWithXcode() {
+        guard !project.isEmpty, !readingSchemes else { return }
+        let alert = NSAlert(); alert.messageText = "Read app details with Xcode?"
+        alert.informativeText = "This project needs Xcode to read its settings. Xcode can run project code, so only continue with source you trust."
+        alert.addButton(withTitle: "Trust and Read"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        inspectionRevision += 1
+        let revision = inspectionRevision, path = project
+        readingSchemes = true; addError = ""
+        Task {
+            defer { if revision == inspectionRevision { readingSchemes = false } }
+            do {
+                let result = try await rpc("project_apps", ["project": path, "trust": true])
+                let rows = try JSONDecoder().decode([CodeBuildApp].self, from: JSONSerialization.data(withJSONObject: result))
+                guard revision == inspectionRevision else { return }
+                previews[path] = rows; scheme = rows.first?.project.scheme ?? ""
+                if rows.isEmpty { addError = "Xcode couldn’t find an iPhone app in this project." }
             } catch { if revision == inspectionRevision { addError = error.localizedDescription } }
         }
     }
     func changeSource(_ source: String) {
+        guard !downloading, !inspectingRepository else { return }
         inspectionRevision += 1; readingSchemes = false
         addSource = source; project = ""; scheme = ""; addError = ""
     }
