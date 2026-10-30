@@ -71,8 +71,9 @@ The Xcode OrbitMac scheme builds and embeds the signed Apple helper and its
 notices too, using the same helper builder as the packaging script. Source builds
 require Go/Python on the Mac; Xcode searches the standard Homebrew paths. Building
 fails with setup guidance if those tools or the resolved signing identity are
-missing. Both active Mac architectures are supported when Xcode builds a universal
-app. Use the packaging/build script for complete setup/source/plugin resources.
+missing. The helper builder follows Xcode’s architecture selection; complete
+client architecture support also depends on the pinned native libraries. Use the
+packaging/build script for complete setup/source/plugin resources.
 
 The bundled wizard uses Homebrew’s upstream `xcodesorg/made/xcodes` package for
 Xcode installation. It exposes the upstream interactive prompts in Orbit, and

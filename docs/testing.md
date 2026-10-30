@@ -511,3 +511,17 @@ run `swift test --filter OrbitPairingExportTests`. This checks the embedded help
 signature, dependency notices and invalid-argument recovery before any daemon
 access. Also verify the enclosing bundle signature. Physical export, manual
 AirDrop/import and LocalDevVPN renewal remain separate acceptance steps.
+
+Pairing-export verification (2026-10-30): bootstrap generated the native transport
+in a detached committed checkout. All 184 Swift tests passed (five optional
+fixtures skipped), plus 17 Python MCP tests, both Go race suites and helper vet.
+The final iOS Simulator client, native arm64 Xcode Mac client and complete Mac
+package built using the ignored local signing configuration. The helper and
+whole bundle passed strict signature verification in both Mac build paths;
+optional bundled-helper tests passed for both, and packaged source extraction/
+resume passed. Removing the transport framework’s nonstandard root Info.plist
+symlink fixed its strict embedded-signature check. An initial universal Mac link
+failed on unresolved x86_64 iroh symbols; native arm64 validation passed. Synthetic
+helper calls use invalid arguments or injected readers, never real pairing data.
+No physical phone export/import, Apple sign-in, installation/renewal, public
+notarization or marketplace acceptance is established by these checks.
