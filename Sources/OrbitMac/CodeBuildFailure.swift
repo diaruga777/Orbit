@@ -15,7 +15,7 @@ enum CodeBuildFailure {
         try? handle.seek(toOffset: 0)
         var data = (try? handle.read(upToCount: Int(min(size, limit)))) ?? Data()
         if size > limit {
-            try? handle.seek(toOffset: max(limit, size > limit * 2 ? size - limit : limit))
+            try? handle.seek(toOffset: size > limit * 2 ? size - limit : limit)
             data.append(10)
             data.append((try? handle.read(upToCount: Int(limit))) ?? Data())
         }
@@ -23,8 +23,7 @@ enum CodeBuildFailure {
     }
 
     static func message(output: String) -> String {
-        let text = output.lowercased()
-        let errors = text.components(separatedBy: .newlines).filter { $0.contains("error:") }
+        let errors = output.lowercased().components(separatedBy: .newlines).filter { $0.contains("error:") }
         let profileMismatch = errors.contains {
             $0.contains("provisioning profile") &&
             ($0.contains("doesn't include") || $0.contains("does not include") || $0.contains("doesn't support"))
@@ -32,7 +31,7 @@ enum CodeBuildFailure {
         let accountFailure = errors.contains {
             $0.contains("no accounts") || $0.contains("no account for team") ||
             $0.contains("authentication credentials") || $0.contains("session has expired")
-        } || (profileMismatch && text.contains("missing xcode-token"))
+        }
         var messages: [String] = []
         if accountFailure {
             messages.append("Xcode couldn’t use your signing account. On your Mac, open Xcode → Settings → Accounts and sign in again, then retry.")

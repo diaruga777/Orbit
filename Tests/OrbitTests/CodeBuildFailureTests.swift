@@ -23,7 +23,7 @@ final class CodeBuildFailureTests: XCTestCase {
         let capability = CodeBuildFailure.message(output: capabilityError)
         XCTAssertTrue(capability.contains("Time Sensitive Notifications"))
         XCTAssertFalse(capability.contains("sign in again"))
-        XCTAssertTrue(CodeBuildFailure.message(output: warning + "\n" + capabilityError).contains("sign in again"))
+        XCTAssertFalse(CodeBuildFailure.message(output: warning + "\n" + capabilityError).contains("sign in again"))
     }
 
     func testUnrelatedAccountWarningDoesNotHideCompilerFailure() {
@@ -46,9 +46,9 @@ final class CodeBuildFailureTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: file) }
         var data = Data((warning + "\n").utf8)
         data.append(Data(repeating: 120, count: 2 * 1024 * 1024))
-        data.append(Data(("\n" + capabilityError).utf8))
+        data.append(Data(("\n" + accountError + "\n" + capabilityError).utf8))
         try data.write(to: file)
-        XCTAssertEqual(CodeBuildFailure.message(log: file), CodeBuildFailure.message(output: warning + "\n" + capabilityError))
+        XCTAssertEqual(CodeBuildFailure.message(log: file), CodeBuildFailure.message(output: warning + "\n" + accountError + "\n" + capabilityError))
         try FileManager.default.removeItem(at: file)
         XCTAssertEqual(CodeBuildFailure.message(log: file), CodeBuildFailure.fallback)
     }
