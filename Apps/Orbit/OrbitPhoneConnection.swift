@@ -107,7 +107,8 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                 do {
                     try await prepare(route)
                     let stream = try await transport.dial(route, expecting: code.deviceID)
-                    _ = try await OrbitRPC.exchange(payload, stream: stream)
+                    let response = try JSONSerialization.jsonObject(with: await OrbitRPC.exchange(payload, stream: stream, timeout: 5)) as? [String: Any]
+                    if let error = response?["error"] as? String { throw CodeFailure(error) }
                     return (code, route)
                 } catch { last = error }
             }

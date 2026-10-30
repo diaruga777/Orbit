@@ -88,13 +88,14 @@ final class OrbitConnectionTests: XCTestCase {
         let phone = try identity(1), mac = try identity(2)
         let code = OrbitPairingCode(deviceID: mac, addresses: [.tcp(host: "192.168.1.2", port: 49210)]).text
         let routes = OrbitConnectionRoutes(provider: "local", pairingCodes: [code], accountPeerID: phone.description)
-        let exchange = RouteExchange(routes: [routes, routes])
+        let exchange = RouteExchange(routes: [routes, routes, routes])
         let sync = OrbitRouteSync()
         try await sync.synchronize(request: { try await exchange.request($0) }, identity: { _ in phone }, save: { await exchange.save($0) })
         let saved = await exchange.saved
         XCTAssertEqual(saved, routes)
         let enrolled = await exchange.enrolled
         XCTAssertEqual(enrolled, phone.description)
+        let acknowledged = await exchange.acknowledged; XCTAssertTrue(acknowledged)
         var changed = routes; changed.accountPeerID = mac.description
         let raced = RouteExchange(routes: [routes, changed])
         do {
@@ -126,10 +127,15 @@ private actor RouteExchange {
     var routes: [OrbitConnectionRoutes]
     var saved: OrbitConnectionRoutes?
     var enrolled: String?
+    var acknowledged = false
     init(routes: [OrbitConnectionRoutes]) { self.routes = routes }
     func request(_ params: [String: Any]) throws -> OrbitConnectionRoutes {
         guard !routes.isEmpty else { throw CodeFailure("Disconnected") }
-        if !params.isEmpty { enrolled = params["transportPeerID"] as? String }
+        if let identity = params["transportPeerID"] as? String { enrolled = identity }
+        if params["receivedCodes"] != nil {
+            guard saved != nil else { throw CodeFailure("Phone acknowledged before saving") }
+            acknowledged = true
+        }
         return routes.removeFirst()
     }
     func save(_ value: OrbitConnectionRoutes) { saved = value }

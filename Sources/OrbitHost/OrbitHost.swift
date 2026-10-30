@@ -219,7 +219,7 @@ public actor OrbitHost {
                 guard alias == peer || (!configuration.trustedPeers.contains(alias) && (configuration.peerAliases?[alias] == nil || configuration.peerAliases?[alias] == peer)) else {
                     throw CodeFailure("That connection belongs to another paired phone.")
                 }
-                if alias != peer {
+                if alias != peer, configuration.peerAliases?[alias] != peer {
                     var aliases = configuration.peerAliases ?? [:]
                     guard aliases.filter({ $0.value == peer }).count < 4 || aliases[alias] != nil else { throw CodeFailure("Too many phone transport identities.") }
                     aliases[alias] = peer
@@ -244,7 +244,6 @@ public actor OrbitHost {
             let previous = configuration
             let codes = try await applyConnections(next)
             // An actor can receive phone syncs while the listener starts. Preserve trust changes.
-            next.trustedPeers = configuration.trustedPeers; next.peerAliases = configuration.peerAliases
             configuration.provider = next.provider; configuration.address = next.address; configuration.relay = next.relay
             do { try saveConfiguration() }
             catch {

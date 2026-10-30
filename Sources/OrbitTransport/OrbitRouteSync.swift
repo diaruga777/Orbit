@@ -17,12 +17,14 @@ public actor OrbitRouteSync {
         let proposed = try await request([:])
         _ = try proposed.validated()
         let local = try await identity(proposed.provider)
-        let confirmed = try await request(["receivedCodes": proposed.pairingCodes, "transportPeerID": local.description])
+        let confirmed = try await request(["transportPeerID": local.description])
         _ = try confirmed.validated()
         guard confirmed.accountPeerID == proposed.accountPeerID, confirmed.provider == proposed.provider,
               confirmed.pairingCodes == proposed.pairingCodes else {
             throw CodeFailure("Connection settings changed. They’ll sync on the next connection.")
         }
         try await save(confirmed)
+        // Public progress reflects a persisted phone snapshot, not just a delivered proposal.
+        _ = try? await request(["receivedCodes": confirmed.pairingCodes])
     }
 }
