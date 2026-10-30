@@ -16,8 +16,8 @@ final class CodeReverseFlowTests: XCTestCase {
     private func sign(_ data: Data, key: P256.Signing.PrivateKey) throws -> Data {
         try key.signature(for: Data("orbit-install-endpoint-v1\u{0}".utf8) + data).derRepresentation
     }
-    private func ready(_ hub: CodeReverseFlowHub, key: P256.Signing.PrivateKey, binding: CodeEndpointBinding, generation: String = "g") async throws -> CodeReverseReadiness {
-        var control = CodeReverseControl(); control.bindingID = binding.id; control.generation = generation
+    private func ready(_ hub: CodeReverseFlowHub, key: P256.Signing.PrivateKey, binding: CodeEndpointBinding, generation: String = "g", provider: CodeInstallProvider = .local) async throws -> CodeReverseReadiness {
+        var control = CodeReverseControl(); control.bindingID = binding.id; control.generation = generation; control.provider = provider
         let bytes = try await hub.begin(control, peer: "account")
         control.sessionID = try JSONDecoder().decode(CodeReverseChallenge.self, from: bytes).id; control.signature = try sign(bytes, key: key)
         return try await hub.finish(control, peer: "account")
@@ -31,8 +31,9 @@ final class CodeReverseFlowTests: XCTestCase {
         }
         throw CodeFailure("No demand")
     }
-    func testFreshPhysicalKeyProofForwardsOpaqueBytesWithHalfCloseAndRejectsReplay() async throws {
-        let (hub, key, binding) = fixture(); let ready = try await ready(hub, key: key, binding: binding)
+    func testDumbpipePhysicalKeyProofForwardsOpaqueBytesWithHalfCloseAndRejectsReplay() async throws {
+        let (hub, key, binding) = fixture(); let ready = try await ready(hub, key: key, binding: binding, provider: .dumbpipe)
+        XCTAssertEqual(ready.provider, .dumbpipe)
         let pending = Task { try await hub.open(readiness: ready, service: .afc, port: 32100) }
         let demand = try await demand(hub, ready: ready)
         let (mac, phone) = ReverseTestStream.pair(); let echo = ReverseEchoSocket()

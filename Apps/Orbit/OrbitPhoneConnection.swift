@@ -23,32 +23,41 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         return try JSONSerialization.data(withJSONObject: await rpc("code", object))
     }
     func offerInstallWindow(seconds: Int) async {
-        guard !pairingCode.isEmpty else { return }
-        do {
+        let deadline = Date().addingTimeInterval(Double(seconds))
+        while !Task.isCancelled, Date() < deadline, !pairingCode.isEmpty {
             await syncRoutes()
-            // Resolve the available route before offering Apple streams. Keep the original account pin.
-            let (code, route) = try await reachableRoute()
-            let account = savedRoutes?.accountPeerID ?? localID
-            let provider: CodeInstallProvider
-            if case .dumbpipe = route { provider = .dumbpipe }
-            else if case .relay = route { provider = .syncthing }
-            else { provider = .local }
-            if case .dumbpipe = route { _ = try await OrbitDumbpipe.shared.start(secretURL: Self.root.appendingPathComponent("Identity/iroh.key")) }
-            let local = provider == .dumbpipe ? try await OrbitDumbpipe.shared.start() : try transport.identity()
-            let runtime = CodePhoneReverseRuntime(client: client,
-                identity: try CodeInstallEndpointIdentity(service: (Bundle.main.bundleIdentifier ?? "org.example.orbit.ios") + ".installation"),
-                accountPeerID: account.isEmpty ? local.description : account, macPeerID: peerID,
-                generation: peerID, provider: provider, dial: { [transport] in
-                    OrbitInstallStream(authenticatedStream: try await transport.dial(route, expecting: code.deviceID))
-                }, available: { try Task.checkCancellation() }, open: { service, port in
-                    try await OrbitLocalAppleServices.openVerifiedService(service, port: port, interfaces: ["en0", "en1"])
-                })
-            guard await forwarding.begin(runtime) else { return }
+            let snapshot = savedRoutes
+            let generation = peerID
             do {
-                if try await runtime.start() { try await Task.sleep(for: .seconds(seconds)) }
+                let (_, route) = try await reachableRoute()
+                let account = snapshot?.accountPeerID ?? localID
+                let provider: CodeInstallProvider
+                if case .dumbpipe = route { provider = .dumbpipe }
+                else if case .relay = route { provider = .syncthing }
+                else { provider = .local }
+                let local = provider == .dumbpipe ? try await OrbitDumbpipe.shared.start() : try transport.identity()
+                let runtime = CodePhoneReverseRuntime(client: client,
+                    identity: try CodeInstallEndpointIdentity(service: (Bundle.main.bundleIdentifier ?? "org.example.orbit.ios") + ".installation"),
+                    accountPeerID: account.isEmpty ? local.description : account, macPeerID: generation,
+                    generation: generation, provider: provider, dial: { [self] in
+                        // Every Apple stream uses the currently reachable, independently pinned route.
+                        let (code, route) = try await reachableRoute()
+                        return OrbitInstallStream(authenticatedStream: try await transport.dial(route, expecting: code.deviceID))
+                    }, available: { try Task.checkCancellation() }, open: { service, port in
+                        try await OrbitLocalAppleServices.openVerifiedService(service, port: port, interfaces: ["en0", "en1"])
+                    })
+                guard await forwarding.begin(runtime) else { return }
+                do {
+                    if try await runtime.start() {
+                        while !Task.isCancelled, Date() < deadline, snapshot == savedRoutes, generation == peerID, await runtime.isActive {
+                            try await Task.sleep(for: .seconds(2))
+                        }
+                    }
+                } catch { }
+                await runtime.stop(); await forwarding.end(runtime)
             } catch { }
-            await runtime.stop(); await forwarding.end(runtime)
-        } catch { }
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+        }
     }
     func prepareIdentity() async throws {
         let code = try OrbitPairingCode(string: pairingCode)
@@ -124,4 +133,9 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         }
         throw last
     }
+}
+private actor OrbitPhoneForwarding {
+    private var active: CodePhoneReverseRuntime?
+    func begin(_ value: CodePhoneReverseRuntime) -> Bool { guard active == nil else { return false }; active = value; return true }
+    func end(_ value: CodePhoneReverseRuntime) { if active === value { active = nil } }
 }

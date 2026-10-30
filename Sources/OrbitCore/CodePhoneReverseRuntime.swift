@@ -27,6 +27,7 @@ public actor CodePhoneReverseRuntime {
         self.client = client; self.identity = identity; account = accountPeerID; mac = macPeerID
         self.generation = generation; self.provider = provider; self.dial = dial; self.available = available; self.open = open; self.record = record
     }
+    public var isActive: Bool { readiness != nil && !stopped }
     @discardableResult public func start() async throws -> Bool {
         guard !stopped, readiness == nil else { throw CodeFailure("Phone readiness already started or ended.") }
         try await available()

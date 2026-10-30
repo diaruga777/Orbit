@@ -51,6 +51,8 @@ Phone snapshots persist separately from the original pairing and sync on activat
 and every ten seconds while active. Offline phones retain their last authenticated
 snapshot until reachable again; updated routes replace retired routes after sync.
 No new trust window or public identity lookup substitutes for authentication.
+Phone forwarding renews readiness after snapshot changes or expired leases and
+resolves the current pinned route for each separate Apple stream, including iroh.
 
 `OrbitToolInstaller` runs the upstream Homebrew/xcodes installer through a private
 pseudo-terminal inside the wizard. It installs missing full Xcode and Python,

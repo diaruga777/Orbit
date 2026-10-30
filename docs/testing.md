@@ -438,7 +438,7 @@ installation/renewal, public notarization and marketplace listing remain separat
 
 `OrbitConnectionTests` covers live activation before configuration persistence,
 activation failure rollback, local/remote transitions, authenticated route exchange,
-per-transport pins, alias ownership and collision rejection, restart persistence,
+per-transport pins, confirmed phone enrollment before persistence, alias ownership and collision rejection, restart persistence,
 revocation, backwards-compatible configuration and Tailscale/relay validation.
 Fixtures use inert addresses and injected listeners; they never contact a phone,
 Apple account, public discovery or a relay service.
@@ -449,4 +449,7 @@ route sync on an already paired updated iOS client, offline-phone catch-up, both
 clients restarting, local Wi-Fi fallback, switching back to local-only, and
 Tailscale/private-relay errors. Existing Apple installation authorization must
 survive transport changes. Internet reachability and physical installations need
-separate physical acceptance; unit tests do not establish them.
+separate physical acceptance; unit tests do not establish them. The synthetic
+reverse-flow byte/half-close/replay check also covers iroh readiness. Active phone
+forwarding restarts when route snapshots change and resolves the current pinned
+route for each Apple stream.

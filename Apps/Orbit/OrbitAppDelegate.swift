@@ -284,8 +284,3 @@ import OrbitWire
     func message(_ text: String) { let alert = UIAlertController(title: "Orbit", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true) }
 }
 
-private actor OrbitPhoneForwarding {
-    private var active: CodePhoneReverseRuntime?
-    func begin(_ value: CodePhoneReverseRuntime) -> Bool { guard active == nil else { return false }; active = value; return true }
-    func end(_ value: CodePhoneReverseRuntime) { if active === value { active = nil } }
-}

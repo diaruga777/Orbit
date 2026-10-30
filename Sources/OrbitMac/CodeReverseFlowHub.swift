@@ -26,7 +26,7 @@ public actor CodeReverseFlowHub {
         let version = revision
         let binding = try await lookup(control.bindingID, peer)
         guard version == revision, !control.generation.isEmpty, control.generation.count <= 128,
-              [.local, .tailscale, .syncthing].contains(control.provider), challenges.count < 8 else { throw CodeFailure("Phone readiness is unavailable or changed.") }
+              [.local, .tailscale, .syncthing, .dumbpipe].contains(control.provider), challenges.count < 8 else { throw CodeFailure("Phone readiness is unavailable or changed.") }
         let id = UUID().uuidString
         let bytes = try JSONEncoder().encode(CodeReverseChallenge(purpose: "readiness", id: id, accountPeerID: peer, bindingID: binding.id, deviceID: binding.deviceID, generation: control.generation))
         challenges[id] = PendingReady(binding: binding, peer: peer, generation: control.generation, provider: control.provider, bytes: bytes, deadline: uptime() + 30)
