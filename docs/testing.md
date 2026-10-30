@@ -453,3 +453,16 @@ separate physical acceptance; unit tests do not establish them. The synthetic
 reverse-flow byte/half-close/replay check also covers iroh readiness. Active phone
 forwarding restarts when route snapshots change and resolves the current pinned
 route for each Apple stream.
+
+Remote-setup verification (2026-10-30): bootstrap ran in a detached committed
+checkout. All 177 Swift tests passed (four optional fixtures skipped), plus
+17 Python MCP tests, both Go race suites and helper vet. Both Xcode client builds
+passed using the ignored local signing configuration. The complete Mac review
+bundle retained the running app’s signing certificate and passed signature and
+packaged phone-source extraction/resume checks. Its isolated running service
+switched local → iroh → local twice without restarting; each activation returned
+ready status. The normal app and its state were left intact. Inert captures of
+the actual Mac setup views covered local, iroh, Tailscale, private relay and
+startup-error layouts with connection options expanded. No physical phone,
+Apple sign-in, away-from-home handoff/install acceptance, public notarization or
+marketplace listing was performed.
