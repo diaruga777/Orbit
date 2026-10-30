@@ -188,7 +188,16 @@ You can build/install through Xcode's native USB or Wi-Fi connection without an 
 
 Start with a project you trust. Xcode projects, package plugins and build phases can execute code on your Mac. A GitHub compatibility check finds an Xcode project before cloning; it is not a security review or a promise that an arbitrary repository will compile.
 
-In either client, use **Apps / Add App**. Orbit automatically finds `.xcodeproj` and `.xcworkspace` projects on your Mac. Pick a detected project, approve reading its source, then choose a runnable iOS app scheme. The iOS client shows the same Mac discovery list. On Mac, **Choose Project…** opens the system file picker for projects elsewhere. You can also browse GitHub, select a repository, and inspect its Xcode project paths. Choose a runnable iOS app scheme, the phone, branch and signing team. Shared schemes make setup reproducible. Library-only Swift packages, Android/web projects and repositories requiring unrun project generators do not qualify until they contain a working Xcode app project.
+In the Mac client, **Add App** opens **On This Mac** or **GitHub**. Project
+previews load from a saved cache immediately and update in the background without
+opening Xcode. Pick an app (with its icon) and a phone by name; the last used or
+setup phone is selected for you. **Advanced** holds branch, signing account and
+refresh settings, with free Personal Team refreshes defaulting to six days.
+Adding asks you to trust the source before Xcode validates it, then opens Apps
+with a confirmation and the new app ready to build. GitHub projects download
+before app selection; download and validation progress stay visible.
+
+On iOS, use **Apps / Add App**. Orbit automatically finds `.xcodeproj` and `.xcworkspace` projects on your Mac. Pick a detected project, approve reading its source, then choose a runnable iOS app scheme. The iOS client shows the same Mac discovery list. On Mac, **Choose Project…** opens the system file picker for projects elsewhere. You can also browse GitHub, select a repository, and inspect its Xcode project paths. Choose a runnable iOS app scheme, the phone, branch and signing team. Shared schemes make setup reproducible. Library-only Swift packages, Android/web projects and repositories requiring unrun project generators do not qualify until they contain a working Xcode app project.
 
 The CLI and MCP expose the same catalog:
 

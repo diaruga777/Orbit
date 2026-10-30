@@ -466,3 +466,17 @@ the actual Mac setup views covered local, iroh, Tailscale, private relay and
 startup-error layouts with connection options expanded. No physical phone,
 Apple sign-in, away-from-home handoff/install acceptance, public notarization or
 marketplace listing was performed.
+
+
+## Mac Add App
+
+`CodeProjectPreviewTests` exercises inert app detection, library/test/extension/
+Mac exclusions, explicit Run aliases, metadata edits, branch defaults and nested
+workspace references without Xcode or devices. Catalog tests also reject an
+automatic library scheme whose build settings include an app dependency.
+Desktop acceptance should check cached previews on entry/relaunch, rescan,
+project switching during preview reads, icons in the app menu, local/GitHub tabs,
+phone names/defaults/offline state, collapsed Advanced settings, validation
+progress/errors, and successful/duplicate adds appearing immediately in Apps.
+A success banner means registration only; physical installation and provisioning
+lifetime remain separate acceptance.

@@ -24,6 +24,7 @@ public actor OrbitHost {
     public private(set) var service: CodeService
     private let scripts = OrbitScriptLibrary()
     private var targets: [OrbitTarget]
+    private var updatingIcons = false
     private var iconLookups: [String: Date] = [:]
     public private(set) var configuration: OrbitConfiguration
     public private(set) var pairingUntil = Date.distantPast
@@ -86,6 +87,11 @@ public actor OrbitHost {
         case "projects_detect":
             let roots = configuration.allowedRoots.map { URL(fileURLWithPath: $0) } + [FileManager.default.homeDirectoryForCurrentUser]
             return await Task.detached { OrbitProjectDiscovery.scan(roots: roots) }.value
+        case "project_preview":
+            let path = try required(p, "project")
+            guard path.hasPrefix("/"), ["xcodeproj", "xcworkspace"].contains(URL(fileURLWithPath: path).pathExtension) else { throw CodeFailure("Choose an Xcode project or workspace.") }
+            let apps = await Task.detached { CodeProjectPreview.apps(path: path) }.value
+            return try object(apps)
         case "project_apps":
             guard p["trust"] as? Bool == true else { throw CodeFailure("Only inspect source you trust. Xcode can run project code on your Mac.") }
             let path = try required(p, "project")
@@ -93,9 +99,15 @@ public actor OrbitHost {
             return try object(await decoded(CodeRequest(.apps, path: path)).apps ?? [])
         case "browse": return try browse(p)
         case "targets":
-            await populateMissingTargetIcons { project in
-                var request = CodeRequest(.apps, path: project.path); request.project = project
-                return try await self.decoded(request).apps ?? []
+            if !updatingIcons {
+                updatingIcons = true
+                Task {
+                    await populateMissingTargetIcons { project in
+                        var request = CodeRequest(.apps, path: project.path); request.project = project
+                        return try await self.decoded(request).apps ?? []
+                    }
+                    updatingIcons = false
+                }
             }
             return try object(targets)
         case "applet_prompt": return ["prompt": OrbitAppletPrompt.text, "blank": OrbitAppletExport.blank]
@@ -206,6 +218,7 @@ public actor OrbitHost {
             return try JSONSerialization.jsonObject(with: await service.handle(JSONEncoder().encode(request)))
         case "repo_search": return try await OrbitGitHub.search(try required(p, "query"))
         case "repo_inspect": return try await OrbitGitHub.inspect(try required(p, "repository"))
+        case "repo_prepare": return try await prepareRepository(p)
         case "repo_add": return try await importRepository(p)
         case "connection_status":
             return ["provider": configuration.provider, "ready": !connectionCodes.isEmpty && connectionError == nil,
@@ -419,22 +432,35 @@ public actor OrbitHost {
             ["path": url.path, "name": url.lastPathComponent, "directory": try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false] as [String: Any]
         }, "next": offset + 100 < entries.count ? offset + 100 as Any : NSNull()]
     }
-    private func importRepository(_ p: [String: Any]) async throws -> Any {
-        guard p["trust"] as? Bool == true else { throw CodeFailure("Review this repository, then add with trust=true.") }
+    private func prepareRepository(_ p: [String: Any]) async throws -> [String: Any] {
+        guard p["trust"] as? Bool == true else { throw CodeFailure("Review this repository, then download with trust=true.") }
         let name = try OrbitGitHub.repository(required(p, "repository"))
         let inspection = try await OrbitGitHub.inspect(name)
         guard inspection["compatible"] as? Bool == true else { throw CodeFailure("No Xcode project was found in this repository.") }
         let projectsRoot = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent("Repositories")
         let folder = projectsRoot.appendingPathComponent(name.replacingOccurrences(of: "/", with: "--"))
-        guard !FileManager.default.fileExists(atPath: folder.path) else { throw CodeFailure("This repository is already cloned. Add a local target from \(folder.path).") }
-        try FileManager.default.createDirectory(at: folder.deletingLastPathComponent(), withIntermediateDirectories: true)
         let branch = p["branch"] as? String ?? inspection["defaultBranch"] as? String ?? "main"
-        _ = try await OrbitCommand.run("/usr/bin/git", ["clone", "--single-branch", "--branch", branch, "--", "https://github.com/" + name + ".git", folder.path])
-        var input = p
+        if FileManager.default.fileExists(atPath: folder.path) {
+            let remote = try await OrbitCommand.run("/usr/bin/git", ["remote", "get-url", "origin"], directory: folder)
+            guard String(decoding: remote, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) == "https://github.com/" + name + ".git" else {
+                throw CodeFailure("Another project already uses this folder. Choose it from On This Mac instead.")
+            }
+        } else {
+            try FileManager.default.createDirectory(at: folder.deletingLastPathComponent(), withIntermediateDirectories: true)
+            _ = try await OrbitCommand.run("/usr/bin/git", ["clone", "--single-branch", "--branch", branch, "--", "https://github.com/" + name + ".git", folder.path])
+        }
         let projects = inspection["projects"] as? [String] ?? []
+        let paths = projects.map { folder.appendingPathComponent($0).standardizedFileURL }.filter { $0.path.hasPrefix(folder.path + "/") }
+        return ["repository": name, "branch": branch, "projects": paths.map(\.path)]
+    }
+    private func importRepository(_ p: [String: Any]) async throws -> Any {
+        let prepared = try await prepareRepository(p)
+        let projects = prepared["projects"] as? [String] ?? []
         let selected = p["project"] as? String ?? (projects.count == 1 ? projects[0] : "")
-        guard !selected.isEmpty, projects.contains(selected) else { throw CodeFailure("Repository cloned at \(folder.path). Choose one of its projects: \(projects.joined(separator: ", "))") }
-        input["project"] = folder.appendingPathComponent(selected).path; input["branch"] = branch
+        guard let path = projects.first(where: { $0 == selected || $0.hasSuffix("/" + selected) }), !selected.isEmpty else {
+            throw CodeFailure("Choose one of the downloaded Xcode projects.")
+        }
+        var input = p; input["project"] = path; input["branch"] = prepared["branch"]
         return try await add(input)
     }
 }

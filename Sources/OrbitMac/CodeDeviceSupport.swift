@@ -46,7 +46,7 @@ enum CodeDeviceSupport {
         if let target = try runnableTarget(path: project.path, scheme: project.scheme) {
             return settings.first { $0["TARGET_NAME"] == target }
         }
-        return settings.first
+        return settings.first { $0["TARGET_NAME"] == project.scheme }
     }
     static func apps(path: String, scheme selectedScheme: String? = nil, root: URL) async throws -> [CodeBuildApp] {
         var apps: [CodeBuildApp] = []

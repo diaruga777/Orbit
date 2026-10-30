@@ -257,3 +257,20 @@ Refresh setup on iOS presents the next incomplete step with numbered progress. S
 ## Local project discovery
 
 Host `projects_detect` scans configured project roots and the Mac home folder using filesystem metadata only. It skips hidden folders, symlinks, caches, dependencies and package contents, deduplicates paths and bounds results to 500 projects and 100,000 entries. Inaccessible folders are skipped; Choose Project on Mac uses NSOpenPanel for other locations. Trusted paired phones can request the same scan. `project_apps` requires explicit source trust before invoking the existing Xcode runnable-iOS-app validation. Both clients select schemes from that response; registration revalidates the selection and existing committed-worktree build rules apply. Discovery does not build, install or fetch repositories.
+
+
+Mac Add App prewarms inert project previews at Host startup and stores snapshots
+in user-owned `project-previews-v1.json`. `project_preview` reads bounded pbxproj
+and scheme/workspace XML plus icon assets; it never invokes Xcode, resolves
+packages or executes source. Cached rows appear immediately while startup or
+manual discovery refreshes them. Registration still requires explicit source
+trust and Xcode validation. Automatic schemes must match their own target name,
+so an app dependency cannot turn a library scheme into an app choice.
+GitHub download (`repo_prepare`) is separate from app selection and registration;
+retries reuse only a checkout whose origin matches, and never reset working files.
+The Mac remembers the last successfully added phone and otherwise uses setup’s
+phone. Advanced settings default to the detected local branch, setup signing
+account and 144-hour Personal Team cadence. Successful registration merges the
+returned durable target into Apps and selects that tab with a success banner.
+Target-list responses return immediately; legacy icon backfill runs independently
+with the existing five-minute failure throttle.
