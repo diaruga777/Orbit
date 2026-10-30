@@ -224,6 +224,7 @@ public actor CodeJobs {
             }
             if exit == 0, request.operation != .runOnDevice { recordCompilation(job.id, revision: revision) }
             completed.state = exit == 0 ? .succeeded : .failed
+            if exit != 0 { completed.failureMessage = CodeBuildFailure.message(log: log) }
             if exit == 0, request.operation == .deploy { completed.log = "\nAvailable to the internal group after processing. Open TestFlight on your iPhone to install." }
         } catch is CancellationError { completed.state = .cancelled }
         catch { completed.state = .failed; completed.failureMessage = error.localizedDescription; completed.log = "\n" + error.localizedDescription }

@@ -47,7 +47,7 @@ extension CodeJobs {
                 "-derivedDataPath", derived.path, "-resultBundlePath", root.appendingPathComponent(job.id + ".xcresult").path,
                 "-allowProvisioningUpdates", "CONFIGURATION_BUILD_DIR=" + products.path] + signing + artifactFlags + ["build"], directory: checkout.directory.path, process: process, log: log, id: job.id,
                 workloadKey: project.path + "|" + project.scheme + "|device", from: 0.25, to: 0.80) == 0 else {
-                throw CodeFailure("The build stopped. See the Mac job log for details.")
+                throw CodeFailure(CodeBuildFailure.message(log: log))
             }
             recordCompilation(job.id, revision: checkout.revision)
             let appURL = products.appendingPathComponent(product)

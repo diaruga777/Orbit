@@ -336,3 +336,5 @@ prefix-plus-`.ios` convention; an explicit local value preserves an existing
 phone app's exact identity and controls extension IDs and shared Keychain access.
 The Mac ID stays prefix-plus-`.mac`. The setup wizard creates local config only
 inside its private extracted source; source/developer checkouts own theirs.
+
+Known Xcode signing failures are summarized from bounded startup and tail log reads. Account authentication and capability/profile mismatches can appear together, so both recovery steps reach the durable job failure shown by Mac, phone and CLI/MCP. Unrelated account warnings do not replace a compiler failure. Summaries contain fixed recovery copy; raw account names, project paths and repository output remain in the job log. Orbit preserves the requested entitlements and leaves account authentication and profile updates to Xcode.

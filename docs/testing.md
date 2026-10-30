@@ -620,3 +620,7 @@ cell layout hid the progress bar; the final stack layout and regression checks
 cover it. No physical phone access, Apple sign-in, actual installation/renewal,
 physical Live Activity delivery, public notarization or marketplace acceptance
 was performed.
+
+## Signing failure recovery
+
+`CodeBuildFailureTests` covers simultaneous missing-account and Time Sensitive Notifications profile failures, individual account/capability errors, alternate Xcode wording, unrelated credential warnings during compiler failures, private-detail exclusion and bounded reads of large logs. These fixtures never access Apple credentials, provisioning caches or devices. A successful signed Luna build still requires an authenticated Xcode account and a profile that includes its requested capabilities.
