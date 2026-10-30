@@ -83,7 +83,7 @@ import OrbitCore
         configure(server, placeholder: "Automatic — SideStore", content: .URL)
         server.keyboardType = .URL; server.returnKeyType = .done
         serverFields.addArrangedSubview(field(server, title: "Anisette server (optional)"))
-        serverFields.addArrangedSubview(label("Leave blank to use ani.sidestore.io, or enter your own HTTPS service.", style: .footnote))
+        serverFields.addArrangedSubview(label("Leave blank to use new.ani.sidestore.io, or enter your own HTTPS service.", style: .footnote))
         serverFields.isHidden = server.text?.isEmpty != false
         credentials.addArrangedSubview(serverFields)
         credentials.addArrangedSubview(label("Sign-in uses SideStore’s helper service. Your email and password go only to Apple.", style: .footnote))
@@ -164,7 +164,7 @@ import OrbitCore
             catch {
                 challenge.isHidden = true
                 if teams.isHidden { credentials.isHidden = false; submit.isHidden = false }
-                show(error.localizedDescription, error: true)
+                show(CodeRefreshAccountError.message(error), error: true)
             }
         }
     }

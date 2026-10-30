@@ -2,7 +2,7 @@ import Foundation
 import SideSign
 import OrbitCore
 
-struct CodeRefreshAccount: Codable {
+struct CodeRefreshAccount: Codable, Sendable {
     var auth: AuthSession
     var team: Team?
     var anisetteURL: URL
@@ -10,86 +10,124 @@ struct CodeRefreshAccount: Codable {
     var adiBlob: Data?
 }
 
-actor CodeRefreshAppleAccount: CodeRefreshSignInService {
-    private struct Login: Codable { var appleID: String; var password: String }
-    private let secrets = CodeRefreshSecrets()
-    private let portal = DeveloperPortal()
-    private var account: CodeRefreshAccount? {
-        get throws {
-            guard let bytes = try secrets.read("apple-session") else { return nil }
-            return try JSONDecoder().decode(CodeRefreshAccount.self, from: bytes)
-        }
+struct CodeRefreshLogin: Codable, Sendable { var appleID: String; var password: String }
+/// One atomic Keychain update keeps the session, remembered login and key together.
+struct CodeRefreshCredentials: Codable, Sendable {
+    var account: CodeRefreshAccount?
+    var login: CodeRefreshLogin?
+    var certificate: Data?
+}
+
+struct CodeRefreshAccountNetwork: Sendable {
+    var anisette = CodeRefreshAnisette()
+    var authenticate: @Sendable (String, String, AnisetteData, @escaping DeveloperPortal.VerificationHandler) async throws -> AuthSession = { email, password, data, verify in
+        try await CodeRefreshAnisette.portal(for: data).authenticate(appleID: email, password: password, anisetteData: data,
+            xcodeVersion: "26.2", accountRepairHandler: { _, _ in .cancel }, verificationHandler: verify)
     }
-    func team() throws -> Team? { try account?.team }
-    func signInServer() throws -> URL { try account?.anisetteURL ?? CodeRefreshSignInInput.defaultServer }
-    func hasCertificate() throws -> Bool { try secrets.read("signing-p12").map { !$0.isEmpty } ?? false }
+    var teams: @Sendable (AuthSession) async throws -> [Team] = { auth in
+        try await CodeRefreshAnisette.portal(for: auth.session.anisetteData).fetchTeams(for: auth.account, session: auth.session)
+    }
+}
+
+actor CodeRefreshAppleAccount: CodeRefreshSignInService {
+    private let secrets: any CodeRefreshSecretStore
+    private let network: CodeRefreshAccountNetwork
+    private var working = false
+    init(secrets: any CodeRefreshSecretStore = CodeRefreshSecrets(), network: CodeRefreshAccountNetwork = .init()) {
+        self.secrets = secrets; self.network = network
+    }
+    private func begin() throws {
+        guard !working else { throw CodeFailure("Wait for the current Apple account action to finish.") }
+        working = true
+    }
+    private func credentials() throws -> CodeRefreshCredentials {
+        if let bytes = try secrets.read("apple-credentials") { return try JSONDecoder().decode(CodeRefreshCredentials.self, from: bytes) }
+        // Read legacy items without destroying them. Migrate only after a successful save.
+        let account = try secrets.read("apple-session").map { try JSONDecoder().decode(CodeRefreshAccount.self, from: $0) }
+        let login = try secrets.read("apple-login").map { try JSONDecoder().decode(CodeRefreshLogin.self, from: $0) }
+        return CodeRefreshCredentials(account: account, login: login, certificate: try secrets.read("signing-p12"))
+    }
+    private func save(_ value: CodeRefreshCredentials) throws {
+        try secrets.write(JSONEncoder().encode(value), account: "apple-credentials")
+        for key in ["apple-session", "apple-login", "signing-p12"] { try? secrets.remove(key) }
+    }
+    func team() throws -> Team? { try credentials().account?.team }
+    func signInServer() throws -> URL { try credentials().account?.anisetteURL ?? CodeRefreshSignInInput.defaultServer }
+    func hasCertificate() throws -> Bool { try credentials().certificate.map { !$0.isEmpty } ?? false }
     func signIn(appleID: String, password: String, anisetteURL: URL, rememberPassword: Bool = false,
                 verify: @escaping DeveloperPortal.VerificationHandler) async throws -> [Team] {
         let input = try CodeRefreshSignInInput(appleID: appleID, password: password, server: anisetteURL.absoluteString, rememberPassword: rememberPassword)
-        let previous = try account
+        try begin(); defer { working = false }
+        var state = try credentials()
+        let previous = state.account
         let identifier = previous?.identifier ?? UUID()
-        let manager = AnisetteDataManager(mode: .remote(server: anisetteURL))
-        let anisette: (data: AnisetteData, newAdiBlob: Data?)
-        do {
-            anisette = try await manager.fetchAnisetteData(identifier: identifier,
-                existingAdiBlob: previous?.anisetteURL == anisetteURL ? previous?.adiBlob : nil)
-        } catch {
-            try Task.checkCancellation()
-            throw CodeFailure("Couldn’t reach the sign-in helper. Try again, or change the server in Advanced.")
-        }
+        let anisette = try await network.anisette.data(server: input.server, identifier: identifier, previous: previous)
         try Task.checkCancellation()
-        let auth = try await portal.authenticate(appleID: input.appleID, password: password, anisetteData: anisette.data,
-            xcodeVersion: "26.2", accountRepairHandler: { _, _ in .cancel }, verificationHandler: verify)
+        let auth = try await network.authenticate(input.appleID, input.password, anisette.data, verify)
         try Task.checkCancellation()
-        let teams = try await portal.fetchTeams(for: auth.account, session: auth.session)
+        let teams = try await network.teams(auth)
         try Task.checkCancellation()
         guard !teams.isEmpty else { throw CodeFailure("No signing teams were found. Finish setting up this account in Xcode, then try again.") }
-        let state = CodeRefreshAccount(auth: auth, team: previous?.auth.account.identifier == auth.account.identifier ? previous?.team : nil, anisetteURL: anisetteURL, identifier: identifier, adiBlob: anisette.newAdiBlob)
+        let sameAccount = previous?.auth.account.identifier == auth.account.identifier
+        let team = sameAccount ? teams.first(where: { $0.identifier == previous?.team?.identifier }) : nil
+        state.account = CodeRefreshAccount(auth: auth, team: team, anisetteURL: input.server, identifier: identifier, adiBlob: anisette.blob)
+        if !sameAccount || (previous?.team != nil && team == nil) { state.certificate = nil }
+        state.login = rememberPassword ? CodeRefreshLogin(appleID: input.appleID, password: input.password) : nil
         try save(state)
-        if previous?.auth.account.identifier != auth.account.identifier { try secrets.remove("signing-p12") }
-        if rememberPassword { try secrets.write(JSONEncoder().encode(Login(appleID: input.appleID, password: password)), account: "apple-login") }
-        else { try secrets.remove("apple-login") }
         return teams
     }
-    private func save(_ value: CodeRefreshAccount) throws { try secrets.write(JSONEncoder().encode(value), account: "apple-session") }
     func select(_ team: Team) throws {
-        guard var value = try account else { throw CodeFailure("Sign in with your Apple account first.") }
-        value.team = team; try save(value)
+        try begin(); defer { working = false }
+        var state = try credentials()
+        guard var value = state.account else { throw CodeFailure("Sign in with your Apple account first.") }
+        if let previous = value.team, previous.identifier != team.identifier { state.certificate = nil }
+        value.team = team; state.account = value; try save(state)
     }
     private func session() async throws -> (Team, Session) {
-        guard var value = try account, let team = value.team else {
+        var state = try credentials()
+        guard var value = state.account, let team = value.team else {
             throw CodeFailure("Sign in with your Apple account to refresh apps.")
         }
-        let manager = AnisetteDataManager(mode: .remote(server: value.anisetteURL))
-        let anisette = try await manager.fetchAnisetteData(identifier: value.identifier, existingAdiBlob: value.adiBlob)
+        let anisette = try await network.anisette.data(server: value.anisetteURL, identifier: value.identifier, previous: value)
+        try Task.checkCancellation()
         var session = value.auth.session
         if !session.isValid {
-            guard let bytes = try secrets.read("apple-login") else { throw CodeFailure("Sign in again to renew your Apple session.") }
-            let login = try JSONDecoder().decode(Login.self, from: bytes)
-            let renewed = try await portal.authenticate(appleID: login.appleID, password: login.password, anisetteData: anisette.data,
-                xcodeVersion: "26.2", accountRepairHandler: { _, _ in .cancel }, verificationHandler: { _ in .cancel })
+            guard let login = state.login else { throw CodeFailure("Sign in again to renew your Apple session.") }
+            let renewed = try await network.authenticate(login.appleID, login.password, anisette.data, { _ in .cancel })
             guard renewed.account.identifier == value.auth.account.identifier else { throw CodeFailure("The Apple account changed. Sign in again.") }
             session = renewed.session
         }
+        try Task.checkCancellation()
         session.anisetteData = anisette.data
-        value.adiBlob = anisette.newAdiBlob ?? value.adiBlob
-        value.auth = AuthSession(account: value.auth.account, session: session); try save(value)
+        value.adiBlob = anisette.blob
+        value.auth = AuthSession(account: value.auth.account, session: session)
+        state.account = value; try save(state)
         return (team, session)
     }
     func createCertificate() async throws {
+        try begin(); defer { working = false }
+        // Do not consume another slot after a double tap or a lost UI response.
+        guard try !hasCertificate() else { return }
         let (team, session) = try await session()
-        let key = try await portal.addCertificate(machineName: "Orbit", type: .development, to: team, session: session)
-        try secrets.write(key.exportP12(), account: "signing-p12")
+        let key = try await CodeRefreshAnisette.portal(for: session.anisetteData).addCertificate(machineName: "Orbit", type: .development, to: team, session: session)
+        var state = try credentials(); state.certificate = try key.exportP12(); try save(state)
     }
     func importCertificate(_ data: Data, password: String) throws {
+        try begin(); defer { working = false }
+        var state = try credentials()
+        guard state.account?.team != nil else { throw CodeFailure("Sign in and choose your Apple team first.") }
         let key = try KeyStore(p12Data: data, password: password)
-        try secrets.write(key.exportP12(), account: "signing-p12")
+        try CodeRefreshValidation.certificate(key.certificate, teamID: state.account!.team!.identifier)
+        state.certificate = try key.exportP12(); try save(state)
     }
     func signingMaterial(bundleIDs: [String], teamID: String, deviceID: String, deviceName: String) async throws -> (Team, KeyStore, [ProvisioningProfile]) {
+        try begin(); defer { working = false }
         let (team, session) = try await session()
+        let portal = CodeRefreshAnisette.portal(for: session.anisetteData)
         guard team.identifier == teamID else { throw CodeFailure("Choose the Apple team that signed this build. Refresh keeps its existing app identity.") }
-        guard let data = try secrets.read("signing-p12"), !data.isEmpty else { throw CodeFailure("Import your signing certificate or create one in Refresh settings.") }
+        guard let data = try credentials().certificate, !data.isEmpty else { throw CodeFailure("Import your signing certificate or create one in Refresh settings.") }
         let key = try KeyStore(p12Data: data)
+        try CodeRefreshValidation.certificate(key.certificate, teamID: teamID)
         let certificates = try await portal.fetchCertificates(for: team, session: session)
         guard let certificate = certificates.first(where: { $0.serialNumberHex == key.certificate.serialNumberHex }), let certificateID = certificate.identifier else {
             throw CodeFailure("This signing certificate is no longer active. Import an active certificate or create one in Refresh settings.")
@@ -121,6 +159,8 @@ actor CodeRefreshAppleAccount: CodeRefreshSignInService {
         return (team, key, profiles)
     }
     func signOut() throws {
-        for account in ["apple-session", "apple-login", "signing-p12"] { try secrets.remove(account) }
+        try begin(); defer { working = false }
+        // Persist the signed-out state first, so a partial legacy cleanup cannot restore it.
+        try save(CodeRefreshCredentials())
     }
 }

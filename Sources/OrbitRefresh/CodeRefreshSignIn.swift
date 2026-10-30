@@ -5,7 +5,7 @@ import OrbitCore
 /// Blank means the public default, never an abandoned sign-in attempt.
 struct CodeRefreshSignInInput {
     // SideStore's official server list: https://github.com/SideStore/anisette-servers
-    static let defaultServer = URL(string: "https://ani.sidestore.io")!
+    static let defaultServer = URL(string: "https://new.ani.sidestore.io")!
     let appleID: String
     let password: String
     let server: URL
@@ -38,4 +38,20 @@ protocol CodeRefreshSignInService: Sendable {
     func signIn(appleID: String, password: String, anisetteURL: URL, rememberPassword: Bool,
                 verify: @escaping DeveloperPortal.VerificationHandler) async throws -> [Team]
     func select(_ team: Team) async throws
+}
+
+enum CodeRefreshAccountError {
+    static func message(_ error: Error) -> String {
+        if case ServerError.underlyingError(let code, _) = error, code == -80045 {
+            return "Apple rejected the sign-in helper’s identity (-80045). Clear the server in Advanced to use the current default, then try again."
+        }
+        if let error = error as? ServerError {
+            switch error {
+            case .badServerResponse, .invalidResponseFormat, .missingKey:
+                return "Apple couldn’t finish sign-in. Try again in a few minutes."
+            default: break
+            }
+        }
+        return error.localizedDescription
+    }
 }

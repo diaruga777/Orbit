@@ -559,3 +559,15 @@ the packaged source/resume check. The current Mac app received the missing helpe
 at its existing path with its signing requirement verified; a concurrent Xcode
 rebuild then updated that same path. Its active debug session was left in place.
 No real pairing record was exported during validation.
+
+## Refresh setup audit
+
+`CodeRefreshAccountTests` exercises the real account coordinator with in-memory
+secrets and injected networking: helper metadata/identity propagation, blob reuse
+and invalidation, one same-service recovery for rejected blobs, failed sign-in
+and empty teams, legacy migration, atomic write failure, remembered-password
+removal, account/team changes, cancellation and overlapping operations. No test
+contacts Apple, reads real refresh secrets or accesses a phone. Validation also
+checks certificate team/lifetime and profile/signed-entitlement preservation.
+The default helper now uses SideStore’s listed Mac ADI service; a credential-free
+metadata probe establishes only endpoint availability, not account acceptance.

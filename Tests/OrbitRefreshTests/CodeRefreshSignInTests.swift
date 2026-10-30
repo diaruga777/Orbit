@@ -5,7 +5,7 @@ final class CodeRefreshSignInTests: XCTestCase {
     func testEmptyServerUsesDefaultAndCredentialsAreValidatedBeforeNetworking() throws {
         for blank in ["", " \n\t"] {
             let input = try CodeRefreshSignInInput(appleID: " me@example.test \n", password: " password ", server: blank, rememberPassword: true)
-            XCTAssertEqual(input.server.absoluteString, "https://ani.sidestore.io")
+            XCTAssertEqual(input.server.absoluteString, "https://new.ani.sidestore.io")
             XCTAssertEqual(input.appleID, "me@example.test")
             XCTAssertEqual(input.password, " password ") // Password whitespace is significant.
             XCTAssertTrue(input.rememberPassword)

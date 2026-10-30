@@ -45,6 +45,7 @@ public actor CodeRefreshEngine {
     }
     public func verifyConnection() async throws {
         guard !busy else { throw CodeFailure("Wait for the current refresh to finish.") }
+        busy = true; defer { busy = false }
         _ = try await device.connect()
     }
     public func apps() throws -> [CodeLocalRefreshApp] {
@@ -141,7 +142,7 @@ public actor CodeRefreshEngine {
         busy = true; defer { busy = false }
         let store = try store()
         guard var app = store.apps().first(where: { $0.id == id }) else { throw CodeFailure("Cache this app’s build first.") }
-        if app.requiresReconciliation { try await reconcile(id: id); return }
+        if app.requiresReconciliation { try await reconcileInstallation(id: id); return }
         let directory = try store.directory(id), cached = directory.appendingPathComponent("Cached.app"), work = directory.appendingPathComponent("Signed.app")
         app.lastAttempt = Date(); app.state = .signing; app.failure = nil; try store.save(app)
         do {
@@ -155,13 +156,24 @@ public actor CodeRefreshEngine {
             try? FileManager.default.removeItem(at: work); try FileManager.default.copyItem(at: cached, to: work)
             let products = try Self.products(work)
             let bundles = try products.map { try Self.bundleID($0) }
+            guard Set(bundles).count == bundles.count else { throw CodeFailure("This build contains duplicate app identifiers. Build it again on your Mac.") }
+            let entitlements = try products.map { product in
+                guard let bundle = AppBundle(fileURL: product), !bundle.entitlementsString.isEmpty else {
+                    throw CodeFailure("Couldn’t read this build’s signed capabilities. Cache a new build from your Mac.")
+                }
+                return bundle.entitlements
+            }
             let (team, key, profiles) = try await account.signingMaterial(bundleIDs: bundles, teamID: app.teamID, deviceID: udid, deviceName: ProcessInfo.processInfo.hostName)
             for (product, profile) in zip(products, profiles) {
                 let previous = try ProvisioningProfile(data: Data(contentsOf: product.appendingPathComponent("embedded.mobileprovision")))
-                try Self.preserveIdentity(previous: previous, renewed: profile)
+                try CodeRefreshValidation.preserveIdentity(previous: previous, renewed: profile)
             }
             try Task.checkCancellation()
             try await AppBundleSigner(team: team, keyStore: key).signApp(at: work, provisioningProfiles: profiles)
+            for (product, previous) in zip(products, entitlements) {
+                guard let signed = AppBundle(fileURL: product) else { throw CodeFailure("Couldn’t read the signed build.") }
+                try CodeRefreshValidation.preserveSignedEntitlements(previous: previous, renewed: signed.entitlements)
+            }
             guard try Self.bundleID(work) == app.bundleID else { throw CodeFailure("Signing changed this app’s identifier.") }
             try await device.upload(work, bundleID: app.bundleID)
             try Task.checkCancellation()
@@ -171,7 +183,7 @@ public actor CodeRefreshEngine {
             app.pendingProfiles = Dictionary(uniqueKeysWithValues: profiles.map { ($0.uuid.uuidString, $0.expirationDate) })
             app.state = .installing; try store.save(app) // Durable before the self-update can terminate us.
             try await device.install(work, bundleID: app.bundleID)
-            try await reconcile(id: id)
+            try await reconcileInstallation(id: id)
         } catch {
             if app.state == .installing { app.state = .unknown; app.failure = "Check the installation with LocalDevVPN connected." }
             else { app.state = .failed; app.failure = error.localizedDescription }
@@ -189,6 +201,11 @@ public actor CodeRefreshEngine {
         try store.save(app)
     }
     public func reconcile(id: String) async throws {
+        guard !busy else { throw CodeFailure("Wait for the current refresh to finish.") }
+        busy = true; defer { busy = false }
+        try await reconcileInstallation(id: id)
+    }
+    private func reconcileInstallation(id: String) async throws {
         let store = try store()
         guard var app = store.apps().first(where: { $0.id == id }), app.requiresReconciliation else { return }
         _ = try await device.connect()
@@ -210,15 +227,6 @@ public actor CodeRefreshEngine {
     }
     private static func bundleID(_ app: URL) throws -> String {
         guard let id = try info(app)["CFBundleIdentifier"] as? String else { throw CodeFailure("This build has no app identifier.") }; return id
-    }
-    private static func preserveIdentity(previous: ProvisioningProfile, renewed: ProvisioningProfile) throws {
-        guard previous.bundleIdentifier == renewed.bundleIdentifier, previous.teamIdentifier == renewed.teamIdentifier else { throw CodeFailure("The refreshed profile changed this app’s identity.") }
-        for key in ["keychain-access-groups", "com.apple.security.application-groups", "com.apple.developer.icloud-container-identifiers", "com.apple.developer.ubiquity-kvstore-identifier", "com.apple.developer.associated-domains"] {
-            guard let old = previous.entitlements[key] else { continue }
-            guard let new = renewed.entitlements[key], String(describing: old) == String(describing: new) else {
-                throw CodeFailure("The refreshed profile doesn’t preserve this app’s capabilities. Check signing on the Mac before refreshing.")
-            }
-        }
     }
     private static func digest(_ app: URL) throws -> String {
         let canonical = app.resolvingSymlinksInPath()

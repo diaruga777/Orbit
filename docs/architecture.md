@@ -113,12 +113,20 @@ It owns the sign-in task, inline validation/errors, verification continuations a
 team selection until the selected team is saved. Cancel cancels the task and
 resolves a pending verification request; in-flight work blocks swipe dismissal.
 An empty custom server resolves to SideStore’s officially listed HTTPS endpoint
-`https://ani.sidestore.io`. Advanced retains custom service support, and existing
+`https://new.ani.sidestore.io`. Advanced retains custom service support, and existing
 Keychain account records retain their service URL. Credentials go to Apple;
-remote anisette provisioning uses the existing SideSign provider. Provisioning
-blobs are reused only with the same service. No hosted Orbit service, server-list
+the current default uses Mac ADI. Orbit reads bounded v3 client metadata and
+passes the matching identity through provisioning and Apple authentication.
+Provisioning blobs are reused only with the same service and client identity;
+a rejected cached blob gets one fresh provisioning attempt on that same service.
+Apple authentication is never automatically retried. No hosted Orbit service, server-list
 execution, automatic rotation or downloaded native implementation is introduced.
-The remember switch controls the existing ThisDeviceOnly password storage.
+The remember switch controls ThisDeviceOnly password storage. Account state,
+optional login and signing key are saved in one atomic Keychain envelope, with
+legacy migration after successful writes. Account/team changes clear incompatible
+keys; account mutations and installation reconciliation exclude overlapping work.
+Signing verifies certificate validity/team and preserves signed entitlements
+before upload.
 Simulator-only injected services exercise the actual form without Apple sign-in,
 helper requests or refresh-secret access.
 
