@@ -46,7 +46,7 @@ enum CodeDeviceSupport {
         if let target = try runnableTarget(path: project.path, scheme: project.scheme) {
             return settings.first { $0["TARGET_NAME"] == target }
         }
-        return settings.first
+        return settings.first { $0["TARGET_NAME"] == project.scheme }
     }
     static func apps(path: String, scheme selectedScheme: String? = nil, root: URL) async throws -> [CodeBuildApp] {
         var apps: [CodeBuildApp] = []
@@ -76,7 +76,7 @@ enum CodeDeviceSupport {
         let container = URL(fileURLWithPath: path)
         var containers = [container]
         if container.pathExtension == "xcworkspace" {
-            containers += (try? FileManager.default.contentsOfDirectory(at: container.deletingLastPathComponent(), includingPropertiesForKeys: nil))?.filter { $0.pathExtension == "xcodeproj" } ?? []
+            containers += CodeProjectPreview.projectContainers(path: path)
         }
         for container in containers {
             let shared = container.appendingPathComponent("xcshareddata/xcschemes/" + scheme + ".xcscheme")
