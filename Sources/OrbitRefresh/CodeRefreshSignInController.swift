@@ -38,6 +38,7 @@ import OrbitCore
         view.backgroundColor = .systemBackground
         navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .cancel, primaryAction: UIAction { [weak self] _ in self?.cancel() })
         scroll.keyboardDismissMode = .interactive
+        scroll.accessibilityIdentifier = "refresh-sign-in-scroll"
         scroll.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scroll)
         let actions = UIStackView(arrangedSubviews: [submit])
@@ -76,8 +77,13 @@ import OrbitCore
         advanced.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         advanced.addAction(UIAction { [weak self] _ in
             guard let self else { return }
+            self.view.endEditing(true)
             self.serverFields.isHidden.toggle()
             self.advanced.accessibilityValue = self.serverFields.isHidden ? "Collapsed" : "Expanded"
+            self.view.layoutIfNeeded()
+            if !self.serverFields.isHidden {
+                self.scroll.scrollRectToVisible(self.serverFields.convert(self.serverFields.bounds, to: self.scroll), animated: true)
+            }
         }, for: .touchUpInside)
         credentials.addArrangedSubview(advanced)
         configure(server, placeholder: "Automatic — SideStore", content: .URL)

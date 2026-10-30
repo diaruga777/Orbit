@@ -18,7 +18,7 @@ final class OrbitRefreshSignInUITests: XCTestCase {
     private func tap(_ button: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<8 {
             if button.isHittable { button.tap(); return }
-            app.scrollViews.firstMatch.swipeUp()
+            app.scrollViews["refresh-sign-in-scroll"].swipeUp()
         }
         XCTFail("Control was not reachable: \(button)")
     }
