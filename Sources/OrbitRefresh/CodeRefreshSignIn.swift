@@ -42,6 +42,9 @@ protocol CodeRefreshSignInService: Sendable {
 
 enum CodeRefreshAccountError {
     static func message(_ error: Error) -> String {
+        if case DeveloperPortalError.tooManyCertificates = error {
+            return "Apple’s certificate slots are full. In Setup details, import a .p12 exported from your Mac’s Keychain. Existing certificates will stay active."
+        }
         if case ServerError.underlyingError(let code, _) = error, code == -80045 {
             return "Apple rejected the sign-in helper’s identity (-80045). Clear the server in Advanced to use the current default, then try again."
         }

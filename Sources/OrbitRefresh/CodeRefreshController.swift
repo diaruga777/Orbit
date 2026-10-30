@@ -171,7 +171,7 @@ import OrbitCore
         let lease = UIApplication.shared.beginBackgroundTask(withName: "Refresh apps") { [weak self] in self?.work?.cancel() }
         work = Task {
             defer { if lease != .invalid { UIApplication.shared.endBackgroundTask(lease) }; working = false; work = nil; navigationItem.rightBarButtonItem?.isEnabled = true; reload() }
-            do { try await operation() } catch { message(error.localizedDescription) }
+            do { try await operation() } catch { message(CodeRefreshAccountError.message(error)) }
         }
     }
     private func signIn() {
@@ -192,13 +192,24 @@ import OrbitCore
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first else { return }
         let kind = importKind
+        controller.dismiss(animated: true) { self.importDocument(url, kind: kind) }
+    }
+    private func importedData(_ url: URL) throws -> Data {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= 2 * 1024 * 1024 else {
+            throw CodeFailure("This file is too large. Choose a pairing plist or signing .p12.")
+        }
+        return try Data(contentsOf: url)
+    }
+    private func importDocument(_ url: URL, kind: String) {
         if kind == "certificate" {
             let alert = UIAlertController(title: "Certificate Password", message: nil, preferredStyle: .alert)
             alert.addTextField { $0.isSecureTextEntry = true }
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            alert.addAction(UIAlertAction(title: "Import", style: .default) { _ in self.perform { try await self.engine.account.importCertificate(Data(contentsOf: url), password: alert.textFields?.first?.text ?? "") } })
+            alert.addAction(UIAlertAction(title: "Import", style: .default) { _ in self.perform { try await self.engine.account.importCertificate(self.importedData(url), password: alert.textFields?.first?.text ?? "") } })
             present(alert, animated: true)
-        } else { perform { if kind == "pairing" { try await self.engine.device.importPairing(Data(contentsOf: url)) } else { try await self.engine.importIPA(url) } } }
+        } else { perform { if kind == "pairing" { try await self.engine.importPairing(self.importedData(url)) } else { try await self.engine.importIPA(url) } } }
     }
     private func message(_ text: String) {
         guard presentedViewController == nil else { return }
@@ -229,14 +240,14 @@ import OrbitCore
 
 @MainActor enum CodeRefreshLifecycle {
     static func waitForBackground() async throws {
-        if UIApplication.shared.applicationState != .active { return }
+        if UIApplication.shared.applicationState == .background { return }
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive }
         var top = scene?.windows.first(where: \.isKeyWindow)?.rootViewController
         while let presented = top?.presentedViewController { top = presented }
         let alert = UIAlertController(title: "Ready to Refresh Orbit", message: "Go to the Home Screen to finish. Reopen Orbit after the update.", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default)); top?.present(alert, animated: true)
         let deadline = Date().addingTimeInterval(90)
-        while UIApplication.shared.applicationState == .active {
+        while UIApplication.shared.applicationState != .background {
             try Task.checkCancellation()
             guard Date() < deadline else { throw CodeFailure("Go to the Home Screen when prompted, then try refreshing again.") }
             try await Task.sleep(for: .milliseconds(300))

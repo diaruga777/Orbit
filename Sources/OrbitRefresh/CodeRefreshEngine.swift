@@ -48,6 +48,11 @@ public actor CodeRefreshEngine {
         busy = true; defer { busy = false }
         _ = try await device.connect()
     }
+    public func importPairing(_ data: Data) async throws {
+        guard !busy else { throw CodeFailure("Wait for the current refresh to finish.") }
+        busy = true; defer { busy = false }
+        try await device.importPairing(data)
+    }
     public func apps() throws -> [CodeLocalRefreshApp] {
         let store = try store()
         if !busy {

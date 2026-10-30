@@ -33,7 +33,13 @@ struct CodeRefreshAnisette: Sendable {
     var load: Load = { request in
         let session = URLSession(configuration: .ephemeral, delegate: NoRedirects(), delegateQueue: nil)
         defer { session.invalidateAndCancel() }
-        return try await session.data(for: request)
+        let (stream, response) = try await session.bytes(for: request)
+        var data = Data()
+        for try await byte in stream {
+            guard data.count < 8192 else { throw CodeFailure("The sign-in helper returned invalid settings.") }
+            data.append(byte)
+        }
+        return (data, response)
     }
     var fetch: Fetch = { server, identifier, blob, headers in
         let manager = AnisetteDataManager(mode: .remote(server: server))
@@ -54,7 +60,7 @@ struct CodeRefreshAnisette: Sendable {
         do {
             let (data, newBlob) = try await fetch(server, identifier, existing, identity.headers)
             return (data, newBlob ?? existing)
-        } catch AnisetteError.badServerResponse(let status, _) where status == -1 && existing != nil {
+        } catch SideSign.AnisetteError.badServerResponse(let status, _) where status == -1 && existing != nil {
             // A rejected cached ADI blob gets one fresh provisioning attempt on
             // the same service. Apple authentication is never retried here.
             try Task.checkCancellation()
