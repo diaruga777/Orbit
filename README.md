@@ -82,7 +82,7 @@ JSON values, and supply future timeline entries. iOS controls actual refresh tim
 exact polling is not guaranteed. See [widgets](docs/widgets/README.md).
 
 Cache a build in Apps → Cache for Mac-Free Refresh, or cache Orbit itself in the
-Refresh tab. Set up your phone’s Apple Account/team, certificate, pairing file and
+Refresh tab. Sign in with your Apple Account (no server address needed), then set up the team, certificate, pairing file and
 LocalDevVPN once; then renew cached installed revisions without the Mac. New code
 still needs a Mac build. See [phone refresh](docs/local-refresh.md).
 

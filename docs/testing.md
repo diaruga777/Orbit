@@ -466,3 +466,17 @@ the actual Mac setup views covered local, iroh, Tailscale, private relay and
 startup-error layouts with connection options expanded. No physical phone,
 Apple sign-in, away-from-home handoff/install acceptance, public notarization or
 marketplace listing was performed.
+
+
+## Refresh sign-in form
+
+`CodeRefreshSignInTests` validates blank/default/custom server selection and
+credential validation without networking. `OrbitRefreshSignInUITests` drives the
+actual UIKit sheet through an inert Simulator-only service: blank server with
+Remember enabled, missing credentials, failed sign-in/retry, invalid custom URL
+and clearing it, Apple verification with a rejected code, team-save retry,
+verification failure recovery/cancel, and the largest accessibility text with the
+keyboard open. Screenshot attachments capture the form and verification states.
+The fixture never authenticates with Apple, contacts anisette services, reads
+refresh secrets or installs on a phone. Real account sign-in and renewal remain
+separate physical acceptance.

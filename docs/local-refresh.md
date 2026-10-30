@@ -11,10 +11,19 @@ In the iPhone Refresh tab:
    existing record for manual AirDrop/import. This contains private pairing keys;
    keep it private and delete the exported copy after importing. No pairing key is
    sent through Orbit’s control RPC or agent tools.
-3. Sign in to your Apple Account, choose an HTTPS anisette server and the team
-   used to sign the cached build. Apple receives your credentials; the anisette
-   server supplies sign-in data. Sign In Once keeps the session without retaining
-   the password. Sign In and Remember also stores the password locally.
+3. Sign in to your Apple Account. Orbit uses SideStore’s public anisette helper
+   (`https://ani.sidestore.io`) automatically; no server address is needed. Apple
+   receives your email/password; the helper supplies the sign-in data and does not
+   receive those credentials. Enable Remember password to keep it in this phone’s
+   Keychain for automatic session renewal. Leave it off to keep only the session.
+   If your account has one team it is selected automatically; otherwise choose the
+   team used to sign the cached build. The form stays open for progress, Apple
+   verification and errors. Advanced allows a custom HTTPS anisette service;
+   clearing that field restores the default. Existing saved service choices stay
+   in use when signing in again. No automatic server rotation is performed.
+   Anisette data is still required by the signing library; removing the remote
+   helper entirely would require a separate on-device implementation and its
+   native libraries, which Orbit does not currently ship.
 4. Import a signing .p12 or explicitly create a development certificate. Existing
    certificates are never automatically revoked. Account repair, certificate
    limits, and two-factor prompts can require foreground attention.

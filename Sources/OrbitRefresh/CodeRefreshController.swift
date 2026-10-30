@@ -39,6 +39,16 @@ import OrbitCore
         tableView.reloadData()
     }
     public override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); reload() }
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard let header = tableView.tableHeaderView else { return }
+        let size = header.systemLayoutSizeFitting(CGSize(width: tableView.bounds.width, height: 0),
+            withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        if abs(header.frame.height - size.height) > 0.5 || header.frame.width != tableView.bounds.width {
+            header.frame.size = CGSize(width: tableView.bounds.width, height: size.height)
+            tableView.tableHeaderView = header
+        }
+    }
     private func reload() {
         Task {
             do {
@@ -165,51 +175,14 @@ import OrbitCore
         }
     }
     private func signIn() {
-        let alert = UIAlertController(title: "Apple Account", message: "Apple handles sign-in. Remembering your password keeps it in this phone’s Keychain for automatic refresh. The anisette server doesn’t receive it.", preferredStyle: .alert)
-        for placeholder in ["Apple account email", "Password", "Anisette server (https://…)"] {
-            alert.addTextField { field in field.placeholder = placeholder; field.autocapitalizationType = .none; field.autocorrectionType = .no; field.isSecureTextEntry = placeholder == "Password" }
-        }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        for remember in [false, true] {
-            alert.addAction(UIAlertAction(title: remember ? "Sign In and Remember" : "Sign In Once", style: .default) { _ in
-                guard let fields = alert.textFields, let email = fields[0].text, let password = fields[1].text, let server = URL(string: fields[2].text ?? "") else { return }
-                self.perform {
-                    let teams = try await self.engine.account.signIn(appleID: email, password: password, anisetteURL: server, rememberPassword: remember) { [weak self] request in
-                        guard let self else { return .cancel }
-                        return try await self.verify(request)
-                    }
-                    self.selectTeam(teams)
-                }
-            })
-        }
-        present(alert, animated: true)
-    }
-    private func selectTeam(_ teams: [Team]) {
-        let alert = UIAlertController(title: "Apple Team", message: nil, preferredStyle: .actionSheet)
-        for team in teams { alert.addAction(UIAlertAction(title: team.name, style: .default) { _ in self.perform { try await self.engine.account.select(team) } }) }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = view
-        alert.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
-        alert.popoverPresentationController?.permittedArrowDirections = []
-        present(alert, animated: true)
-    }
-    private func verify(_ request: TwoFactorRequest) async throws -> TwoFactorResponse {
-        switch request {
-        case .selectDeliveryMethod(_, let phones):
-            return await withCheckedContinuation { continuation in
-                let alert = UIAlertController(title: "Send Verification Code", message: nil, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: "Apple Devices", style: .default) { _ in continuation.resume(returning: .requestTrustedDevice) })
-                for phone in phones { alert.addAction(UIAlertAction(title: phone.number, style: .default) { _ in continuation.resume(returning: .requestSMS(phoneID: phone.id)) }) }
-                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in continuation.resume(returning: .cancel) })
-                present(alert, animated: true)
-            }
-        default: break
-        }
-        return await withCheckedContinuation { continuation in
-            let alert = UIAlertController(title: "Verification Code", message: request.error ?? "Enter the code from Apple.", preferredStyle: .alert)
-            alert.addTextField { $0.keyboardType = .numberPad; $0.textContentType = .oneTimeCode }
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in continuation.resume(returning: .cancel) })
-            alert.addAction(UIAlertAction(title: "Continue", style: .default) { _ in continuation.resume(returning: .verificationCode(alert.textFields?.first?.text ?? "")) })
-            present(alert, animated: true)
+        Task {
+            do {
+                let server = try await engine.account.signInServer()
+                let form = CodeRefreshSignInController(service: engine.account, server: server) { [weak self] in self?.reload() }
+                let navigation = UINavigationController(rootViewController: form)
+                navigation.modalPresentationStyle = .formSheet
+                present(navigation, animated: true)
+            } catch { message(error.localizedDescription) }
         }
     }
     private func pick(_ kind: String) {

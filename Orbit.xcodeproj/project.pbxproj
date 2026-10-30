@@ -42,6 +42,7 @@
 		FE221B4F1D5C4A4311029802 /* OrbitSetupModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 438B4102B8289ACB872E1597 /* OrbitSetupModel.swift */; };
 		803B9A0FA4910B40D7679C2B /* OrbitPhoneConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97811297AE1EF362A94D4E75 /* OrbitPhoneConnection.swift */; };
 		98B54526E6246FCC92CBDAD7 /* OrbitConnectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E795D3B6424F9FD7842AB186 /* OrbitConnectionsView.swift */; };
+		3D3D34D22D5106C3524001C6 /* OrbitRefreshSignInUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78B6E2AED2D0776D47E1AE8B /* OrbitRefreshSignInUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -122,6 +123,7 @@
 		F06A3802578DF224C9FBC6A1 /* Orbit-icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Orbit-icons"; path = .; sourceTree = SOURCE_ROOT; };
 		97811297AE1EF362A94D4E75 /* OrbitPhoneConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitPhoneConnection.swift; sourceTree = "<group>"; };
 		E795D3B6424F9FD7842AB186 /* OrbitConnectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitConnectionsView.swift; sourceTree = "<group>"; };
+		78B6E2AED2D0776D47E1AE8B /* OrbitRefreshSignInUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitRefreshSignInUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -279,6 +281,7 @@
 			children = (
 				0950C4F0545DEB151A224B7F /* CodeEditorUITests.swift */,
 				D0CBC0277730C6F98099B56B /* OrbitAppletsUITests.swift */,
+				78B6E2AED2D0776D47E1AE8B /* OrbitRefreshSignInUITests.swift */,
 				0CEE0325789265E9727607DB /* OrbitSetupBannerUITests.swift */,
 				513842FABB3361E949EB9EFB /* OrbitWidgetsUITests.swift */,
 			);
@@ -499,6 +502,7 @@
 			files = (
 				4FC788F7A24297A9E43B7643 /* CodeEditorUITests.swift in Sources */,
 				E060BB84A359C719FDE5770A /* OrbitAppletsUITests.swift in Sources */,
+				3D3D34D22D5106C3524001C6 /* OrbitRefreshSignInUITests.swift in Sources */,
 				882B3785238F22FB71667816 /* OrbitSetupBannerUITests.swift in Sources */,
 				9C0EEC097E9F0AF319575CCF /* OrbitWidgetsUITests.swift in Sources */,
 			);

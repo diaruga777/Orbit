@@ -10,7 +10,7 @@ struct CodeRefreshAccount: Codable {
     var adiBlob: Data?
 }
 
-actor CodeRefreshAppleAccount {
+actor CodeRefreshAppleAccount: CodeRefreshSignInService {
     private struct Login: Codable { var appleID: String; var password: String }
     private let secrets = CodeRefreshSecrets()
     private let portal = DeveloperPortal()
@@ -21,21 +21,33 @@ actor CodeRefreshAppleAccount {
         }
     }
     func team() throws -> Team? { try account?.team }
+    func signInServer() throws -> URL { try account?.anisetteURL ?? CodeRefreshSignInInput.defaultServer }
     func hasCertificate() throws -> Bool { try secrets.read("signing-p12").map { !$0.isEmpty } ?? false }
     func signIn(appleID: String, password: String, anisetteURL: URL, rememberPassword: Bool = false,
                 verify: @escaping DeveloperPortal.VerificationHandler) async throws -> [Team] {
-        guard anisetteURL.scheme == "https", anisetteURL.host != nil else { throw CodeFailure("Use an HTTPS anisette server address.") }
+        let input = try CodeRefreshSignInInput(appleID: appleID, password: password, server: anisetteURL.absoluteString, rememberPassword: rememberPassword)
         let previous = try account
         let identifier = previous?.identifier ?? UUID()
         let manager = AnisetteDataManager(mode: .remote(server: anisetteURL))
-        let anisette = try await manager.fetchAnisetteData(identifier: identifier)
-        let auth = try await portal.authenticate(appleID: appleID, password: password, anisetteData: anisette.data,
+        let anisette: (data: AnisetteData, newAdiBlob: Data?)
+        do {
+            anisette = try await manager.fetchAnisetteData(identifier: identifier,
+                existingAdiBlob: previous?.anisetteURL == anisetteURL ? previous?.adiBlob : nil)
+        } catch {
+            try Task.checkCancellation()
+            throw CodeFailure("Couldn’t reach the sign-in helper. Try again, or change the server in Advanced.")
+        }
+        try Task.checkCancellation()
+        let auth = try await portal.authenticate(appleID: input.appleID, password: password, anisetteData: anisette.data,
             xcodeVersion: "26.2", accountRepairHandler: { _, _ in .cancel }, verificationHandler: verify)
+        try Task.checkCancellation()
         let teams = try await portal.fetchTeams(for: auth.account, session: auth.session)
+        try Task.checkCancellation()
+        guard !teams.isEmpty else { throw CodeFailure("No signing teams were found. Finish setting up this account in Xcode, then try again.") }
         let state = CodeRefreshAccount(auth: auth, team: previous?.auth.account.identifier == auth.account.identifier ? previous?.team : nil, anisetteURL: anisetteURL, identifier: identifier, adiBlob: anisette.newAdiBlob)
         try save(state)
         if previous?.auth.account.identifier != auth.account.identifier { try secrets.remove("signing-p12") }
-        if rememberPassword { try secrets.write(JSONEncoder().encode(Login(appleID: appleID, password: password)), account: "apple-login") }
+        if rememberPassword { try secrets.write(JSONEncoder().encode(Login(appleID: input.appleID, password: password)), account: "apple-login") }
         else { try secrets.remove("apple-login") }
         return teams
     }
