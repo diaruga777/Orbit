@@ -27,7 +27,7 @@ final class OrbitRefreshSignInUITests: XCTestCase {
         attachment.lifetime = .keepAlways; add(attachment)
     }
     func testBlankServerAndRememberCompletesWithoutAdvanced() {
-        let app = launch("success")
+        let app = launch("remember")
         XCTAssertFalse(app.textFields["Automatic — SideStore"].exists)
         fill(app)
         tap(app.switches["Remember password"], in: app)
@@ -94,6 +94,22 @@ final class OrbitRefreshSignInUITests: XCTestCase {
         XCTAssertTrue(app.secureTextFields["Password"].isEnabled)
         app.navigationBars.buttons["Cancel"].tap()
         XCTAssertTrue(app.staticTexts["Sign-in fixture ready"].waitForExistence(timeout: 5))
+    }
+    func testCancelWhileWaitingForAppleVerification() {
+        let app = launch("verification")
+        fill(app); tap(app.buttons["Sign In"], in: app)
+        XCTAssertTrue(app.buttons["Send to Apple Devices"].waitForExistence(timeout: 10))
+        tap(app.buttons["Send to Apple Devices"], in: app)
+        XCTAssertTrue(app.textFields["Verification code"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons["Cancel"].tap()
+        XCTAssertTrue(app.staticTexts["Sign-in fixture ready"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Account ready"].exists)
+    }
+    func testEmptyTeamsShowsRecoveryInsteadOfDismissing() {
+        let app = launch("empty-teams")
+        fill(app); tap(app.buttons["Sign In"], in: app)
+        XCTAssertTrue(app.staticTexts["No signing teams were found. Finish setting up this account in Xcode, then try again."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.secureTextFields["Password"].isEnabled)
     }
     func testLargestTextKeyboardStillAllowsSignIn() {
         let app = launch("success", largeText: true)

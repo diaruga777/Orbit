@@ -32,6 +32,7 @@ import OrbitCore
             guard anisetteURL == CodeRefreshSignInInput.defaultServer, appleID == "person@example.test", password == "fixture-password" else {
                 throw CodeFailure("Unexpected fixture input.")
             }
+            if scenario == "remember" && !rememberPassword { throw CodeFailure("Remember password was not passed to sign-in.") }
             try await Task.sleep(for: .milliseconds(600))
             if scenario == "error" || (scenario == "retry" && attempts == 1) { throw CodeFailure("Couldn’t sign in. Check your details and try again.") }
             if scenario == "verification" || scenario == "verification-error" {

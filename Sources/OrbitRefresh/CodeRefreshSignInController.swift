@@ -40,12 +40,18 @@ import OrbitCore
         scroll.keyboardDismissMode = .interactive
         scroll.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scroll)
+        let actions = UIStackView(arrangedSubviews: [submit])
+        actions.axis = .vertical; actions.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(actions)
         stack.axis = .vertical; stack.spacing = 24; stack.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(stack)
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            actions.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            actions.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+            actions.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12),
+            scroll.bottomAnchor.constraint(equalTo: actions.topAnchor, constant: -16),
             stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 24),
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
             stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
@@ -92,7 +98,6 @@ import OrbitCore
         submit.titleLabel?.adjustsFontForContentSizeCategory = true
         submit.heightAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
         submit.addAction(UIAction { [weak self] _ in self?.signIn() }, for: .touchUpInside)
-        stack.addArrangedSubview(submit)
     }
 
     private func label(_ text: String, style: UIFont.TextStyle) -> UILabel {
@@ -145,8 +150,7 @@ import OrbitCore
             defer { work = nil; setBusy(false) }
             do {
                 let available = try await service.signIn(appleID: input.appleID, password: input.password,
-                    anisetteURL: input.server, rememberPassword: input.rememberPassword) { [weak self] request in
-                        guard let self else { return .cancel }
+                    anisetteURL: input.server, rememberPassword: input.rememberPassword) { request in
                         return try await self.verify(request)
                     }
                 try Task.checkCancellation()
