@@ -1,13 +1,15 @@
 import XCTest
 import OrbitCore
 import OrbitWire
+import OrbitTransport
 @testable import OrbitHost
 
 final class OrbitConnectionTests: XCTestCase {
     private func identity(_ byte: UInt8) throws -> DeviceID { try DeviceID(bytes: Data(repeating: byte, count: 32)) }
     private func request(_ host: OrbitHost, _ method: String, _ params: [String: Any] = [:], peer: String? = nil) async throws -> [String: Any] {
         let data = try JSONSerialization.data(withJSONObject: ["method": method, "params": params])
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: await host.handle(data, peer: peer)) as? [String: Any])
+        let response = await host.handle(data, peer: peer)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: response) as? [String: Any])
     }
     func testLiveConfigurationStartsBeforeSavingAndFailureKeepsWorkingSettings() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -82,6 +84,31 @@ final class OrbitConnectionTests: XCTestCase {
         var config = OrbitConfiguration(); config.provider = "tailscale"; config.address = "tcp://mac.tailnet.invalid:49210"
         XCTAssertNoThrow(try config.validateConnection(requireAddress: true))
     }
+    func testPhoneSyncRequiresConfirmedPinsAndEnrollmentBeforeSaving() async throws {
+        let phone = try identity(1), mac = try identity(2)
+        let code = OrbitPairingCode(deviceID: mac, addresses: [.tcp(host: "192.168.1.2", port: 49210)]).text
+        let routes = OrbitConnectionRoutes(provider: "local", pairingCodes: [code], accountPeerID: phone.description)
+        let exchange = RouteExchange(routes: [routes, routes])
+        let sync = OrbitRouteSync()
+        try await sync.synchronize(request: { try await exchange.request($0) }, identity: { _ in phone }, save: { await exchange.save($0) })
+        let saved = await exchange.saved
+        XCTAssertEqual(saved, routes)
+        let enrolled = await exchange.enrolled
+        XCTAssertEqual(enrolled, phone.description)
+        var changed = routes; changed.accountPeerID = mac.description
+        let raced = RouteExchange(routes: [routes, changed])
+        do {
+            try await sync.synchronize(request: { try await raced.request($0) }, identity: { _ in phone }, save: { await raced.save($0) })
+            XCTFail("Changed account must not replace saved pins")
+        } catch { }
+        let rejected = await raced.saved; XCTAssertNil(rejected)
+        let disconnected = RouteExchange(routes: [routes])
+        do {
+            try await sync.synchronize(request: { try await disconnected.request($0) }, identity: { _ in phone }, save: { await disconnected.save($0) })
+            XCTFail("A lost enrollment reply must not replace saved pins")
+        } catch { }
+        let retained = await disconnected.saved; XCTAssertNil(retained)
+    }
     func testRouteUpdateRejectsMismatchedRemotePinAndIsBackwardCompatible() throws {
         let mac = try identity(9), other = try identity(10)
         let bad = OrbitPairingCode(deviceID: mac, addresses: [.dumbpipe(endpoint: other.bytes.map { String(format: "%02x", $0) }.joined())])
@@ -93,4 +120,17 @@ final class OrbitConnectionTests: XCTestCase {
 private actor ConnectionCalls {
     var providers: [String] = []
     func record(_ provider: String) { providers.append(provider) }
+}
+
+private actor RouteExchange {
+    var routes: [OrbitConnectionRoutes]
+    var saved: OrbitConnectionRoutes?
+    var enrolled: String?
+    init(routes: [OrbitConnectionRoutes]) { self.routes = routes }
+    func request(_ params: [String: Any]) throws -> OrbitConnectionRoutes {
+        guard !routes.isEmpty else { throw CodeFailure("Disconnected") }
+        if !params.isEmpty { enrolled = params["transportPeerID"] as? String }
+        return routes.removeFirst()
+    }
+    func save(_ value: OrbitConnectionRoutes) { saved = value }
 }

@@ -5,7 +5,7 @@ import OrbitTransport
 
 final class OrbitPhoneConnection: @unchecked Sendable {
     static let shared = OrbitPhoneConnection()
-    private let routeSync = OrbitPhoneRouteSync()
+    private let routeSync = OrbitRouteSync()
     private let forwarding = OrbitPhoneForwarding()
     static var root: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Orbit", isDirectory: true) }
     let transport = OrbitGoTransport(configuration: .init(stateDirectory: root.appendingPathComponent("Identity"), requestLocalNetworkAccess: true))
@@ -62,7 +62,26 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         guard let data = UserDefaults.standard.data(forKey: "Orbit.connectionRoutes") else { return nil }
         return try? JSONDecoder().decode(OrbitConnectionRoutes.self, from: data)
     }
-    func syncRoutes() async { await routeSync.sync(self) }
+    func syncRoutes() async {
+        let original = pairingCode
+        guard !original.isEmpty else { return }
+        do {
+            try await routeSync.synchronize(request: { [self] params in
+                guard pairingCode == original else { throw CancellationError() }
+                let object = try await rpc("connection_routes", params)
+                return try JSONDecoder().decode(OrbitConnectionRoutes.self, from: JSONSerialization.data(withJSONObject: object))
+            }, identity: { [self] provider in
+                if provider == "dumbpipe" {
+                    return try await OrbitDumbpipe.shared.start(secretURL: Self.root.appendingPathComponent("Identity/iroh.key"))
+                }
+                return try transport.identity()
+            }, save: { [self] routes in
+                guard pairingCode == original else { throw CancellationError() }
+                UserDefaults.standard.set(try JSONEncoder().encode(routes), forKey: "Orbit.connectionRoutes")
+                if routes.provider != "dumbpipe" { try await OrbitDumbpipe.shared.stop() }
+            })
+        } catch { /* Offline and older clients keep their last authenticated routes. */ }
+    }
     private var codes: [OrbitPairingCode] {
         let original = try? OrbitPairingCode(string: pairingCode)
         let updated = (try? savedRoutes?.validated()) ?? []
@@ -106,35 +125,3 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         throw last
     }
 }
-
-private actor OrbitPhoneRouteSync {
-    private var syncing = false
-    func sync(_ connection: OrbitPhoneConnection) async {
-        guard !syncing, !connection.pairingCode.isEmpty else { return }
-        syncing = true
-        defer { syncing = false }
-        let original = connection.pairingCode
-        do {
-            let object = try await connection.rpc("connection_routes")
-            let update = try JSONDecoder().decode(OrbitConnectionRoutes.self, from: JSONSerialization.data(withJSONObject: object))
-            _ = try update.validated()
-            var params: [String: Any] = ["receivedCodes": update.pairingCodes]
-            if update.provider == "dumbpipe" {
-                let identity = try await OrbitDumbpipe.shared.start(secretURL: OrbitPhoneConnection.root.appendingPathComponent("Identity/iroh.key"))
-                params["transportPeerID"] = identity.description
-            } else {
-                params["transportPeerID"] = try connection.transport.identity().description
-            }
-            // Enroll the phone's new transport key through its existing authenticated route.
-            let confirmed = try await connection.rpc("connection_routes", params)
-            let routes = try JSONDecoder().decode(OrbitConnectionRoutes.self, from: JSONSerialization.data(withJSONObject: confirmed))
-            _ = try routes.validated()
-            guard original == connection.pairingCode else { return }
-            UserDefaults.standard.set(try JSONEncoder().encode(routes), forKey: "Orbit.connectionRoutes")
-            if routes.provider != "dumbpipe" {
-                try await OrbitDumbpipe.shared.stop()
-            }
-        } catch { /* Offline and older clients keep their last authenticated routes. */ }
-    }
-}
-
