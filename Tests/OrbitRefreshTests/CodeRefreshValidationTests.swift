@@ -27,7 +27,7 @@ final class CodeRefreshValidationTests: XCTestCase {
         let values: [String: Any] = ["application-identifier": "TESTTEAM.example.app", "keychain-access-groups": ["TESTTEAM.example.app"], "get-task-allow": true]
         func profile(_ entitlements: [String: Any], team: String = "TESTTEAM") throws -> ProvisioningProfile {
             let bytes = try PropertyListSerialization.data(fromPropertyList: ["Name": "Fixture", "UUID": UUID().uuidString, "TeamIdentifier": [team], "TeamName": "Fixture", "CreationDate": Date(), "ExpirationDate": Date().addingTimeInterval(3600), "Entitlements": entitlements], format: .xml, options: 0)
-            return try ProvisioningProfile(data: bytes)
+            return try ProvisioningProfile(data: Data([0]) + bytes) // Inert CMS framing before XML.
         }
         let previous = try profile(values)
         XCTAssertNoThrow(try CodeRefreshValidation.preserveIdentity(previous: previous, renewed: profile(values)))

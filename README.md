@@ -83,7 +83,7 @@ exact polling is not guaranteed. See [widgets](docs/widgets/README.md).
 
 Cache a build in Apps → Cache for Mac-Free Refresh, or cache Orbit itself in the
 Refresh tab. Sign in with your Apple Account (no server address needed), then set up the team, certificate, pairing file and
-LocalDevVPN once; then renew cached installed revisions without the Mac. Export the pairing file in Orbit Mac after your iPhone has trusted that Mac; iOS sign-in and LocalDevVPN aren’t needed for the export. New code
+LocalDevVPN once; then renew cached installed revisions without the Mac. The default sign-in helper uses Mac ADI with matching client settings; an old saved helper can be reset by clearing Advanced’s server field. Export the pairing file in Orbit Mac after your iPhone has trusted that Mac; iOS sign-in and LocalDevVPN aren’t needed for the export. New code
 still needs a Mac build. See [phone refresh](docs/local-refresh.md).
 
 While phone-only refresh setup is unfinished, Orbit asks to allow notifications
