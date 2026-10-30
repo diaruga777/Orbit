@@ -53,7 +53,12 @@ actor CodeRefreshAppleAccount: CodeRefreshSignInService {
     }
     func team() throws -> Team? { try credentials().account?.team }
     func signInServer() throws -> URL { try credentials().account?.anisetteURL ?? CodeRefreshSignInInput.defaultServer }
-    func hasCertificate() throws -> Bool { try credentials().certificate.map { !$0.isEmpty } ?? false }
+    func hasCertificate() throws -> Bool {
+        let state = try credentials()
+        guard let data = state.certificate, let team = state.account?.team,
+              let key = try? KeyStore(p12Data: data) else { return false }
+        return (try? CodeRefreshValidation.certificate(key.certificate, teamID: team.identifier)) != nil
+    }
     func signIn(appleID: String, password: String, anisetteURL: URL, rememberPassword: Bool = false,
                 verify: @escaping DeveloperPortal.VerificationHandler) async throws -> [Team] {
         let input = try CodeRefreshSignInInput(appleID: appleID, password: password, server: anisetteURL.absoluteString, rememberPassword: rememberPassword)
@@ -110,6 +115,7 @@ actor CodeRefreshAppleAccount: CodeRefreshSignInService {
         guard try !hasCertificate() else { return }
         let (team, session) = try await session()
         let key = try await CodeRefreshAnisette.portal(for: session.anisetteData).addCertificate(machineName: "Orbit", type: .development, to: team, session: session)
+        try CodeRefreshValidation.certificate(key.certificate, teamID: team.identifier)
         var state = try credentials(); state.certificate = try key.exportP12(); try save(state)
     }
     func importCertificate(_ data: Data, password: String) throws {
@@ -162,5 +168,6 @@ actor CodeRefreshAppleAccount: CodeRefreshSignInService {
         try begin(); defer { working = false }
         // Persist the signed-out state first, so a partial legacy cleanup cannot restore it.
         try save(CodeRefreshCredentials())
+        for key in ["apple-session", "apple-login", "signing-p12"] { try secrets.remove(key) }
     }
 }
