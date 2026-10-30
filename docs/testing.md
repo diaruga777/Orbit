@@ -506,3 +506,17 @@ A credential-free request to the default helper’s v3 metadata endpoint succeed
 this does not establish Apple account authentication. No Apple sign-in, physical
 installation/renewal, background acceptance, public notarization or marketplace
 listing was performed.
+
+Mac Add App verification (2026-10-30): bootstrap generated transport in the
+committed detached checkout. After integrating current main, the Swift suite
+passed all 182 checks (four optional fixtures skipped); 17 Python tests, both Go
+race suites and helper vet passed. The iOS Simulator client and separate ad hoc
+Mac review bundle built using the ignored local configuration. The Mac bundle
+passed strict signature checks and its packaged phone-source/resume fixture.
+An inert probe of the actual Luna project returned five primary app choices,
+all with icons, in about 75 ms; LunaMusicUI remained an alternate scheme rather
+than an extra app. Native captures of the production views with inert models
+covered local selection, dark appearance, GitHub, background discovery,
+registration progress and the Apps confirmation. Physical registration/install/
+renewal, live GitHub download acceptance, public notarization and marketplace
+listing were not performed.
