@@ -7,6 +7,7 @@ import OrbitUI
     private let rpc: (String, [String: Any]) async throws -> Any
     private let monitor: CodeBuildMonitor?
     private let peerID: () -> String
+    private let refreshInterval: TimeInterval
     private var jobs: [String: CodeJob] = [:]
     private var starting: String?
     private var poll: Timer?
@@ -21,8 +22,8 @@ import OrbitUI
     convenience init(connection: OrbitPhoneConnection, monitor: CodeBuildMonitor) {
         self.init(rpc: { method, params in try await connection.rpc(method, params) }, monitor: monitor, peerID: { connection.peerID })
     }
-    init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }) {
-        self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
+    init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }, refreshInterval: TimeInterval = 3) {
+        self.refreshInterval = refreshInterval; self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
     }
     required init?(coder: NSCoder) { fatalError() }
     deinit { poll?.invalidate(); searchTask?.cancel() }
@@ -31,7 +32,7 @@ import OrbitUI
         navigationItem.searchController = search
         tableView.accessibilityIdentifier = "OrbitTargets"
         if let monitor { NotificationCenter.default.addObserver(self, selector: #selector(buildChanged), name: CodeBuildMonitor.changed, object: monitor) }
-        poll = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+        poll = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.viewIfLoaded?.window != nil, UIApplication.shared.applicationState == .active else { return }
                 await self.refreshTargets(showError: false)

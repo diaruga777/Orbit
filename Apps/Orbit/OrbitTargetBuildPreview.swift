@@ -35,7 +35,7 @@ import OrbitUI
             case "job": return try JSONSerialization.jsonObject(with: JSONEncoder().encode(try await fixture.loadStatus()))
             default: throw CodeFailure("Unexpected preview request")
             }
-        }, monitor: environment.builds, peerID: { "fixture-mac" })
+        }, monitor: environment.builds, peerID: { "fixture-mac" }, refreshInterval: ProcessInfo.processInfo.arguments.contains("--target-list-retry") ? 60 : 3)
         return UINavigationController(rootViewController: controller)
     }
     actor Fixture {

@@ -58,6 +58,7 @@ import OrbitWire
 
 @MainActor final class OrbitSceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControllerDelegate {
     var window: UIWindow?
+    private var inertPreview = false
     private var widgets: OrbitWidgetsController?
     private var applets: OrbitWidgetsController?
     let connection = OrbitPhoneConnection.shared
@@ -65,6 +66,7 @@ import OrbitWire
         guard let scene = scene as? UIWindowScene else { return }
         let window = OrbitDiagnosticWindow(windowScene: scene); self.window = window
         #if DEBUG && targetEnvironment(simulator)
+        inertPreview = ["--target-build-preview", "--target-icons-preview", "--refresh-sign-in-fixture", "--editor-preview"].contains(where: ProcessInfo.processInfo.arguments.contains)
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--refresh-sign-in-fixture"),
            ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
             window.rootViewController = CodeRefreshSignInPreview.make(scenario: ProcessInfo.processInfo.arguments[index + 1])
@@ -218,6 +220,7 @@ import OrbitWire
     private var scriptSync: Task<Void, Never>?
     private var diagnosticSync: Task<Void, Never>?
     func sceneDidBecomeActive(_ scene: UIScene) {
+        guard !inertPreview else { return }
         OrbitDiagnostics.shared.record("lifecycle", "active")
         OrbitAppletBackground.shared.foreground()
         openAppletIfNeeded()
