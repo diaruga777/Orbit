@@ -711,3 +711,16 @@ freshness, disconnect/reconnect and restart the Mac, then check ordered replay
 without duplicates. Check lock/unavailable-container behavior and instrumented
 versus uninstrumented apps. No unattended test accesses physical devices, signs
 in to Apple, establishes marketplace readiness or proves background delivery.
+
+
+App diagnostics verification (2026-10-31): bootstrap generated the source-built
+transport in a committed detached worktree. All 221 Swift tests completed with
+zero failures (five optional fixtures skipped), along with 19 Python tests,
+both Go race suites and Apple-helper vet. The `orbit-debug` skill passed its
+skill validator. The iOS Simulator client, packaged Mac client
+and self-contained standalone applet export built successfully; the Mac review
+bundle passed `codesign --verify --deep --strict`. Tests exercised the real
+JavaScript breadcrumb API and synthetic app collection/recovery. No physical
+phone access, Apple sign-in, physical UI acceptance, public notarization or
+marketplace listing was performed. Real native container copying and phone
+lock/reconnect acceptance remain manual checks on the intended hardware.
