@@ -77,8 +77,16 @@ final class OrbitAppDiagnosticCollectorTests: XCTestCase {
         XCTAssertEqual(received.recent().map(\.name), ["first"])
         try OrbitAppDiagnosticCollector.importFiles([complete, complete], into: received)
         XCTAssertEqual(received.recent().map(\.name), ["first", "second"])
+        XCTAssertThrowsError(try OrbitAppDiagnosticCollector.importFiles([Data("invalid-json\n".utf8)], into: received))
         XCTAssertThrowsError(try OrbitAppDiagnosticCollector.importFiles(Array(repeating: Data(), count: 5), into: received))
         XCTAssertThrowsError(try OrbitAppDiagnosticCollector.importFiles([Data(repeating: 0, count: 1024 * 1024 + 16385)], into: received))
+    }
+    func testPackagedResourcesTakePrecedenceOverCheckout() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let packaged = root.appendingPathComponent("Orbit_OrbitHost.bundle/AppletHost")
+        try FileManager.default.createDirectory(at: packaged, withIntermediateDirectories: true)
+        XCTAssertEqual(OrbitAppletExport.template(in: root), packaged)
     }
     func testInstrumentationSourcesAreAvailableOnlyOnMac() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

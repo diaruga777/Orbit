@@ -694,7 +694,8 @@ not exercised by these checks.
 `OrbitAppDiagnosticCollectorTests` uses injected journal files, never a phone. It
 covers unavailable/backoff/reconnect behavior, order, duplicate reads after
 restart, per-phone/bundle isolation, metadata redaction, partial-line replay,
-file/batch bounds and Mac-only source/read access. The applet breadcrumb test
+malformed-event rejection, file/batch bounds, packaged-resource lookup and
+Mac-only source/read access. The applet breadcrumb test
 executes the real JavaScript runtime to check correlation, ordering, the 32-event
 quota and omission of input/error strings. Export tests require the canonical
 helper sources in the self-contained committed project. Python MCP checks cover

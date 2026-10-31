@@ -8,8 +8,13 @@ import OrbitCore
 /// Exports only bundled, source-controlled native host code. No repository code or
 /// JavaScript is executed. Xcode builds continue through the normal trusted catalog.
 public enum OrbitAppletExport {
+    static func template(in resources: URL?) -> URL? {
+        let packaged = resources?.appendingPathComponent("Orbit_OrbitHost.bundle/AppletHost")
+        return packaged.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+            ?? Bundle.module.url(forResource: "AppletHost", withExtension: nil)
+    }
     public static func diagnosticSources() throws -> [String: String] {
-        guard let template = Bundle.module.url(forResource: "AppletHost", withExtension: nil) else { throw CodeFailure("The diagnostic sources are missing.") }
+        guard let template = template(in: Bundle.main.resourceURL) else { throw CodeFailure("The diagnostic sources are missing.") }
         return try Dictionary(uniqueKeysWithValues: ["OrbitDiagnostics.swift", "OrbitAppDiagnostics.swift", "OrbitDiagnosticView.swift"].map { name in
             (name, try String(contentsOf: template.appendingPathComponent("Diagnostics").appendingPathComponent(name), encoding: .utf8))
         })
@@ -20,10 +25,7 @@ public enum OrbitAppletExport {
         let source = source ?? blank
         let script = try OrbitAppletDefinition.widgetScript(source)
         let fm = FileManager.default
-        let packaged = Bundle.main.resourceURL?.appendingPathComponent("Orbit_OrbitHost.bundle/AppletHost")
-        let template = packaged.flatMap { fm.fileExists(atPath: $0.path) ? $0 : nil }
-            ?? Bundle.module.url(forResource: "AppletHost", withExtension: nil)
-        guard let template else { throw CodeFailure("The applet host template is missing.") }
+        guard let template = template(in: Bundle.main.resourceURL) else { throw CodeFailure("The applet host template is missing.") }
         // Stage beside the destination, so failed exports never leave a partial project.
         let stage = destination.deletingLastPathComponent().appendingPathComponent(".orbit-applet-" + UUID().uuidString)
         try fm.createDirectory(at: stage, withIntermediateDirectories: true)

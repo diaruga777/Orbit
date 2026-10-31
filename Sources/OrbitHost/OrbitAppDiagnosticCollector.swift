@@ -92,7 +92,10 @@ public actor OrbitAppDiagnosticCollector {
             let lines = data.split(separator: 10, omittingEmptySubsequences: false)
             var batch: [OrbitDiagnosticEvent] = []
             for line in lines.dropLast() {
-                guard line.count <= 16384, let event = try? JSONDecoder().decode(OrbitDiagnosticEvent.self, from: Data(line)) else { continue }
+                guard !line.isEmpty else { continue }
+                guard line.count <= 16384, let event = try? JSONDecoder().decode(OrbitDiagnosticEvent.self, from: Data(line)) else {
+                    throw CodeFailure("Invalid app diagnostic event.")
+                }
                 batch.append(event)
                 if batch.count == 128 { try journal.append(batch); batch = [] }
             }
