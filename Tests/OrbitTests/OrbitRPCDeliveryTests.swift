@@ -20,7 +20,10 @@ final class OrbitRPCDeliveryTests: XCTestCase {
             defer { timer.cancel(); stream.close() }
             let magic = try await stream.read(exactly: 4); XCTAssertEqual(magic, OrbitRPC.magic)
             _ = try await OrbitRPC.read(from: stream)
-            try await OrbitRPC.reply(payload, stream: stream)
+            if ProcessInfo.processInfo.environment["ORBIT_TEST_IMMEDIATE_CLOSE"] == "1" {
+                // Fault injection reproduces the historical write-then-close path.
+                try await OrbitRPC.write(payload, to: stream)
+            } else { try await OrbitRPC.reply(payload, stream: stream) }
         }
         do {
             let connection = try await client.connect(addr: server.addr(), alpn: OrbitDumbpipe.alpn)
