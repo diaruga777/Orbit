@@ -20,6 +20,9 @@ import UniformTypeIdentifiers
             .onDrop(of: [UTType.fileURL], isTargeted: nil, perform: model.acceptDrop)
             .alert("Couldn’t Import", isPresented: $model.scriptImportFailed) { Button("OK", role: .cancel) {} } message: { Text(model.scriptMessage) }
         }.commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Orbit Mac") { showAbout() }
+            }
             CommandGroup(after: .appSettings) {
                 Button("Show Client Logs") { NSWorkspace.shared.open(OrbitDiagnostics.defaultDirectory) }
                 Button("Setup…") { setup.state.finished = false; setup.state.step = .welcome; setup.persist() }
@@ -29,6 +32,19 @@ import UniformTypeIdentifiers
             Button("Open Orbit") { NSApp.activate(ignoringOtherApps: true); NSApp.windows.first?.makeKeyAndOrderFront(nil) }
             Button("Quit Orbit") { NSApp.terminate(nil) }
         }
+    }
+
+    private func showAbout() {
+        let alert = NSAlert()
+        alert.messageText = "Orbit Mac"
+        alert.informativeText = "Bundle ID"
+        let identifier = NSTextField(labelWithString: Bundle.main.bundleIdentifier ?? "Unavailable")
+        identifier.isSelectable = true
+        identifier.lineBreakMode = .byTruncatingMiddle
+        identifier.frame = NSRect(x: 0, y: 0, width: 360, height: 22)
+        alert.accessoryView = identifier
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 final class OrbitMacDelegate: NSObject, NSApplicationDelegate {

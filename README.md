@@ -95,6 +95,8 @@ Open Orbit after Mac installs so it can sync the latest dates. The scheduled
 notification then works without the Mac or Orbit running. Notification permission
 and iOS delivery settings still apply.
 
+To identify a running Mac copy, choose **Orbit Mac → About Orbit Mac**. Its bundle ID is selectable for copying.
+
 ## Client logs
 
 Orbit keeps private rotating action logs on both devices. They include screen

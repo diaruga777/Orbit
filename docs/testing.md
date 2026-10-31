@@ -724,3 +724,7 @@ JavaScript breadcrumb API and synthetic app collection/recovery. No physical
 phone access, Apple sign-in, physical UI acceptance, public notarization or
 marketplace listing was performed. Real native container copying and phone
 lock/reconnect acceptance remain manual checks on the intended hardware.
+
+## Mac bundle identity
+
+Open **Orbit Mac → About Orbit Mac** during setup and after setup. Verify the selectable bundle ID matches the running app bundle’s `CFBundleIdentifier`, including for independently installed copies.

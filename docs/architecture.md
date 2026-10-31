@@ -413,3 +413,5 @@ selector. CLI and MCP share these methods. The automatically discoverable
 when creating source for Orbit deployment, with no app-side export action or AI
 runtime dependency. Existing arbitrary binaries still need a source update.
 See [app debugging](app-debugging.md) for APIs, privacy and availability limits.
+
+The Mac app’s About menu reads its bundle ID from the running app bundle, so independently installed copies can be identified during setup or normal use.
