@@ -640,3 +640,26 @@ build remains blocked by the reported missing Xcode account token and profile
 capability mismatch until the user repairs Xcode sign-in/signing. No Apple sign-in,
 physical-device access, installation/renewal, notarization or marketplace acceptance
 was performed.
+
+## Apps RPC delivery and client logs
+
+`OrbitRPCDeliveryTests` sends a 3 MiB catalog-sized response over real local QUIC
+using the production iroh stream and framing, with discovery/relays disabled.
+It verifies that server teardown waits for the client's complete read and close.
+`OrbitDiagnosticsTests` covers concurrent writers, bounded rotation, privacy
+redaction, owner-only permissions, cursor recovery, restart deduplication,
+authenticated per-phone upload, local-only reads, oversized batches and invalid
+phone/path rejection. It uses temporary state and synthetic identities.
+
+`CodeEditorUITests.testAppsBuildShowsLiveProgressConsoleAndCompletion` starts the
+production Apps build flow using its one-press play button.
+`testAppsListFailureCanRetryAndEmptyCatalogExplainsAdd` covers a failed list read,
+Retry and an empty catalog. Existing progress, reconnect and failure checks use
+inert build jobs; no Simulator fixture builds or installs a physical app.
+
+Physical acceptance should additionally check a real paired phone's Apps list,
+one play press, exact installed revision/profile lifetime, relaunch/network
+changes, and phone log arrival on Mac after an offline interval. Automatic
+foreground log transfer does not imply delivery while iOS suspends the app.
+Apple account repair, physical installation/renewal, public notarization and
+marketplace listing remain separate acceptance.

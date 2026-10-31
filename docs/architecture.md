@@ -133,7 +133,14 @@ helper requests or refresh-secret access.
 
 ## Requests and jobs
 
-The local CLI uses a Unix socket inside the owner-only state directory. Remote peers use mutually authenticated TLS or pinned iroh endpoint keys and must be explicitly trusted by the Mac. Control frames begin with `ORBT`, followed by a four-byte big-endian JSON length; the 12 MiB cap is checked before payload allocation. Each RPC uses a fresh bounded exchange. Installation streams use their separate LCDF protocol and phone-key proof.
+The local CLI uses a Unix socket inside the owner-only state directory. Remote peers use mutually authenticated TLS or pinned iroh endpoint keys and must be explicitly trusted by the Mac. Control frames begin with `ORBT`, followed by a four-byte big-endian JSON length; the 12 MiB cap is checked before payload allocation. Each RPC uses a fresh bounded exchange. After queuing a reply, the server waits
+for the client's close (under the connection timeout) before tearing down the
+stream. QUIC writes can complete before delivery; closing immediately could
+truncate catalog/build replies even while small connection checks succeeded.
+The phone retries reads on alternate pinned routes, but never automatically
+replays a mutation after an interrupted exchange. Correlation IDs link the phone
+and Mac event journals without retaining request bodies. Concurrent catalog
+starts for one target are serialized across suspension points. Installation streams use their separate LCDF protocol and phone-key proof.
 
 The Mac checks its schedule every minute. Success means a confirmed installation, not just compilation. Submission IDs and pending requests are persisted before dispatch; jobs, logs, artifacts and install evidence survive restart. Builds use a detached checkout of the configured committed branch. GitHub-managed targets fetch their configured branch; local targets never pull or rewrite the user's checkout.
 
@@ -338,3 +345,39 @@ The Mac ID stays prefix-plus-`.mac`. The setup wizard creates local config only
 inside its private extracted source; source/developer checkouts own theirs.
 
 Known Xcode signing failures are summarized from bounded startup and tail log reads. Account authentication and capability/profile mismatches can appear together, so both recovery steps reach the durable job failure shown by Mac, phone and CLI/MCP. Unrelated account warnings do not replace a compiler failure. Summaries contain fixed recovery copy; raw account names, project paths and repository output remain in the job log. Orbit preserves the requested entitlements and leaves account authentication and profile updates to Xcode.
+
+## Client diagnostics
+
+`OrbitCore/OrbitDiagnostics` owns process-shared, locked, owner-only JSON-lines
+journals: four 1 MiB files per client or received phone. Events carry a UUID,
+wall-clock timestamp, session, category, name and bounded metadata. Rotation,
+restart reads and UUID deduplication preserve acknowledged-batch recovery.
+Metadata excludes form/document text, RPC bodies, keys, Apple sessions and the
+private installer transcript. Error strings additionally redact credential
+assignments, URLs, email addresses, private paths and long token-like strings.
+Callers must still avoid supplying secret data; this is structured diagnostics,
+not a capture of arbitrary console output.
+
+The iOS window observes controller changes and touch endings without reading
+view contents. App lifecycle, navigation, Apps refresh/build actions and RPC
+attempts/results/errors are recorded explicitly. Mac lifecycle, clicks, tab/setup
+changes, setup actions, local control calls, Code operations and Host job-state
+changes feed the Mac journal. Existing build consoles and recovery journals stay
+separate. A process-local registry prevents independent UI/Host writers from
+racing rotation of the same files.
+
+Every foreground sync pass sends at most four batches of twelve events over
+`diagnostics_upload`. Only authenticated trusted peers can upload, and each
+canonical phone identity gets its own validated directory. The Host limits
+batches to 128 KiB/128 entries, sanitizes again and acknowledges the final UUID
+after writing. The phone persists a per-Mac cursor only after that acknowledgement;
+lost replies retry safely, including across restarts. If rotation removes a
+cursor, synchronization resumes from the oldest retained event. The phone keeps
+its journal after upload. Background delivery is opportunistic, and offline
+history is bounded by rotation. Upload requests exclude their own RPC trace to
+avoid a log-feedback loop.
+
+The local-only `diagnostics` RPC and shared CLI/MCP expose recent Mac events,
+paired phone IDs and per-phone received events. Remote peers cannot read either
+journal or supply filesystem paths. Logs are untrusted diagnostic data when
+read by an agent.

@@ -95,6 +95,32 @@ Open Orbit after Mac installs so it can sync the latest dates. The scheduled
 notification then works without the Mac or Orbit running. Notification permission
 and iOS delivery settings still apply.
 
+## Client logs
+
+Orbit keeps private rotating action logs on both devices. They include screen
+changes, taps/clicks, requests, build/job transitions and errors. Text-field
+contents, source files, RPC bodies, Apple sessions and installer transcripts are
+excluded; error metadata is bounded and redacted.
+
+While Orbit is open, iPhone logs automatically sync to its paired Mac every ten
+seconds. Offline entries stay on the phone and resume from the last acknowledged
+event. Each journal keeps up to four 1 MiB files, so very old offline events can
+rotate out. iOS controls background opportunities.
+
+Mac logs live in `~/.orbit/Logs/events.jsonl`; received phone journals live in
+`~/.orbit/Logs/Phones/<paired-phone-id>/`. Set `ORBIT_HOME` to use another state
+folder. An agent can call `orbit_diagnostics` or run `bin/orbit diagnostics` to
+read recent Mac events and list phone IDs, then use
+`bin/orbit diagnostics --phone PHONE_ID --limit 100` for that phone. Diagnostics
+are local to your devices and available only through the Mac's local control
+socket. Build console logs remain available through `orbit_job`.
+
+The iPhone Apps list loads independently of job-console reads, shows errors with
+Retry, and explains how to add apps when the catalog is empty. Tap the play
+button beside an app to build and install it in one press. Row menus still hold
+schedules, cancellation and console actions. An interrupted build reply asks you
+to check Apps before retrying, since the Mac may already be building.
+
 ## Quick path with an agent
 
 Clone this repository and ask your agent:
