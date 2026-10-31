@@ -122,6 +122,8 @@ class AppletContractTests(unittest.TestCase):
             self.assertFalse(reply['result']['isError'])
         names = {s['name']:s for s in orbit.tool_specs()}
         self.assertTrue(names['orbit_applet_prompt']['annotations']['readOnlyHint'])
+        self.assertTrue(names['orbit_diagnostics']['annotations']['readOnlyHint'])
+        self.assertIn('phone', names['orbit_diagnostics']['inputSchema']['properties'])
         self.assertIn('orbit_applet_add', names)
 
     def test_applet_export_cli_accepts_blank_or_file(self):

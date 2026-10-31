@@ -56,7 +56,7 @@ public actor OrbitHost {
         }
         service = try CodeService(root: root.appendingPathComponent("Builds"),
             installBundleID: configuration.phoneBundleID ?? Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String,
-            installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"))
+            installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"), diagnostics: diagnostics)
     }
     public func openPairing() { pairingUntil = Date().addingTimeInterval(300) }
     public func isTrusted(_ peer: String) -> Bool { configuration.trustedPeers.contains(canonicalPeer(peer)) }
@@ -221,7 +221,7 @@ public actor OrbitHost {
             if let existing = configuration.phoneBundleID, existing != bundleID { throw CodeFailure("Keep Orbit’s existing bundle prefix to preserve phone data.") }
             if configuration.phoneBundleID == bundleID { return ["bundleID": bundleID] }
             configuration.phoneBundleID = bundleID; try saveConfiguration()
-            service = try CodeService(root: root.appendingPathComponent("Builds"), installBundleID: bundleID, installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"))
+            service = try CodeService(root: root.appendingPathComponent("Builds"), installBundleID: bundleID, installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"), diagnostics: diagnostics)
             return ["bundleID": bundleID]
         case "phone_setup_status":
             if let peer {

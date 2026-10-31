@@ -21,6 +21,7 @@ import UniformTypeIdentifiers
             .alert("Couldn’t Import", isPresented: $model.scriptImportFailed) { Button("OK", role: .cancel) {} } message: { Text(model.scriptMessage) }
         }.commands {
             CommandGroup(after: .appSettings) {
+                Button("Show Client Logs") { NSWorkspace.shared.open(OrbitDiagnostics.defaultDirectory) }
                 Button("Setup…") { setup.state.finished = false; setup.state.step = .welcome; setup.persist() }
             }
         }

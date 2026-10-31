@@ -216,19 +216,22 @@ import OrbitWire
     private var expirySync: Task<Void, Never>?
     private var readiness: Task<Void, Never>?
     private var scriptSync: Task<Void, Never>?
-    func sceneDidEnterBackground(_ scene: UIScene) {
-        OrbitDiagnostics.shared.record("lifecycle", "background")
-        Task { await connection.syncDiagnostics() }
-    }
+    private var diagnosticSync: Task<Void, Never>?
     func sceneDidBecomeActive(_ scene: UIScene) {
         OrbitDiagnostics.shared.record("lifecycle", "active")
         OrbitAppletBackground.shared.foreground()
         openAppletIfNeeded()
         widgets?.refreshInbox(); applets?.refreshInbox()
+        diagnosticSync?.cancel()
+        diagnosticSync = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.connection.syncDiagnostics()
+                do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            }
+        }
         scriptSync?.cancel()
         scriptSync = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.connection.syncDiagnostics()
                 await self?.syncScripts()
                 do { try await Task.sleep(for: .seconds(10)) } catch { return }
             }
@@ -259,8 +262,8 @@ import OrbitWire
             } catch { /* Keep the last received queue while the Mac is unavailable. */ }
         }
     }
-    func sceneWillResignActive(_ scene: UIScene) { scriptSync?.cancel(); scriptSync = nil; OrbitAppletBackground.shared.background() }
-    func sceneDidEnterBackground(_ scene: UIScene) { expirySync?.cancel(); expirySync = nil; Task { await OrbitExpiryNotifications.shared.update() }; scriptSync?.cancel(); scriptSync = nil; readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
+    func sceneWillResignActive(_ scene: UIScene) { diagnosticSync?.cancel(); diagnosticSync = nil; scriptSync?.cancel(); scriptSync = nil; OrbitAppletBackground.shared.background() }
+    func sceneDidEnterBackground(_ scene: UIScene) { OrbitDiagnostics.shared.record("lifecycle", "background"); expirySync?.cancel(); expirySync = nil; Task { await OrbitExpiryNotifications.shared.update() }; scriptSync?.cancel(); scriptSync = nil; readiness?.cancel(); readiness = nil; OrbitAppDelegate.requestWindow() }
 
 }
 @MainActor final class OrbitConnectionController: UITableViewController {
@@ -273,7 +276,7 @@ import OrbitWire
     }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 4 }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        connection.localID.isEmpty ? nil : "This phone: " + connection.localID
+        "Logs sync to your Mac while Orbit is open." + (connection.localID.isEmpty ? "" : "\n\nThis phone: " + connection.localID)
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)

@@ -4,7 +4,7 @@ import OrbitCore
 /// Observe navigation and taps without inspecting labels, keyboard input,
 /// source text, credentials or any other view contents.
 final class OrbitDiagnosticWindow: UIWindow {
-    private var screen = ""
+    private var screenPath = ""
     override func layoutSubviews() {
         super.layoutSubviews()
         var controller = rootViewController
@@ -17,11 +17,11 @@ final class OrbitDiagnosticWindow: UIWindow {
             else { controller = nil }
         }
         let next = chain.joined(separator: "/")
-        if next != screen { screen = next; OrbitDiagnostics.shared.record("screen", "shown", ["controller": next]) }
+        if next != screenPath { screenPath = next; OrbitDiagnostics.shared.record("screen", "shown", ["controller": next]) }
     }
     override func sendEvent(_ event: UIEvent) {
         if event.type == .touches, let touch = event.allTouches?.first, touch.phase == .ended {
-            OrbitDiagnostics.shared.record("interaction", "tap", ["view": touch.view.map { String(describing: type(of: $0)) } ?? "unknown", "screen": screen])
+            OrbitDiagnostics.shared.record("interaction", "tap", ["view": touch.view.map { String(describing: type(of: $0)) } ?? "unknown", "screen": screenPath])
         }
         super.sendEvent(event)
     }
