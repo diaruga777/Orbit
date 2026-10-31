@@ -230,7 +230,7 @@ def mcp_http(parent_pid, port=49211):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['mcp-http','mcp','status','devices','targets','add','build','schedule','remove','job','cancel','github-search','github-inspect','github-add','widget-add','widget-remove','widgets','applets','applet-add','applet-remove','applet-prompt','applet-export','configure','pair','forget','code'])
+    parser.add_argument('command', choices=['mcp-http','mcp','diagnostics','status','devices','targets','add','build','schedule','remove','job','cancel','github-search','github-inspect','github-add','widget-add','widget-remove','widgets','applets','applet-add','applet-remove','applet-prompt','applet-export','configure','pair','forget','code'])
     parser.add_argument('value', nargs='?')
     parser.add_argument('--destination'); parser.add_argument('--bundle-id',dest='bundleID'); parser.add_argument('--icon',dest='iconPath')
     parser.add_argument('--project'); parser.add_argument('--scheme'); parser.add_argument('--device',dest='deviceID')
@@ -241,6 +241,7 @@ def main():
     parser.add_argument('--trust',action='store_true',default=None)
     parser.add_argument('--launch',action='store_true',default=None)
     parser.add_argument('--provider',choices=['local','tailscale','syncthing','dumbpipe'])
+    parser.add_argument('--phone'); parser.add_argument('--limit', type=int)
     parser.add_argument('--address'); parser.add_argument('--relay')
     args = vars(parser.parse_args()); command = args.pop('command'); value = args.pop('value')
     if command == 'mcp-http':

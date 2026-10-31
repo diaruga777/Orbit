@@ -23,6 +23,7 @@
 		55F48DC5ECD5C0DA308A7E9C /* OrbitSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0A01C472F4A3668A1DD14B8 /* OrbitSetupView.swift */; };
 		57A297359E56B8F9E1827699 /* OrbitSetupBannerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A1017F61EB39265701512C /* OrbitSetupBannerController.swift */; };
 		5EF589508B63A6049E6F8ED5 /* OrbitShareController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84D5D4C2C98A634420DF1494 /* OrbitShareController.swift */; };
+		73F4F90972AD09AB8CF57F59 /* OrbitDiagnosticWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0891620B0777DC9CC77B1F32 /* OrbitDiagnosticWindow.swift */; };
 		765C5B90D30DEBFB1781A916 /* OrbitWidgetUI in Frameworks */ = {isa = PBXBuildFile; productRef = 5A6A977103D45EE1C2401BEF /* OrbitWidgetUI */; };
 		7F9D90A3F6A84FB66E00BAB9 /* OrbitMacAppletsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A047289DD1B1804E32256CF /* OrbitMacAppletsView.swift */; };
 		803B9A0FA4910B40D7679C2B /* OrbitPhoneConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97811297AE1EF362A94D4E75 /* OrbitPhoneConnection.swift */; };
@@ -87,6 +88,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0891620B0777DC9CC77B1F32 /* OrbitDiagnosticWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitDiagnosticWindow.swift; sourceTree = "<group>"; };
 		0931C2FA931D915342ABC272 /* OrbitScriptFolderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitScriptFolderView.swift; sourceTree = "<group>"; };
 		0950C4F0545DEB151A224B7F /* CodeEditorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeEditorUITests.swift; sourceTree = "<group>"; };
 		09C5B39631C8DF45F113C9D5 /* OrbitExpiryNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitExpiryNotifications.swift; sourceTree = "<group>"; };
@@ -177,6 +179,7 @@
 				E691E1A576C579A627A7BDDF /* Info.plist */,
 				AA0E97AE18D6AF113D5ECCC8 /* Orbit.entitlements */,
 				C98699AB088CAE924C1A6654 /* OrbitAppDelegate.swift */,
+				0891620B0777DC9CC77B1F32 /* OrbitDiagnosticWindow.swift */,
 				09C5B39631C8DF45F113C9D5 /* OrbitExpiryNotifications.swift */,
 				97811297AE1EF362A94D4E75 /* OrbitPhoneConnection.swift */,
 				B6A1017F61EB39265701512C /* OrbitSetupBannerController.swift */,
@@ -547,6 +550,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C31003C286B425BF85F7198C /* OrbitAppDelegate.swift in Sources */,
+				73F4F90972AD09AB8CF57F59 /* OrbitDiagnosticWindow.swift in Sources */,
 				94904093FEB14238BE70B4AA /* OrbitExpiryNotifications.swift in Sources */,
 				803B9A0FA4910B40D7679C2B /* OrbitPhoneConnection.swift in Sources */,
 				57A297359E56B8F9E1827699 /* OrbitSetupBannerController.swift in Sources */,

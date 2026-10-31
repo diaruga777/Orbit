@@ -12,7 +12,17 @@ public struct OrbitDiagnosticEvent: Codable, Sendable, Equatable {
 /// Private, bounded JSON-lines journals. Callers supply event metadata only,
 /// never text-field contents, source, RPC bodies or installer transcripts.
 public final class OrbitDiagnostics: @unchecked Sendable {
-    public static let shared = OrbitDiagnostics(directory: defaultDirectory)
+    private static let registryLock = NSLock()
+    private static var registry: [String: OrbitDiagnostics] = [:]
+    public static let shared = store(directory: defaultDirectory)
+    public static func store(directory: URL) -> OrbitDiagnostics {
+        registryLock.lock(); defer { registryLock.unlock() }
+        let key = directory.standardizedFileURL.path
+        if let store = registry[key] { return store }
+        let store = OrbitDiagnostics(directory: directory)
+        registry[key] = store
+        return store
+    }
     public static var defaultDirectory: URL {
         #if os(macOS)
         let root = ProcessInfo.processInfo.environment["ORBIT_HOME"].map { URL(fileURLWithPath: $0) }

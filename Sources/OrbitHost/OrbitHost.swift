@@ -34,7 +34,7 @@ public actor OrbitHost {
     public private(set) var pairingUntil = Date.distantPast
     public init(root: URL = OrbitPaths.root) throws {
         self.root = root
-        diagnostics = OrbitDiagnostics(directory: root.appendingPathComponent("Logs"))
+        diagnostics = OrbitDiagnostics.store(directory: root.appendingPathComponent("Logs"))
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         stateLock = try OrbitStateLock(root: root)
         let configURL = root.appendingPathComponent("config.json"), targetsURL = root.appendingPathComponent("targets.json")

@@ -23,6 +23,8 @@ import OrbitUI
         let controller = OrbitTargetsController(rpc: { method, params in
             switch method {
             case "targets":
+                if ProcessInfo.processInfo.arguments.contains("--target-list-retry"), await fixture.failList() { throw CodeFailure("Fixture Mac unavailable. Retry to load apps.") }
+                if ProcessInfo.processInfo.arguments.contains("--target-list-empty") { return [[String: Any]]() }
                 var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": false]
                 if await fixture.started { row["jobID"] = "fixture-job" }
                 return [row]
@@ -38,6 +40,8 @@ import OrbitUI
     }
     actor Fixture {
         var started = false
+        private var listFailed = false
+        func failList() -> Bool { if listFailed { return false }; listFailed = true; return true }
         private var start = Date()
         func begin() { started = true; start = Date() }
         func loadStatus() throws -> CodeJob {

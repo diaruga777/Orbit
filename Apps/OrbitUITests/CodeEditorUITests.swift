@@ -1,14 +1,31 @@
 import XCTest
 
 final class CodeEditorUITests: XCTestCase {
+    func testAppsListFailureCanRetryAndEmptyCatalogExplainsAdd() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-list-retry"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["OrbitTargetsMessage"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 3))
+        app.buttons["Retry"].tap()
+        XCTAssertTrue(app.cells["OrbitTarget:fixture"].waitForExistence(timeout: 5))
+        app.terminate()
+        app.launchArguments = ["--target-build-preview", "--target-list-empty"]
+        app.launch()
+        let message = app.staticTexts["OrbitTargetsMessage"]
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        expectation(for: NSPredicate(format: "label CONTAINS 'No apps yet'"), evaluatedWith: message)
+        waitForExpectations(timeout: 5)
+    }
+
     func testAppsBuildShowsLiveProgressConsoleAndCompletion() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--target-build-preview"]
         app.launch()
         let row = app.cells["OrbitTarget:fixture"]
-        XCTAssertTrue(row.waitForExistence(timeout: 15)); row.tap()
-        app.buttons["Build and Install"].tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        app.buttons["OrbitTargetPlay:fixture"].tap()
         let progress = app.progressIndicators["CodeBuildProgress"]
         XCTAssertTrue(progress.waitForExistence(timeout: 8))
         let first = progress.value as? String

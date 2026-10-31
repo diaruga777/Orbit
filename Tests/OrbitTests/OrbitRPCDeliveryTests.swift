@@ -11,8 +11,10 @@ final class OrbitRPCDeliveryTests: XCTestCase {
         let client = try await Endpoint.bind(options: EndpointOptions(preset: presetMinimal(), alpns: [OrbitDumbpipe.alpn]))
         let payload = Data(repeating: 65, count: 3 * 1024 * 1024)
         let serving = Task {
-            let incoming = try XCTUnwrap(await server.acceptNext())
-            let connection = try await incoming.accept().connect()
+            let next = await server.acceptNext()
+            let incoming = try XCTUnwrap(next)
+            let accepting = try await incoming.accept()
+            let connection = try await accepting.connect()
             let stream = OrbitIrohStream(connection: connection, stream: try await connection.acceptBi())
             let timer = Task { try? await Task.sleep(for: .seconds(10)); if !Task.isCancelled { stream.close() } }
             defer { timer.cancel(); stream.close() }

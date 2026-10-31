@@ -17,7 +17,7 @@ public actor CodeService {
     private var savedReplies: [String: (Data, Data)] = [:]
     public init(root: URL, installBundleID: String? = nil, installHelper: URL? = nil, checkAccess: @escaping @Sendable (String) async throws -> Void = { _ in }) throws {
         self.root = root; self.checkAccess = checkAccess
-        diagnostics = OrbitDiagnostics(directory: root.deletingLastPathComponent().appendingPathComponent("Logs"))
+        diagnostics = OrbitDiagnostics.store(directory: root.deletingLastPathComponent().appendingPathComponent("Logs"))
         let builds = try CodeJobs(root: root.appendingPathComponent("Jobs"), phoneBundleID: installBundleID); jobs = builds
         let journal = try CodeOvernightStore(root: root.appendingPathComponent("Overnight"))
         if let installBundleID {
