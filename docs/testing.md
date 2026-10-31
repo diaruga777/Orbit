@@ -663,3 +663,27 @@ changes, and phone log arrival on Mac after an offline interval. Automatic
 foreground log transfer does not imply delivery while iOS suspends the app.
 Apple account repair, physical installation/renewal, public notarization and
 marketplace listing remain separate acceptance.
+
+Apps/logging verification (2026-10-31): bootstrap generated native dependencies in
+a committed detached checkout. All 216 Swift checks passed (five optional checks
+skipped), all 19 Python checks passed, both Go race suites and helper vet passed.
+The local QUIC test failed with `ORBIT_TEST_IMMEDIATE_CLOSE=1`, reproducing the
+historical truncated reply, and passed with normal reply draining. The final iOS
+Simulator client, native arm64 Xcode Mac client and complete Mac package built
+with the ignored local identity configuration. Strict Mac signatures and six
+packaged helper/source extraction/resume checks passed. Three final Simulator
+checks passed: one-press Play/progress/console/completion, reconnect/failure and
+list failure/Retry/empty state. Reviewed the progress, completion/play and failure
+captures and confirmed the Simulator's private 0600 journal contains lifecycle,
+screen, interaction, Apps/build and RPC events.
+
+The first iOS build caught a duplicate lifecycle callback and a window property
+name collision; both were corrected. The first Retry fixture raced automatic
+polling; injecting its polling interval made explicit Retry deterministic. Inert
+Simulator previews now skip production foreground networking even if the
+Simulator had a saved pairing. The running Mac client was updated at its existing
+path using its existing certificate, bundle ID and verified designated
+requirement; its local control socket exposes the retained six-target catalog
+and new diagnostic reads. iPhone installation, live physical log transfer,
+provisioning renewal, Apple sign-in, notarization and marketplace acceptance were
+not exercised by these checks.
