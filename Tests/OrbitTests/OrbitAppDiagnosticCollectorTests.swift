@@ -86,7 +86,7 @@ final class OrbitAppDiagnosticCollectorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let packaged = root.appendingPathComponent("Orbit_OrbitHost.bundle/AppletHost")
         try FileManager.default.createDirectory(at: packaged, withIntermediateDirectories: true)
-        XCTAssertEqual(OrbitAppletExport.template(in: root), packaged)
+        XCTAssertEqual(OrbitAppletExport.template(in: root)?.path, packaged.path)
     }
     func testInstrumentationSourcesAreAvailableOnlyOnMac() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
