@@ -11,6 +11,7 @@ import OrbitWire
 
 @main final class OrbitAppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        OrbitDiagnostics.shared.record("lifecycle", "launched", ["version": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "", "revision": Bundle.main.object(forInfoDictionaryKey: "OrbitSourceRevision") as? String ?? "unknown"])
         OrbitExpiryNotifications.shared.start()
         OrbitAppletBackground.shared.register()
         CodeRefreshBackground.register()
@@ -62,7 +63,7 @@ import OrbitWire
     let connection = OrbitPhoneConnection.shared
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
         guard let scene = scene as? UIWindowScene else { return }
-        let window = UIWindow(windowScene: scene); self.window = window
+        let window = OrbitDiagnosticWindow(windowScene: scene); self.window = window
         #if DEBUG && targetEnvironment(simulator)
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--refresh-sign-in-fixture"),
            ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
@@ -194,6 +195,7 @@ import OrbitWire
     }
     func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
         guard let tabs = tabBarController as? OrbitTabBarController else { return }
+        OrbitDiagnostics.shared.record("screen", "tab_selected", ["tab": selectedTab.identifier])
         UserDefaults.standard.set(tabs.destinationIndex, forKey: "Orbit.selectedTab")
     }
     func openRefreshSetupIfNeeded() {
@@ -214,13 +216,19 @@ import OrbitWire
     private var expirySync: Task<Void, Never>?
     private var readiness: Task<Void, Never>?
     private var scriptSync: Task<Void, Never>?
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        OrbitDiagnostics.shared.record("lifecycle", "background")
+        Task { await connection.syncDiagnostics() }
+    }
     func sceneDidBecomeActive(_ scene: UIScene) {
+        OrbitDiagnostics.shared.record("lifecycle", "active")
         OrbitAppletBackground.shared.foreground()
         openAppletIfNeeded()
         widgets?.refreshInbox(); applets?.refreshInbox()
         scriptSync?.cancel()
         scriptSync = Task { [weak self] in
             while !Task.isCancelled {
+                await self?.connection.syncDiagnostics()
                 await self?.syncScripts()
                 do { try await Task.sleep(for: .seconds(10)) } catch { return }
             }
@@ -275,6 +283,7 @@ import OrbitWire
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        OrbitDiagnostics.shared.record("action", "connection_action", ["row": String(indexPath.row)])
         switch indexPath.row {
         case 0:
             let alert = UIAlertController(title: "Connect Your Mac", message: "In Orbit Mac, choose Connect a Phone and copy its pairing code.", preferredStyle: .alert)

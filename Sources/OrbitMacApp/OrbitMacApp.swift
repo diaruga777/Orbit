@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import OrbitCore
 import UniformTypeIdentifiers
 
 @main struct OrbitMacApplication: App {
@@ -13,6 +14,9 @@ import UniformTypeIdentifiers
                 else if setup.state.finished { OrbitMacView(model: model, setup: setup).frame(minWidth: 760, minHeight: 540) }
                 else { OrbitSetupView(setup: setup, model: model) }
             }
+            .onAppear { OrbitDiagnostics.shared.record("screen", "mac_window") }
+            .onChange(of: model.selectedTab) { _, tab in OrbitDiagnostics.shared.record("screen", "mac_tab", ["tab": tab]) }
+            .onChange(of: setup.state.step) { _, step in OrbitDiagnostics.shared.record("screen", "setup_step", ["step": step.rawValue]) }
             .onDrop(of: [UTType.fileURL], isTargeted: nil, perform: model.acceptDrop)
             .alert("Couldn’t Import", isPresented: $model.scriptImportFailed) { Button("OK", role: .cancel) {} } message: { Text(model.scriptMessage) }
         }.commands {
@@ -27,5 +31,14 @@ import UniformTypeIdentifiers
     }
 }
 final class OrbitMacDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) { NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true) }
+    private var eventMonitor: Any?
+    func applicationWillTerminate(_ notification: Notification) { OrbitDiagnostics.shared.record("lifecycle", "terminated") }
+    func applicationDidBecomeActive(_ notification: Notification) { OrbitDiagnostics.shared.record("lifecycle", "active") }
+    func applicationDidResignActive(_ notification: Notification) { OrbitDiagnostics.shared.record("lifecycle", "inactive") }
+    func applicationDidFinishLaunching(_ notification: Notification) { OrbitDiagnostics.shared.record("lifecycle", "launched")
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp, .rightMouseUp]) { event in
+            OrbitDiagnostics.shared.record("interaction", "click", ["window": event.window.map { String(describing: type(of: $0)) } ?? "unknown"])
+            return event
+        }
+        NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true) }
 }

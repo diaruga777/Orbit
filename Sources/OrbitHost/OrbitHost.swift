@@ -21,15 +21,20 @@ public actor OrbitHost {
     }
     private let stateLock: OrbitStateLock
     public let root: URL
+    private let diagnostics: OrbitDiagnostics
     public private(set) var service: CodeService
     private let scripts = OrbitScriptLibrary()
     private var targets: [OrbitTarget]
     private var updatingIcons = false
+    private var startingTargets: Set<String> = []
+    private var diagnosticStores: [String: OrbitDiagnostics] = [:]
+    private var jobStates: [String: String] = [:]
     private var iconLookups: [String: Date] = [:]
     public private(set) var configuration: OrbitConfiguration
     public private(set) var pairingUntil = Date.distantPast
     public init(root: URL = OrbitPaths.root) throws {
         self.root = root
+        diagnostics = OrbitDiagnostics(directory: root.appendingPathComponent("Logs"))
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         stateLock = try OrbitStateLock(root: root)
         let configURL = root.appendingPathComponent("config.json"), targetsURL = root.appendingPathComponent("targets.json")
@@ -62,15 +67,38 @@ public actor OrbitHost {
     private func saveConfiguration() throws { try JSONEncoder().encode(configuration).write(to: root.appendingPathComponent("config.json"), options: .atomic) }
     private func saveTargets() throws { try JSONEncoder().encode(targets).write(to: root.appendingPathComponent("targets.json"), options: .atomic) }
     public func handle(_ data: Data, peer: String? = nil) async -> Data {
+        let started = Date()
+        var fields = ["origin": peer ?? "mac", "request": UUID().uuidString]
+        var upload = false
         do {
             guard data.count <= CodeWire.maxPayloadBytes,
                   let request = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let method = request["method"] as? String else { throw CodeFailure("Invalid Orbit request.") }
             let p = request["params"] as? [String: Any] ?? [:]
+            upload = method == "diagnostics_upload"
+            if let trace = request["trace"] as? String, UUID(uuidString: trace) != nil { fields["request"] = trace }
+            fields["method"] = method
+            if let operation = p["operation"] as? String { fields["operation"] = operation }
+            if let id = p["id"] as? String { fields["actionID"] = id }
+            if !upload { diagnostics.record("rpc", "received", fields) }
             if let peer, !isTrusted(peer) { throw CodeFailure("Approve this phone in Orbit Mac.") }
             let result = try await dispatch(method, p, peer: peer.map { canonicalPeer($0) })
-            return try JSONSerialization.data(withJSONObject: ["result": result], options: [.sortedKeys, .fragmentsAllowed])
-        } catch { return (try? JSONSerialization.data(withJSONObject: ["error": error.localizedDescription])) ?? Data() }
+            let response = try JSONSerialization.data(withJSONObject: ["result": result], options: [.sortedKeys, .fragmentsAllowed])
+            fields["milliseconds"] = String(Int(Date().timeIntervalSince(started) * 1000)); fields["bytes"] = String(response.count)
+            if !upload { diagnostics.record("rpc", "completed", fields) }
+            return response
+        } catch {
+            diagnostics.error("rpc", "failed", error, fields)
+            return (try? JSONSerialization.data(withJSONObject: ["error": error.localizedDescription])) ?? Data()
+        }
+    }
+    private func phoneDiagnostics(_ peer: String) throws -> OrbitDiagnostics {
+        // Validate before using a remotely supplied identity as a path component.
+        let peer = try DeviceID(string: peer).description
+        if let store = diagnosticStores[peer] { return store }
+        let store = OrbitDiagnostics(directory: root.appendingPathComponent("Logs/Phones").appendingPathComponent(peer))
+        diagnosticStores[peer] = store
+        return store
     }
     private func object<T: Encodable>(_ value: T) throws -> Any { try JSONSerialization.jsonObject(with: JSONEncoder().encode(value), options: .fragmentsAllowed) }
     private func required(_ p: [String: Any], _ key: String) throws -> String {
@@ -78,6 +106,24 @@ public actor OrbitHost {
     }
     private func dispatch(_ method: String, _ p: [String: Any], peer: String?) async throws -> Any {
         switch method {
+        case "diagnostics_upload":
+            guard let peer else { throw CodeFailure("Use a paired phone to upload logs.") }
+            let data = try JSONSerialization.data(withJSONObject: p["events"] ?? [])
+            guard data.count <= 128 * 1024 else { throw CodeFailure("Diagnostic batch too large.") }
+            let events = try JSONDecoder().decode([OrbitDiagnosticEvent].self, from: data)
+            guard events.count <= 128 else { throw CodeFailure("Too many diagnostic events.") }
+            try phoneDiagnostics(peer).append(events)
+            return ["acknowledged": events.last?.id ?? ""]
+        case "diagnostics":
+            guard peer == nil else { throw CodeFailure("Read diagnostics on your Mac.") }
+            let limit = p["limit"] as? Int ?? 100
+            if let phone = p["phone"] as? String {
+                guard configuration.trustedPeers.contains(phone) else { throw CodeFailure("Phone not found.") }
+                return ["events": try object(phoneDiagnostics(phone).recent(maximum: limit))]
+            }
+            return ["directory": root.appendingPathComponent("Logs").path,
+                    "phones": configuration.trustedPeers,
+                    "events": try object(diagnostics.recent(maximum: limit))]
         case "status": return ["product": "Orbit", "targets": targets.count, "configuration": try object(configuration)]
         case "code":
             let data = try JSONSerialization.data(withJSONObject: p)
@@ -370,6 +416,9 @@ public actor OrbitHost {
     private func start(_ index: Int, launch: Bool = false, monitorBundleID: String? = nil) async throws -> Any {
         let target = targets[index], id = target.id
         if let jobID = target.jobID { return try await job(jobID) }
+        guard startingTargets.insert(id).inserted else { throw CodeFailure("This build is already starting. Check Apps in a moment.") }
+        defer { startingTargets.remove(id) }
+        diagnostics.record("build", "starting", ["target": id, "launch": String(launch)])
         var branch = target.branch
         if target.repository != nil {
             _ = try await OrbitCommand.run("/usr/bin/git", ["check-ref-format", "--branch", branch])
@@ -398,7 +447,9 @@ public actor OrbitHost {
         guard let current = targets.firstIndex(where: { $0.id == id }) else { throw CodeFailure("Target was removed.") }
         targets[current].pendingRequest = nil; targets[current].jobID = jobID; targets[current].lastJobID = jobID
         targets[current].jobKind = request.operation == .overnightSubmit ? "retained" : "build"
-        targets[current].failure = nil; try saveTargets(); return value
+        targets[current].failure = nil; try saveTargets()
+        diagnostics.record("build", "accepted", ["target": id, "job": jobID])
+        return value
     }
     public func tick(at date: Date = Date()) async {
         for id in targets.map(\.id) {
@@ -408,6 +459,10 @@ public actor OrbitHost {
                     let retained = targets[i].jobKind == "retained"
                     let value = try await job(jobID) as? [String: Any] ?? [:]
                     let state = value["state"] as? String ?? ""
+                    if jobStates[jobID] != state {
+                        jobStates[jobID] = state
+                        diagnostics.record("build", "state", ["job": jobID, "state": state])
+                    }
                     guard let j = targets.firstIndex(where: { $0.id == id }), targets[j].jobID == jobID else { continue }
                     if ["succeeded", "failed", "cancelled"].contains(state) {
                         targets[j].jobID = nil

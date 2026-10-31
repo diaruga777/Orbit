@@ -9,6 +9,7 @@ public actor CodeService {
     private let endpoints: CodeEndpointEnrollmentService?
     private let overnight: CodeOvernightService
     private let root: URL
+    private let diagnostics: OrbitDiagnostics
     private let checkAccess: @Sendable (String) async throws -> Void
     private var language: Task<CodeLanguageServer, Error>?
     private var projectKey: String?
@@ -16,6 +17,7 @@ public actor CodeService {
     private var savedReplies: [String: (Data, Data)] = [:]
     public init(root: URL, installBundleID: String? = nil, installHelper: URL? = nil, checkAccess: @escaping @Sendable (String) async throws -> Void = { _ in }) throws {
         self.root = root; self.checkAccess = checkAccess
+        diagnostics = OrbitDiagnostics(directory: root.deletingLastPathComponent().appendingPathComponent("Logs"))
         let builds = try CodeJobs(root: root.appendingPathComponent("Jobs"), phoneBundleID: installBundleID); jobs = builds
         let journal = try CodeOvernightStore(root: root.appendingPathComponent("Overnight"))
         if let installBundleID {
@@ -78,9 +80,12 @@ public actor CodeService {
     public func revokeEndpointAuthorizations() async throws { try await endpoints?.revokeAll(); await reverseFlows?.revoke() }
     public func handle(_ data: Data, authenticatedPeerID: String? = nil) async -> Data {
         var response = CodeResponse()
+        var fields: [String: String] = [:]
         do {
             guard data.count <= CodeWire.maxPayloadBytes else { throw CodeFailure("Request too large.") }
             let request = try JSONDecoder().decode(CodeRequest.self, from: data)
+            fields = ["request": request.id, "operation": request.operation.rawValue]
+            diagnostics.record("code", "started", fields)
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
             let canonical = try encoder.encode(request)
             if let previous = savedReplies[request.id] {
@@ -184,8 +189,9 @@ public actor CodeService {
                 if savedReplies.count > 64 { savedReplies.removeAll() }
                 savedReplies[request.id] = (canonical, encoded)
             }
+            diagnostics.record("code", "completed", fields)
             return encoded
-        } catch { response.error = error.localizedDescription }
+        } catch { diagnostics.error("code", "failed", error, fields); response.error = error.localizedDescription }
         return (try? JSONEncoder().encode(response)) ?? Data()
     }
 }

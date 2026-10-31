@@ -83,10 +83,11 @@ import UniformTypeIdentifiers
                 catch { status = error.localizedDescription }
                 Task { await detectProjects() }
                 while !Task.isCancelled { await mcp.startIfNeeded(); await refresh(); try? await Task.sleep(for: .seconds(5)) }
-            } catch { status = error.localizedDescription }
+            } catch { OrbitDiagnostics.shared.error("mac", "failed", error); status = error.localizedDescription }
         }
     }
     func rpc(_ method: String, _ params: [String: Any] = [:]) async throws -> Any {
+        OrbitDiagnostics.shared.record("mac", "request", ["method": method])
         guard let host else { throw NSError(domain: "Orbit", code: 1, userInfo: [NSLocalizedDescriptionKey: "Orbit is starting."]) }
         let data = await host.handle(try JSONSerialization.data(withJSONObject: ["method": method, "params": params]))
         let response = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
@@ -98,7 +99,7 @@ import UniformTypeIdentifiers
         do {
             let rows = try await rpc("targets") as? [[String: Any]] ?? []
             if revision == targetRevision { targets = rows }
-        } catch { status = error.localizedDescription }
+        } catch { OrbitDiagnostics.shared.error("mac", "failed", error); status = error.localizedDescription }
         await refreshScripts()
     }
     func refreshScripts() async {
@@ -112,6 +113,7 @@ import UniformTypeIdentifiers
         } catch { scriptMessage = error.localizedDescription }
     }
     func importScripts(_ urls: [URL]) async {
+        OrbitDiagnostics.shared.record("action", "importScripts")
         var failures: [String] = [], count = 0
         for url in urls {
             let access = url.startAccessingSecurityScopedResource()
@@ -126,6 +128,7 @@ import UniformTypeIdentifiers
         await refreshScripts()
     }
     func acceptDrop(_ providers: [NSItemProvider]) -> Bool {
+        OrbitDiagnostics.shared.record("action", "acceptDrop")
         let files = providers.filter { $0.canLoadObject(ofClass: URL.self) }
         guard !files.isEmpty else { return false }
         Task {
@@ -176,6 +179,7 @@ import UniformTypeIdentifiers
         } catch { phoneError = error.localizedDescription }
     }
     func chooseProject() {
+        OrbitDiagnostics.shared.record("action", "chooseProject")
         let panel = NSOpenPanel()
         panel.title = "Choose an Xcode project or workspace"
         panel.canChooseFiles = true; panel.canChooseDirectories = false
@@ -185,6 +189,7 @@ import UniformTypeIdentifiers
         inspectProject(url.path)
     }
     func inspectProject(_ path: String) {
+        OrbitDiagnostics.shared.record("action", "inspectProject")
         inspectionRevision += 1
         let revision = inspectionRevision
         project = path; addError = ""; addedName = ""
@@ -206,6 +211,7 @@ import UniformTypeIdentifiers
         }
     }
     func inspectWithXcode() {
+        OrbitDiagnostics.shared.record("action", "inspectWithXcode")
         guard !project.isEmpty, !readingSchemes else { return }
         let alert = NSAlert(); alert.messageText = "Read app details with Xcode?"
         alert.informativeText = "This project needs Xcode to read its settings. Xcode can run project code, so only continue with source you trust."
@@ -226,12 +232,15 @@ import UniformTypeIdentifiers
         }
     }
     func changeSource(_ source: String) {
+        OrbitDiagnostics.shared.record("action", "changeSource")
         guard !downloading, !inspectingRepository else { return }
         inspectionRevision += 1; readingSchemes = false
         addSource = source; project = ""; scheme = ""; addError = ""
     }
-    func pair() { Task { await host?.openPairing(); pairing = (try? await server?.pairingCode()) ?? "" } }
+    func pair() {
+        OrbitDiagnostics.shared.record("action", "pair"); Task { await host?.openPairing(); pairing = (try? await server?.pairingCode()) ?? "" } }
     func search() {
+        OrbitDiagnostics.shared.record("action", "search")
         guard !searching else { return }
         searching = true; addError = ""
         Task {
@@ -241,6 +250,7 @@ import UniformTypeIdentifiers
         }
     }
     func inspect(_ repository: String) {
+        OrbitDiagnostics.shared.record("action", "inspect")
         guard !inspectingRepository else { return }
         inspectingRepository = true; inspection = nil; repositoryProjects = []; preparedRepository = nil; project = ""; scheme = ""; addError = ""
         Task {
@@ -250,6 +260,7 @@ import UniformTypeIdentifiers
         }
     }
     func downloadRepository() {
+        OrbitDiagnostics.shared.record("action", "downloadRepository")
         guard let repository = inspection?["repository"] as? String, !downloading else { return }
         let alert = NSAlert(); alert.messageText = "Download this project?"
         alert.informativeText = repository + " will be saved in your projects folder. Only continue with source you trust."
@@ -268,6 +279,7 @@ import UniformTypeIdentifiers
         }
     }
     func add(repository: String? = nil) {
+        OrbitDiagnostics.shared.record("action", "add")
         guard canAdd else { return }
         let alert = NSAlert(); alert.messageText = "Trust this app’s source?"
         alert.informativeText = "Xcode can run scripts from this project on your Mac. Only add source you trust."

@@ -17,6 +17,13 @@ public enum OrbitRPC {
         guard size > 0, size <= CodeWire.maxPayloadBytes else { throw CodeFailure("Invalid message size.") }
         return try await stream.read(exactly: Int(size))
     }
+    /// A successful write only queues bytes (notably on QUIC). The client closes
+    /// after reading the complete frame. Keep the server alive until that EOF,
+    /// bounded by the serving connection's timer; otherwise close can drop replies.
+    public static func reply(_ value: Data, stream: any BEPByteStream) async throws {
+        try await write(value, to: stream)
+        _ = try? await stream.read(exactly: 1)
+    }
     public static func exchange(_ value: Data, stream: any BEPByteStream, timeout: TimeInterval = 180) async throws -> Data {
         let timer = Task { try? await Task.sleep(for: .seconds(timeout)); if !Task.isCancelled { stream.close() } }
         defer { timer.cancel(); stream.close() }

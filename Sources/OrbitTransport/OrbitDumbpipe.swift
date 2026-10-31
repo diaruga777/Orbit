@@ -61,7 +61,7 @@ public actor OrbitDumbpipe {
         }
     }
 }
-private final class OrbitIrohStream: BEPByteStream, @unchecked Sendable {
+final class OrbitIrohStream: BEPByteStream, @unchecked Sendable {
     private let connection: Connection
     private let stream: BiStream
     private let reader: OrbitIrohReader

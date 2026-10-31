@@ -21,7 +21,7 @@ import OrbitCore
     private var work: Task<Void, Never>?
     init() {
         Task {
-            do { state = try await setup.load() } catch { message = error.localizedDescription }
+            do { state = try await setup.load() } catch { OrbitDiagnostics.shared.error("setup", "failed", error); message = error.localizedDescription }
             loaded = true
             tools = await setup.checkTools()
             teams = await setup.signingTeams()
@@ -39,14 +39,16 @@ import OrbitCore
         case .complete: return true
         }
     }
-    func persist() { let state = state; Task { do { try await setup.save(state) } catch { message = error.localizedDescription } } }
+    func persist() { let state = state; Task { do { try await setup.save(state) } catch { OrbitDiagnostics.shared.error("setup", "failed", error); message = error.localizedDescription } } }
     func next() {
+        OrbitDiagnostics.shared.record("action", "setup_next")
         guard canContinue, !busy else { return }
         if state.step == .complete { state.finished = true; persist(); return }
         let steps = OrbitSetupStep.allCases
         if let index = steps.firstIndex(of: state.step), index + 1 < steps.count { state.step = steps[index + 1]; persist(); message = "" }
     }
     func back() {
+        OrbitDiagnostics.shared.record("action", "setup_back")
         guard !busy, let index = OrbitSetupStep.allCases.firstIndex(of: state.step), index > 0 else { return }
         state.step = OrbitSetupStep.allCases[index - 1]; persist(); message = ""
     }
@@ -54,11 +56,12 @@ import OrbitCore
         guard !busy else { return }; busy = true; message = ""
         work = Task {
             defer { busy = false; work = nil }
-            do { try await action() } catch is CancellationError { message = "Cancelled. You can pick up here later." } catch { message = error.localizedDescription }
+            do { try await action() } catch is CancellationError { message = "Cancelled. You can pick up here later." } catch { OrbitDiagnostics.shared.error("setup", "failed", error); message = error.localizedDescription }
         }
     }
     func checkTools() { perform { self.tools = await self.setup.checkTools(); self.message = self.tools.detail } }
     func installTools() {
+        OrbitDiagnostics.shared.record("action", "setup_installTools")
         perform {
             self.tools = await self.setup.checkTools()
             let version: String?
@@ -80,10 +83,12 @@ import OrbitCore
         }
     }
     func openXcode() {
+        OrbitDiagnostics.shared.record("action", "setup_openXcode")
         let url = URL(fileURLWithPath: tools.developerDirectory).deletingLastPathComponent().deletingLastPathComponent()
         NSWorkspace.shared.openApplication(at: url, configuration: .init()) { _, _ in }
     }
     func chooseFolder(_ model: OrbitMacModel) {
+        OrbitDiagnostics.shared.record("action", "setup_chooseFolder")
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.prompt = "Use Folder"
         panel.directoryURL = URL(fileURLWithPath: state.folder ?? OrbitSetupState.defaultFolder.path)
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -91,6 +96,7 @@ import OrbitCore
         allowFolder(model)
     }
     func allowFolder(_ model: OrbitMacModel) {
+        OrbitDiagnostics.shared.record("action", "setup_allowFolder")
         perform {
             let url = URL(fileURLWithPath: self.state.folder ?? OrbitSetupState.defaultFolder.path)
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -102,10 +108,12 @@ import OrbitCore
         }
     }
     func changeLoginItem(_ enabled: Bool) {
+        OrbitDiagnostics.shared.record("action", "setup_changeLoginItem")
         do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; loginItem = enabled }
         catch { message = error.localizedDescription }
     }
     func listPhones(_ model: OrbitMacModel) {
+        OrbitDiagnostics.shared.record("action", "setup_listPhones")
         perform {
             let rows = try await model.rpc("devices")
             self.devices = try JSONDecoder().decode([CodeDevice].self, from: JSONSerialization.data(withJSONObject: rows))
@@ -116,6 +124,7 @@ import OrbitCore
         }
     }
     func install(_ model: OrbitMacModel) {
+        OrbitDiagnostics.shared.record("action", "setup_install")
         perform {
             guard OrbitSetupState.validTeam(self.state.teamID), OrbitSetupState.validPrefix(self.state.bundlePrefix), !self.state.deviceID.isEmpty else { throw CodeFailure("Choose your Apple Account and iPhone first.") }
             self.phoneReady = try await self.setup.phoneReady(self.state.deviceID)
@@ -162,10 +171,12 @@ import OrbitCore
         }
     }
     func cancelInstall(_ model: OrbitMacModel) {
+        OrbitDiagnostics.shared.record("action", "setup_cancelInstall")
         work?.cancel()
         if let id = state.installJobID { Task { _ = try? await model.rpc("cancel", ["id": id]) } }
     }
     func exportPairing() {
+        OrbitDiagnostics.shared.record("action", "setup_exportPairing")
         perform {
             self.message = "Exporting your iPhone’s pairing file…"
             let file = try await OrbitPairingExport.export(deviceID: self.state.deviceID, root: OrbitPaths.root)
@@ -174,6 +185,7 @@ import OrbitCore
         }
     }
     func checkConnection(_ model: OrbitMacModel) {
+        OrbitDiagnostics.shared.record("action", "setup_checkConnection")
         perform {
             let status = try await model.rpc("status") as? [String: Any] ?? [:]
             let config = status["configuration"] as? [String: Any] ?? [:]
@@ -182,6 +194,7 @@ import OrbitCore
         }
     }
     func installMac() {
+        OrbitDiagnostics.shared.record("action", "setup_installMac")
         perform {
             let source = Bundle.main.bundleURL
             guard source.pathExtension == "app" else { throw CodeFailure("Open Orbit from its DMG to install it.") }

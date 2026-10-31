@@ -115,8 +115,8 @@ public actor OrbitServer {
             guard try await routed.stream.read(exactly: 4) == OrbitRPC.magic else { return }
             let request = try await OrbitRPC.read(from: routed.stream)
             let response = await host.handle(request, peer: await host.canonicalPeer(peer.device.description))
-            try await OrbitRPC.write(response, to: routed.stream)
-        } catch { /* Peer gets an EOF; no request contents go to global logs. */ }
+            try await OrbitRPC.reply(response, stream: routed.stream)
+        } catch { OrbitDiagnostics.shared.error("transport", "serve_failed", error, ["peer": peer.device.description]) }
     }
     private func startLocalSocket() throws {
         let path = root.appendingPathComponent("control.sock").path
@@ -145,7 +145,7 @@ public actor OrbitServer {
                     do {
                         guard try await stream.read(exactly: 4) == OrbitRPC.magic else { return }
                         let response = await host.handle(try OrbitRPC.read(from: stream))
-                        try await OrbitRPC.write(response, to: stream)
+                        try await OrbitRPC.reply(response, stream: stream)
                     } catch { }
                 }
             }

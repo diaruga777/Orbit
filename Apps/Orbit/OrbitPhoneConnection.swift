@@ -12,6 +12,7 @@ final class OrbitPhoneConnection: @unchecked Sendable {
     var pairingCode: String {
         get { UserDefaults.standard.string(forKey: "Orbit.pairing") ?? "" }
         set {
+            OrbitDiagnostics.shared.record("connection", "pairing_changed")
             if newValue != pairingCode { UserDefaults.standard.removeObject(forKey: "Orbit.connectionRoutes") }
             UserDefaults.standard.set(newValue, forKey: "Orbit.pairing")
         }
@@ -53,9 +54,9 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                             try await Task.sleep(for: .seconds(2))
                         }
                     }
-                } catch { }
+                } catch { OrbitDiagnostics.shared.error("connection", "forwarding_failed", error) }
                 await runtime.stop(); await forwarding.end(runtime)
-            } catch { }
+            } catch { OrbitDiagnostics.shared.error("connection", "readiness_failed", error) }
             do { try await Task.sleep(for: .seconds(5)) } catch { return }
         }
     }
@@ -89,7 +90,7 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                 UserDefaults.standard.set(try JSONEncoder().encode(routes), forKey: "Orbit.connectionRoutes")
                 if routes.provider != "dumbpipe" { try await OrbitDumbpipe.shared.stop() }
             })
-        } catch { /* Offline and older clients keep their last authenticated routes. */ }
+        } catch { OrbitDiagnostics.shared.error("connection", "route_sync_failed", error) }
     }
     private var codes: [OrbitPairingCode] {
         let original = try? OrbitPairingCode(string: pairingCode)
@@ -115,28 +116,94 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         }
         throw last
     }
-    func rpc(_ method: String, _ params: [String: Any] = [:]) async throws -> Any {
-        guard !pairingCode.isEmpty else { throw CodeFailure("Connect your Mac first.") }
-        let payload = try JSONSerialization.data(withJSONObject: ["method": method, "params": params])
-        var last: Error = CodeFailure("Your Mac is unavailable.")
-        for code in codes {
-            for route in code.addresses {
-                let response: [String: Any]
-                do {
-                    try await prepare(route)
-                    let stream = try await transport.dial(route, expecting: code.deviceID)
-                    response = try JSONSerialization.jsonObject(with: await OrbitRPC.exchange(payload, stream: stream)) as? [String: Any] ?? [:]
-                } catch { last = error; continue }
-                // Application errors must not replay mutations on another route.
-                if let message = response["error"] as? String { throw CodeFailure(message) }
-                return response["result"] ?? NSNull()
+    private let logSync = OrbitDiagnosticSync()
+    func syncDiagnostics() async {
+        guard await logSync.begin() else { return }
+        let original = pairingCode, peer = peerID
+        let key = "Orbit.diagnostics.cursor." + peer
+        do {
+            guard !original.isEmpty else { await logSync.end(); return }
+            // Bound each foreground pass, then resume from the durable acknowledgement.
+            for _ in 0..<4 {
+                let events = OrbitDiagnostics.shared.events(after: UserDefaults.standard.string(forKey: key), maximum: 12)
+                guard !events.isEmpty, pairingCode == original, !Task.isCancelled else { break }
+                let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(events))
+                let result = try await rpc("diagnostics_upload", ["events": object]) as? [String: Any]
+                guard pairingCode == original, result?["acknowledged"] as? String == events.last?.id else { break }
+                UserDefaults.standard.set(events.last?.id, forKey: key)
             }
-        }
-        throw last
+        } catch { /* Offline journals remain on the phone and retry next foreground pass. */ }
+        await logSync.end()
     }
+    func rpc(_ method: String, _ params: [String: Any] = [:]) async throws -> Any {
+        let trace = UUID().uuidString, started = Date()
+        var fields = ["method": method, "request": trace]
+        if let operation = params["operation"] as? String { fields["operation"] = operation }
+        if let id = params["id"] as? String { fields["actionID"] = id }
+        let logging = method != "diagnostics_upload"
+        if logging { OrbitDiagnostics.shared.record("rpc", "started", fields) }
+        do {
+            guard !pairingCode.isEmpty else { throw CodeFailure("Connect your Mac first.") }
+            let original = pairingCode
+            let payload = try JSONSerialization.data(withJSONObject: ["method": method, "params": params, "trace": trace])
+            var last: Error = CodeFailure("Your Mac is unavailable.")
+            for code in codes {
+                for route in code.addresses {
+                    try Task.checkCancellation()
+                    guard pairingCode == original else { throw CancellationError() }
+                    let stream: any BEPByteStream
+                    do {
+                        try await prepare(route)
+                        stream = try await transport.dial(route, expecting: code.deviceID)
+                    } catch {
+                        last = error
+                        if logging { OrbitDiagnostics.shared.error("rpc", "dial_failed", error, fields) }
+                        continue
+                    }
+                    fields["route"] = routeKind(route)
+                    let data: Data
+                    do { data = try await OrbitRPC.exchange(payload, stream: stream, timeout: method == "targets" ? 30 : 180) }
+                    catch {
+                        if logging { OrbitDiagnostics.shared.error("rpc", "exchange_failed", error, fields) }
+                        // The Mac may have accepted a mutation. Never resend a build/save
+                        // just because its reply was lost. Refresh reads durable job state.
+                        if !Self.readOnly(method, params) { throw CodeFailure("The Mac’s reply was interrupted. Check Apps before trying again.") }
+                        last = error; continue
+                    }
+                    guard pairingCode == original else { throw CancellationError() }
+                    guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                          response["result"] != nil || response["error"] is String else { throw CodeFailure("Your Mac sent an invalid reply. Update Orbit Mac and retry.") }
+                    if let message = response["error"] as? String { throw CodeFailure(message) }
+                    fields["milliseconds"] = String(Int(Date().timeIntervalSince(started) * 1000)); fields["bytes"] = String(data.count)
+                    if logging { OrbitDiagnostics.shared.record("rpc", "completed", fields) }
+                    return response["result"] ?? NSNull()
+                }
+            }
+            throw last
+        } catch {
+            if logging { OrbitDiagnostics.shared.error("rpc", "failed", error, fields) }
+            throw error
+        }
+    }
+    private static func readOnly(_ method: String, _ params: [String: Any]) -> Bool {
+        if method == "code" {
+            return ["open", "schemes", "apps", "devices", "branches", "job", "overnightCapabilities", "overnightStatus", "overnightDiagnostics", "endpointStatus"].contains(params["operation"] as? String ?? "")
+        }
+        return ["targets", "status", "job", "connection_status", "browse", "widgets", "applets", "installed_apps", "projects_detect", "project_preview", "project_apps", "repo_search", "repo_inspect", "artifact", "diagnostics_upload"].contains(method)
+    }
+    private func routeKind(_ route: OrbitPeerAddress) -> String {
+        switch route { case .dumbpipe: return "iroh"; case .relay: return "relay"; case .tcp: return "tcp"; case .tailscale: return "tailscale" }
+    }
+
 }
 private actor OrbitPhoneForwarding {
     private var active: CodePhoneReverseRuntime?
     func begin(_ value: CodePhoneReverseRuntime) -> Bool { guard active == nil else { return false }; active = value; return true }
     func end(_ value: CodePhoneReverseRuntime) { if active === value { active = nil } }
+}
+
+private actor OrbitDiagnosticSync {
+    private var active = false
+    func begin() -> Bool { guard !active else { return false }; active = true; return true }
+    func end() { active = false }
 }
