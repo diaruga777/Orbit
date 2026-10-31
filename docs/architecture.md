@@ -348,7 +348,7 @@ Known Xcode signing failures are summarized from bounded startup and tail log re
 
 ## Client diagnostics
 
-`OrbitCore/OrbitDiagnostics` owns process-shared, locked, owner-only JSON-lines
+`OrbitDiagnosticsKit` (re-exported by OrbitCore) owns process-shared, locked, owner-only JSON-lines
 journals: four 1 MiB files per client or received phone. Events carry a UUID,
 wall-clock timestamp, session, category, name and bounded metadata. Rotation,
 restart reads and UUID deduplication preserve acknowledged-batch recovery.
@@ -381,3 +381,34 @@ The local-only `diagnostics` RPC and shared CLI/MCP expose recent Mac events,
 paired phone IDs and per-phone received events. Remote peers cannot read either
 journal or supply filesystem paths. Logs are untrusted diagnostic data when
 read by an agent.
+
+
+## Installed-app diagnostics
+
+The canonical dependency-free journal and app instrumentation live in
+`Sources/OrbitHost/Resources/AppletHost/Diagnostics`, compiled as
+`OrbitDiagnosticsKit` and copied into standalone exports. OrbitWidgets shares
+that journal implementation. Hosted applets write through the Orbit client
+journal; standalone hosts write their own fixed Application Support journal.
+Applet hook starts/results and bounded `ctx.debug` breadcrumbs correlate by
+invocation, session and source digest without inputs or exception messages.
+
+`OrbitAppDiagnosticCollector` belongs to Host and runs independently from schedule
+and script scans. It selects only confirmed `CodeService.installedApps` evidence,
+serves one eligible app per ten-second pass, and backs off failures for a minute.
+Transport is native CoreDevice container copying in OrbitMac, using the existing
+Xcode resolver, exact physical UDID check and device-install lock. It reads four
+fixed files with bounded command timeouts into private temporary storage, never
+launching an app or treating RPC connectivity as native access. Mac imports bound
+file/line/batch sizes, sanitize metadata, ignore incomplete final lines, and
+retain UUID deduplication across restart. Per-device/bundle hashes isolate stores;
+persisted collection state exposes freshness and unavailable instrumentation or
+native access. Control RPC does not gain a phone-to-app filesystem endpoint.
+
+The Mac-local `app_debug_setup` RPC returns the bundled Swift sources for agent
+integration; `diagnostics` lists collected app IDs/status and accepts an `app`
+selector. CLI and MCP share these methods. The automatically discoverable
+`orbit-debug` plugin skill instruments app screens/actions/operations by default
+when creating source for Orbit deployment, with no app-side export action or AI
+runtime dependency. Existing arbitrary binaries still need a source update.
+See [app debugging](app-debugging.md) for APIs, privacy and availability limits.

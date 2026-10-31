@@ -121,3 +121,20 @@ MCP tools: `orbit_applet_prompt`, `orbit_applets`, `orbit_applet_add`,
 optional `path` and `iconPath`; it returns `project`, `scheme`, `branch` and `name`.
 Use those with `orbit_add_target` / `orbit_build`. MCP queues code for local phone
 consent; it cannot remotely approve or launch an imported script on the phone.
+
+
+## Private action history
+
+Approved applets record hook starts/results and action IDs automatically. Use
+stable descriptive action IDs and `ctx.debug("screen.settings")` or
+`ctx.debug("save.started")` for screens and important branches. Labels use 1–128
+ASCII letters, numbers, dots, hyphens or underscores; at most 32 breadcrumbs are
+kept per invocation. Use developer-authored constants, never input, content,
+storage, URLs or credentials. JavaScript error messages are excluded too.
+
+The copied AI prompt requests these breadcrumbs. Hosted applets use Orbit's
+existing automatically synchronized phone journal. Standalone exports include
+private rotating journals that Orbit Mac collects automatically through its
+native paired-phone connection. Agents can reconstruct ordered steps using
+session, invocation and revision IDs; private values are not retained. See
+[app debugging](../app-debugging.md).

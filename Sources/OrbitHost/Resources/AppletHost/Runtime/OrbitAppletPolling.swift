@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(OrbitDiagnosticsKit)
+import OrbitDiagnosticsKit
+#endif
 
 public struct OrbitAppletNotification: Codable, Equatable, Sendable {
     public var id: String

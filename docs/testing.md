@@ -687,3 +687,26 @@ requirement; its local control socket exposes the retained six-target catalog
 and new diagnostic reads. iPhone installation, live physical log transfer,
 provisioning renewal, Apple sign-in, notarization and marketplace acceptance were
 not exercised by these checks.
+
+
+## App and applet diagnostics
+
+`OrbitAppDiagnosticCollectorTests` uses injected journal files, never a phone. It
+covers unavailable/backoff/reconnect behavior, order, duplicate reads after
+restart, per-phone/bundle isolation, metadata redaction, partial-line replay,
+file/batch bounds and Mac-only source/read access. The applet breadcrumb test
+executes the real JavaScript runtime to check correlation, ordering, the 32-event
+quota and omission of input/error strings. Export tests require the canonical
+helper sources in the self-contained committed project. Python MCP checks cover
+the app selector and read-only source setup tool.
+
+For source integration, retrieve `orbit_debug_setup`, add all three Swift files
+to an iOS target and build on Simulator. Exercise a screen, action and caught
+failure; inspect its `Library/Application Support/OrbitAppDiagnostics` journal.
+A standalone applet export should build without importing Orbit packages.
+Physical acceptance is separate: install an instrumented committed app through
+Orbit on the intended phone, interact, verify automatic Mac collection and
+freshness, disconnect/reconnect and restart the Mac, then check ordered replay
+without duplicates. Check lock/unavailable-container behavior and instrumented
+versus uninstrumented apps. No unattended test accesses physical devices, signs
+in to Apple, establishes marketplace readiness or proves background delivery.

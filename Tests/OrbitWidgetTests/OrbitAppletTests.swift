@@ -1,9 +1,32 @@
 import XCTest
+import OrbitDiagnosticsKit
 @testable import OrbitWidgets
 
 final class OrbitAppletTests: XCTestCase {
     private func source(_ body: String, domains: String = "[]") -> String {
         "/* orbit-applet\n{\"id\":\"counter\",\"name\":\"Counter\",\"domains\":\(domains)}\n*/\n" + body
+    }
+    func testBreadcrumbsAreOrderedBoundedAndExcludeInputsAndErrorMessages() async throws {
+        let id = "debug-" + UUID().uuidString.lowercased()
+        let source = "/* orbit-applet\n{\"id\":\"" + id + "\",\"name\":\"Debug\",\"domains\":[]}\n*/" + #"""
+        module.exports = {
+          action(ctx,event) {
+            ctx.debug('screen.settings');
+            ctx.debug(event.values.private);
+            for(let i=0;i<50;i++) ctx.debug('save.started');
+            throw new Error(event.values.private);
+          }, render() { return {type:'text',text:'Ready'}; }
+        };
+        """#
+        let script = try OrbitAppletDefinition.widgetScript(source)
+        do { _ = try await OrbitAppletRuntime.run(script: script, storage: [:], event: .init(action: "save", values: ["private": "private value user@example.com"])) ; XCTFail("Expected failure") } catch { }
+        let events = OrbitDiagnostics.shared.recent(maximum: 500).filter { $0.fields["applet"] == id }
+        XCTAssertEqual(events.first?.name, "started")
+        XCTAssertEqual(events.last?.name, "failed")
+        XCTAssertEqual(events.filter { $0.name == "breadcrumb" }.count, 32)
+        XCTAssertEqual(Set(events.compactMap { $0.fields["invocation"] }).count, 1)
+        let json = String(decoding: try JSONEncoder().encode(events), as: UTF8.self)
+        XCTAssertFalse(json.contains("private value")); XCTAssertFalse(json.contains("user@example.com"))
     }
     func testManifestIsInertAndSeparateFromWidgets() throws {
         let source = source("throw new Error('untrusted');")

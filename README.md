@@ -115,6 +115,16 @@ read recent Mac events and list phone IDs, then use
 are local to your devices and available only through the Mac's local control
 socket. Build console logs remain available through `orbit_job`.
 
+Apps created with the bundled **orbit-debug** skill also record screens, actions
+and operation results by default. Orbit Mac automatically collects their private
+journals over Xcode's existing native phone connection. Call `orbit_diagnostics`
+to list app IDs/status, then use `app` or `bin/orbit diagnostics --app APP_ID`.
+Applets record action sequences automatically; their copied prompt also requests
+screen/branch breadcrumbs. Hosted applets use the phone journal; standalone
+exports include the app helper. Existing native apps need source instrumentation
+and a rebuild. No logging switch, manual export or hosted service is involved.
+See [app debugging](docs/app-debugging.md) for integration and connection limits.
+
 The iPhone Apps list loads independently of job-console reads, shows errors with
 Retry, and explains how to add apps when the catalog is empty. Tap the play
 button beside an app to build and install it in one press. Row menus still hold

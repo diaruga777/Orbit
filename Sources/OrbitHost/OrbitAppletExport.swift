@@ -8,6 +8,12 @@ import OrbitCore
 /// Exports only bundled, source-controlled native host code. No repository code or
 /// JavaScript is executed. Xcode builds continue through the normal trusted catalog.
 public enum OrbitAppletExport {
+    public static func diagnosticSources() throws -> [String: String] {
+        guard let template = Bundle.module.url(forResource: "AppletHost", withExtension: nil) else { throw CodeFailure("The diagnostic sources are missing.") }
+        return try Dictionary(uniqueKeysWithValues: ["OrbitDiagnostics.swift", "OrbitAppDiagnostics.swift", "OrbitDiagnosticView.swift"].map { name in
+            (name, try String(contentsOf: template.appendingPathComponent("Diagnostics").appendingPathComponent(name), encoding: .utf8))
+        })
+    }
     public static func create(source: String?, destination: URL, bundleID: String, icon: URL? = nil) async throws -> [String: String] {
         guard destination.path.hasPrefix("/"), !FileManager.default.fileExists(atPath: destination.path),
               OrbitSetupState.validPrefix(bundleID) else { throw CodeFailure("Choose a new folder and a unique reverse-DNS bundle ID.") }
@@ -24,7 +30,7 @@ public enum OrbitAppletExport {
         defer { try? fm.removeItem(at: stage) }
         let sources = stage.appendingPathComponent("Sources")
         try fm.createDirectory(at: sources, withIntermediateDirectories: true)
-        for folder in ["Runtime", "UI"] { try fm.copyItem(at: template.appendingPathComponent(folder), to: sources.appendingPathComponent(folder)) }
+        for folder in ["Runtime", "UI", "Diagnostics"] { try fm.copyItem(at: template.appendingPathComponent(folder), to: sources.appendingPathComponent(folder)) }
         try fm.copyItem(at: template.appendingPathComponent("HostApp.swift"), to: sources.appendingPathComponent("HostApp.swift"))
         let project = stage.appendingPathComponent("AppletHost.xcodeproj")
         let schemes = project.appendingPathComponent("xcshareddata/xcschemes")

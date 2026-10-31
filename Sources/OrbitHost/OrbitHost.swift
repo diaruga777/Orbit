@@ -21,6 +21,7 @@ public actor OrbitHost {
     }
     private let stateLock: OrbitStateLock
     public let root: URL
+    private let appDiagnostics: OrbitAppDiagnosticCollector
     private let diagnostics: OrbitDiagnostics
     public private(set) var service: CodeService
     private let scripts = OrbitScriptLibrary()
@@ -34,6 +35,7 @@ public actor OrbitHost {
     public private(set) var pairingUntil = Date.distantPast
     public init(root: URL = OrbitPaths.root) throws {
         self.root = root
+        appDiagnostics = try OrbitAppDiagnosticCollector(root: root.appendingPathComponent("Logs/Apps"))
         diagnostics = OrbitDiagnostics.store(directory: root.appendingPathComponent("Logs"))
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         stateLock = try OrbitStateLock(root: root)
@@ -57,6 +59,10 @@ public actor OrbitHost {
         service = try CodeService(root: root.appendingPathComponent("Builds"),
             installBundleID: configuration.phoneBundleID ?? Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String,
             installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"), diagnostics: diagnostics)
+    }
+    public func collectAppDiagnostics() async {
+        guard let apps = try? await service.installedApps() else { return }
+        await appDiagnostics.collect(apps)
     }
     public func openPairing() { pairingUntil = Date().addingTimeInterval(300) }
     public func isTrusted(_ peer: String) -> Bool { configuration.trustedPeers.contains(canonicalPeer(peer)) }
@@ -106,6 +112,10 @@ public actor OrbitHost {
     }
     private func dispatch(_ method: String, _ p: [String: Any], peer: String?) async throws -> Any {
         switch method {
+        case "app_debug_setup":
+            guard peer == nil else { throw CodeFailure("Set up app debugging on your Mac.") }
+            return ["files": try OrbitAppletExport.diagnosticSources(),
+                    "containerPath": "Library/Application Support/OrbitAppDiagnostics"] as [String: Any]
         case "diagnostics_upload":
             guard let peer else { throw CodeFailure("Use a paired phone to upload logs.") }
             let data = try JSONSerialization.data(withJSONObject: p["events"] ?? [])
@@ -117,11 +127,16 @@ public actor OrbitHost {
         case "diagnostics":
             guard peer == nil else { throw CodeFailure("Read diagnostics on your Mac.") }
             let limit = p["limit"] as? Int ?? 100
+            if let app = p["app"] as? String {
+                guard p["phone"] == nil else { throw CodeFailure("Choose app or phone diagnostics.") }
+                return ["events": try object(await appDiagnostics.events(app: app, maximum: limit))]
+            }
             if let phone = p["phone"] as? String {
                 guard configuration.trustedPeers.contains(phone) else { throw CodeFailure("Phone not found.") }
                 return ["events": try object(phoneDiagnostics(phone).recent(maximum: limit))]
             }
             return ["directory": root.appendingPathComponent("Logs").path,
+                    "apps": try object(await appDiagnostics.list()),
                     "phones": configuration.trustedPeers,
                     "events": try object(diagnostics.recent(maximum: limit))]
         case "status": return ["product": "Orbit", "targets": targets.count, "configuration": try object(configuration)]

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(OrbitDiagnosticsKit)
+import OrbitDiagnosticsKit
+#endif
 import JavaScriptCore
 
 public enum OrbitWidgetRuntime {
@@ -33,9 +36,10 @@ final class OrbitWidgetExecution: @unchecked Sendable {
     private let applet: Bool
     private let poll: Bool
     private let notifications: Bool
-    init(script: OrbitWidgetScript, storage: [String: String], family: String, now: Date, applet: Bool = false, event: OrbitAppletEvent? = nil, poll: Bool = false, notifications: Bool = false) {
+    private let diagnosticInvocation: String
+    init(script: OrbitWidgetScript, storage: [String: String], family: String, now: Date, applet: Bool = false, event: OrbitAppletEvent? = nil, poll: Bool = false, notifications: Bool = false, diagnosticInvocation: String = UUID().uuidString) {
         self.script = script; self.storage = storage; self.family = family; self.now = now; self.applet = applet; self.event = event
-        self.poll = poll; self.notifications = notifications
+        self.poll = poll; self.notifications = notifications; self.diagnosticInvocation = diagnosticInvocation
     }
     func start(_ continuation: CheckedContinuation<OrbitWidgetOutput, Error>) {
         lock.lock()
@@ -94,6 +98,15 @@ final class OrbitWidgetExecution: @unchecked Sendable {
         }
         let finish: @convention(block) (String) -> Void = { [weak self] json in self?.decode(json) }
         let fail: @convention(block) (String) -> Void = { [weak self] message in self?.stop(OrbitWidgetError(message)) }
+        var debugCount = 0
+        let debug: @convention(block) (String) -> Void = { [weak self] label in
+            guard let self, self.applet, debugCount < 32,
+                  OrbitAppDiagnostics.validLabel(label) else { return }
+            debugCount += 1
+            OrbitAppletDiagnostics.record("breadcrumb", ["applet": self.script.id,
+                "revision": OrbitWidgetDefinition.digest(self.script.source), "invocation": self.diagnosticInvocation, "label": label])
+        }
+        context.setObject(debug, forKeyedSubscript: "_orbitDebug" as NSString)
         context.setObject(fetch, forKeyedSubscript: "_orbitFetch" as NSString)
         context.setObject(finish, forKeyedSubscript: "_orbitFinish" as NSString)
         context.setObject(fail, forKeyedSubscript: "_orbitFail" as NSString)
@@ -142,6 +155,7 @@ final class OrbitWidgetExecution: @unchecked Sendable {
     });
     const _orbitNotifications = [];
     const ctx = Object.freeze({family: _orbitConfig.family, now: new Date(_orbitConfig.now), storage: _orbitStorage,
+      debug(label) { _orbitDebug(String(label)); },
       notify(notification) {
         if (!_orbitConfig.notifications) throw new Error('Declare notifications:true and call notify only from poll(ctx).');
         if (_orbitNotifications.length) throw new Error('Send at most one notification per poll.');

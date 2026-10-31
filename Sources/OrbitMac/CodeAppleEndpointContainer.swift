@@ -45,6 +45,33 @@ public struct CodeAppleEndpointContainer: CodeEndpointContainerAccess {
             return try Data(contentsOf: destination)
         }
     }
+    /// Fixed, bounded journal files only. Never accept a path supplied by an app/agent.
+    public func readDiagnosticFiles(deviceID: String) async throws -> [Data] {
+        try await withDevice(deviceID) { scratch, process in
+            var files: [Data] = []
+            // Oldest first, so appends preserve the action sequence after reconnect.
+            for index in (0..<4).reversed() {
+                let name = index == 0 ? "events.jsonl" : "events.\(index).jsonl"
+                let destination = scratch.appendingPathComponent(name)
+                do {
+                    _ = try await command(["device", "copy", "from", "--device", deviceID,
+                        "--source", "Library/Application Support/OrbitAppDiagnostics/" + name,
+                        "--destination", destination.path, "--domain-type", "appDataContainer",
+                        "--domain-identifier", bundleID], scratch: scratch, process: process)
+                } catch {
+                    if index == 0 { throw error }
+                    continue // A journal need not have rotated yet.
+                }
+                let values = try destination.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true,
+                      (values.fileSize ?? Int.max) <= 1024 * 1024 + 16384 else {
+                    throw CodeFailure("App diagnostic file exceeded its limit.")
+                }
+                files.append(try Data(contentsOf: destination))
+            }
+            return files
+        }
+    }
     private func withDevice<T>(_ device: String, operation: (URL, CodeProcess) async throws -> T) async throws -> T {
         let lock = CodeDeviceInstallLock.shared; let token = try await lock.acquire(device)
         defer { Task { await lock.release(device, token: token) } }

@@ -124,6 +124,8 @@ class AppletContractTests(unittest.TestCase):
         self.assertTrue(names['orbit_applet_prompt']['annotations']['readOnlyHint'])
         self.assertTrue(names['orbit_diagnostics']['annotations']['readOnlyHint'])
         self.assertIn('phone', names['orbit_diagnostics']['inputSchema']['properties'])
+        self.assertIn('app', names['orbit_diagnostics']['inputSchema']['properties'])
+        self.assertTrue(names['orbit_debug_setup']['annotations']['readOnlyHint'])
         self.assertIn('orbit_applet_add', names)
 
     def test_applet_export_cli_accepts_blank_or_file(self):

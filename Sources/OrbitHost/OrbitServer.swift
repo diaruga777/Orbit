@@ -24,6 +24,7 @@ public actor OrbitServer {
         try startLocalSocket()
         Task { while !Task.isCancelled { await host.tick(); try? await Task.sleep(for: .seconds(60)) } }
         Task { while !Task.isCancelled { await host.scanScripts(); try? await Task.sleep(for: .seconds(2)) } }
+        Task { while !Task.isCancelled { await host.collectAppDiagnostics(); try? await Task.sleep(for: .seconds(10)) } }
         let config = await host.configuration
         let listener = try await transport.listen(bindAddress: config.listen)
         listeners.append(listener)

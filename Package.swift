@@ -3,6 +3,7 @@ import PackageDescription
 let package = Package(
     name: "Orbit", platforms: [.iOS(.v26), .macOS(.v15)],
     products: [
+        .library(name: "OrbitDiagnosticsKit", targets: ["OrbitDiagnosticsKit"]),
         .library(name: "OrbitWidgets", targets: ["OrbitWidgets"]),
         .library(name: "OrbitWidgetUI", targets: ["OrbitWidgetUI"]),
         .library(name: "OrbitAppletUI", targets: ["OrbitAppletUI"]),
@@ -29,11 +30,12 @@ let package = Package(
         .target(name: "OrbitTransport", dependencies: ["OrbitWire", "OrbitCore", "COrbitNet", .product(name: "IrohLib", package: "iroh-ffi")], linkerSettings: [.linkedFramework("Security"), .linkedLibrary("resolv")]),
         .target(name: "OrbitHost", dependencies: ["OrbitWidgets", "OrbitCore", "OrbitMac", "OrbitTransport", "OrbitWire"], resources: [.copy("Resources/AppletHost")]),
         .executableTarget(name: "OrbitMacApp", dependencies: ["OrbitHost", "OrbitCore"]),
-        .target(name: "OrbitWidgets", path: "Sources/OrbitHost/Resources/AppletHost/Runtime"),
+        .target(name: "OrbitDiagnosticsKit", path: "Sources/OrbitHost/Resources/AppletHost/Diagnostics"),
+        .target(name: "OrbitWidgets", dependencies: ["OrbitDiagnosticsKit"], path: "Sources/OrbitHost/Resources/AppletHost/Runtime"),
         .target(name: "OrbitAppletUI", dependencies: ["OrbitWidgets"], path: "Sources/OrbitHost/Resources/AppletHost/UI"),
         .target(name: "OrbitWidgetUI", dependencies: ["OrbitWidgets", "OrbitAppletUI"]),
         .testTarget(name: "OrbitWidgetTests", dependencies: ["OrbitWidgets"]),
-        .target(name: "OrbitCore"),
+        .target(name: "OrbitCore", dependencies: ["OrbitDiagnosticsKit"]),
         .target(name: "OrbitRefresh", dependencies: ["OrbitCore", .product(name: "SideSign", package: "SideSign"), .product(name: "AnisetteKit", package: "AnisetteKit"), .product(name: "IdeviceGateway", package: "DeviceGateway")]),
         .testTarget(name: "OrbitRefreshTests", dependencies: ["OrbitRefresh", .product(name: "SideSign", package: "SideSign"), .product(name: "IdeviceGateway", package: "DeviceGateway")]),
         .target(name: "OrbitMac", dependencies: ["OrbitCore"], resources: [.copy("Resources/BuildServer")]),

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(OrbitDiagnosticsKit)
+import OrbitDiagnosticsKit
+#endif
 
 /// A separate, non-evaluated manifest keeps widgets and interactive applets distinct.
 public struct OrbitAppletDefinition: Codable, Equatable, Sendable {
@@ -51,10 +54,23 @@ public enum OrbitAppletRuntime {
         guard event.map({ !$0.action.isEmpty && $0.action.count <= 128 && $0.values.count <= 120 && $0.values.allSatisfy { $0.key.count <= 128 && $0.value.count <= 2000 } }) ?? true else {
             throw OrbitWidgetError("This applet received too much input.")
         }
-        let execution = OrbitWidgetExecution(script: checked, storage: storage, family: "app", now: now, applet: true, event: event, poll: poll, notifications: poll && definition.notifications == true)
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { execution.start($0) }
-        } onCancel: { execution.stop(OrbitWidgetError("Applet closed.")) }
+        let invocation = UUID().uuidString
+        let execution = OrbitWidgetExecution(script: checked, storage: storage, family: "app", now: now, applet: true, event: event, poll: poll, notifications: poll && definition.notifications == true, diagnosticInvocation: invocation)
+        let fields = ["applet": script.id, "revision": OrbitWidgetDefinition.digest(script.source),
+                      "invocation": invocation, "hook": poll ? "poll" : (event == nil ? "update" : "action"),
+                      "action": event?.action ?? "open"]
+        OrbitAppletDiagnostics.record("started", fields)
+        do {
+            let output = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { execution.start($0) }
+            } onCancel: { execution.stop(OrbitWidgetError("Applet closed.")) }
+            OrbitAppletDiagnostics.record("completed", fields)
+            return output
+        } catch {
+            // JavaScript errors can interpolate private input; omit their message.
+            OrbitAppletDiagnostics.record("failed", fields)
+            throw error
+        }
     }
 }
 
@@ -72,6 +88,7 @@ public enum OrbitAppletPrompt {
     };
     Every invocation uses a fresh JavaScript VM. Persist JSON with ctx.storage.get(key, fallback), set(key,value), remove(key). State commits only after successful output. ctx.now is a Date, ctx.family is 'app'. Use storage for navigation/screens. action runs before render; update does not run on actions. No timers or timeline.
     For internet monitoring add optional header fields "pollHours":6,"notifications":true (pollHours 0.25–8760 hours, fractional allowed). Export async poll(ctx): fetch an exact granted HTTPS source, check response.ok, parse response.json() or response.text() with JavaScript (no DOMParser), compare the parsed result with private storage, save it, and optionally call ctx.notify({id:'stable-event-id',title:'Short title',body:'What changed'}). At most one notification per poll; title <=100 chars, body <=2000, id 1–128. Keep event IDs stable to avoid repeats (last 64 delivered IDs remembered); usually store a silent baseline on the first check. notify is only available from poll with notifications:true. poll runs separately from update/action/render; render reads saved data. A failed poll commits no script state or notifications. Notification permission is requested on the phone; denial still allows checks. Checks run when due while Orbit is active and during iOS-granted background refresh. pollHours is a minimum requested interval, never an exact guarantee; iOS can delay or prevent checks when closed, force-quit or background refresh is disabled. No Mac or server is required. Failed checks retry after at least 15 minutes. Imported/updated polling and notification permissions require consent. The same API works in exported standalone apps.
+    Debugging is automatic: Orbit records ordered applet action IDs, hook starts/results and revision/session metadata for Mac agents. Use stable descriptive action IDs (open-settings, save-item), never user values in IDs. Call ctx.debug("screen.settings") or ctx.debug("save.started") for navigation and important branches; use fixed developer labels only. Do not pass inputs, fetched content, storage, credentials or personal data. Do not add a logging toggle, export step or AI dependency.
     Native node types: text {text}, symbol {symbol: SF Symbol name}, vstack/hstack {children,spacing}, spacer, date {date:ISO8601}, divider, button {text,action}, textfield {text:placeholder,key,value,action}, toggle {text,key,isOn,action}. Text fields submit on Return; toggles send 'true'/'false'. All controls send all current inputs in event.values keyed by key. Use unique input keys. Controls require a nonempty action. Button text is its accessible label. No nested children in controls. Root scrolls vertically. Nodes support size 8–72, weight regular/medium/semibold/bold, color primary/secondary/accent/red/orange/green/blue/purple, spacing 0–40. Max 120 nodes, 8 levels, text/input 2000 characters.
     fetch(url,{method:'GET'|'POST',headers,body}) returns {ok,status,json:async(),text:async()}. Only HTTPS with exact hosts in manifest domains, no credentials in URLs, no cross-host redirects. No shared cookies or credentials. Eight requests per invocation, 1 MiB responses, 16 KiB request bodies, 18 second deadline. Storage: 128 keys, 64 KiB total. Source:128 KiB. Import/update always needs phone consent. Only use real documented APIs; clearly label sample data. Ask for missing requirements before producing the file.
     """#
