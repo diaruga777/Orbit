@@ -10,7 +10,7 @@ The most dependable local configuration is an absolute-path stdio server:
 codex mcp add orbit -- /absolute/path/Orbit/bin/orbit mcp
 ```
 
-The repository also includes `plugins/orbit`, a portable Agent Plugin with `plugin.json`, `mcp.json`, and setup/deploy skills, plus a `.codex-plugin/plugin.json` compatibility manifest. The portable package uses `${PLUGIN_ROOT}`; the compatibility MCP uses the supported `${CLAUDE_PLUGIN_ROOT}` alias. The plugin launcher reads the checkout location recorded by bootstrap, so a plugin-cache update cannot erase schedules or app configuration.
+The repository also includes `plugins/orbit`, a portable Agent Plugin with `plugin.json`, `mcp.json`, and setup/deploy/debug skills, plus a `.codex-plugin/plugin.json` compatibility manifest. The portable package uses `${PLUGIN_ROOT}`; the compatibility MCP uses the supported `${CLAUDE_PLUGIN_ROOT}` alias. The plugin launcher reads the checkout location recorded by bootstrap, so a plugin-cache update cannot erase schedules or app configuration.
 
 For a Codex desktop version supporting local plugin sources, optionally run `python3 scripts/package_plugin.py codex /tmp/orbit-codex` and add that directory through its local plugin/marketplace import flow and run **orbit-setup**. If that surface does not offer local imports, use the MCP command above and install the skills as normal local skills under `~/.codex/skills`. No OpenAI API key is required for Orbit's MCP. [Official packaging and local testing guidance](https://developers.openai.com/plugins/build/plugins)
 
@@ -39,7 +39,7 @@ python3 scripts/package_plugin.py claude /tmp/orbit-claude
 claude --plugin-dir /tmp/orbit-claude
 ```
 
-Or register only the MCP with the host's stdio MCP command. The shared setup/deploy skills use portable SKILL.md files; no model-provider API is called by Orbit. Review the host's current [plugin documentation](https://code.claude.com/docs/en/plugins) for marketplace installation and policy restrictions.
+Or register only the MCP with the host's stdio MCP command. The shared setup/deploy/debug skills use portable SKILL.md files; no model-provider API is called by Orbit. Review the host's current [plugin documentation](https://code.claude.com/docs/en/plugins) for marketplace installation and policy restrictions.
 
 ## VS Code / GitHub Copilot and other MCP hosts
 
@@ -54,3 +54,17 @@ Orbit handles registration, signing coordination, build/install jobs and refresh
 - [SwiftUI Agent Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill): SwiftUI implementation and review guidance. Check its instructions and supported Swift versions before installing.
 
 These are optional recommendations, not dependencies or copied skill bundles. Use the equivalent UIKit, Swift concurrency, accessibility and testing skills already installed in your harness. A human can perform every Orbit setup and deployment step without an agent.
+
+
+## Automatic iPhone debugging context
+
+Use the bundled `orbit-debug` skill when building apps for Orbit installation.
+It retrieves the maintained Swift helpers with `orbit_debug_setup`, instruments
+screens/actions/operations by default, and reads `orbit_diagnostics` to reconstruct
+steps from automatically collected private app journals. The deployment skill
+links it too. Hosted applets already use Orbit's phone log; their copied prompt
+requests descriptive action IDs and `ctx.debug` breadcrumbs. Standalone applet
+exports include the helper without extra integration. See
+[app debugging](app-debugging.md) for APIs, source integration and native phone
+connection limits. Collection makes data locally available; it does not message
+or run an agent, and existing uninstrumented binaries need a source rebuild.

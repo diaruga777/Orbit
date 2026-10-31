@@ -46,6 +46,15 @@ final class OrbitAppDiagnosticCollectorTests: XCTestCase {
         await collector.collect([app], now: now.addingTimeInterval(80))
         let repeated = try await collector.events(app: id, maximum: 100)
         XCTAssertEqual(repeated, events)
+        // Late old rotation contents must not reorder source actions.
+        let lateRoot = root.appendingPathComponent("late")
+        let lateData = try JSONEncoder().encode([events[2], events[0], events[1]])
+        let lateEvents = try JSONDecoder().decode([OrbitDiagnosticEvent].self, from: lateData)
+        let lateFiles = try lateEvents.map { try JSONEncoder().encode($0) + Data([10]) }.reduce(Data(), +)
+        let lateCollector = try OrbitAppDiagnosticCollector(root: lateRoot, readFiles: { _ in [lateFiles] })
+        await lateCollector.collect([app], now: now)
+        let reordered = try await lateCollector.events(app: id, maximum: 100)
+        XCTAssertEqual(reordered.map(\.name), events.map(\.name))
         var other = app; other.deviceID = "phone-2"
         XCTAssertNotEqual(id, OrbitAppDiagnosticCollector.id(other))
         other = app; other.bundleID = "org.test.other"

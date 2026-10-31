@@ -350,7 +350,7 @@ Known Xcode signing failures are summarized from bounded startup and tail log re
 
 `OrbitDiagnosticsKit` (re-exported by OrbitCore) owns process-shared, locked, owner-only JSON-lines
 journals: four 1 MiB files per client or received phone. Events carry a UUID,
-wall-clock timestamp, session, category, name and bounded metadata. Rotation,
+wall-clock timestamp, session, optional writer sequence, category, name and bounded metadata. Rotation,
 restart reads and UUID deduplication preserve acknowledged-batch recovery.
 Metadata excludes form/document text, RPC bodies, keys, Apple sessions and the
 private installer transcript. Error strings additionally redact credential
@@ -401,7 +401,8 @@ Xcode resolver, exact physical UDID check and device-install lock. It reads four
 fixed files with bounded command timeouts into private temporary storage, never
 launching an app or treating RPC connectivity as native access. Mac imports bound
 file/line/batch sizes, sanitize metadata, ignore incomplete final lines, and
-retain UUID deduplication across restart. Per-device/bundle hashes isolate stores;
+retain UUID deduplication across restart. Per-session writer sequences restore
+source order when rotation races a container copy. Per-device/bundle hashes isolate stores;
 persisted collection state exposes freshness and unavailable instrumentation or
 native access. Control RPC does not gain a phone-to-app filesystem endpoint.
 

@@ -32,9 +32,10 @@ public struct OrbitAppletView: View {
             }.padding().frame(maxWidth: .infinity, alignment: .leading).disabled(busy)
         }
         .navigationTitle(script.definition.name)
-        .toolbar { Button("Reload", systemImage: "arrow.clockwise") { run(nil) }.disabled(busy) }
+        .toolbar { Button("Reload", systemImage: "arrow.clockwise") { OrbitAppletDiagnostics.record("reload", ["applet": script.id]); run(nil) }.disabled(busy) }
         .task { run(nil) }
-        .onDisappear { invocation?.cancel(); invocation = nil }
+        .onAppear { OrbitAppletDiagnostics.record("shown", ["applet": script.id]) }
+        .onDisappear { OrbitAppletDiagnostics.record("closed", ["applet": script.id]); invocation?.cancel(); invocation = nil }
     }
     private func send(_ action: String) { run(OrbitAppletEvent(action: action, values: inputs)) }
     private func run(_ event: OrbitAppletEvent?) {

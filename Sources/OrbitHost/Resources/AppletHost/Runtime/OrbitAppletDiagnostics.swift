@@ -12,6 +12,6 @@ public enum OrbitAppletDiagnostics {
         #else
         let journal = OrbitAppDiagnostics.journal
         #endif
-        journal.record("applet", name, fields)
+        journal.record("applet", name, fields.merging(OrbitAppDiagnostics.metadata) { original, _ in original })
     }
 }

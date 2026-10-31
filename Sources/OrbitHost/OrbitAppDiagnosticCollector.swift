@@ -38,7 +38,17 @@ public actor OrbitAppDiagnosticCollector {
     public func list() -> [OrbitAppDiagnosticStatus] { statuses.values.sorted { $0.id < $1.id } }
     public func events(app id: String, maximum: Int) throws -> [OrbitDiagnosticEvent] {
         guard statuses[id] != nil, id.count == 64, id.allSatisfy({ $0.isHexDigit && $0.isASCII }) else { throw CodeFailure("App diagnostics not found.") }
-        return OrbitDiagnostics.store(directory: root.appendingPathComponent(id)).recent(maximum: maximum)
+        let events = OrbitDiagnostics.store(directory: root.appendingPathComponent(id)).recent(maximum: 500)
+        // A rotation during native copying can deliver earlier events on a later
+        // pass. Order each source session by its writer sequence, not arrival.
+        var sessions: [String] = []
+        for event in events where !sessions.contains(event.session) { sessions.append(event.session) }
+        let ordered = sessions.flatMap { session in
+            let group = events.filter { $0.session == session }
+            guard group.allSatisfy({ $0.sequence != nil }) else { return group }
+            return group.sorted { $0.sequence! < $1.sequence! }
+        }
+        return Array(ordered.suffix(max(0, min(500, maximum))))
     }
     /// One app per pass; unavailable/uninstrumented apps back off. This loop never
     /// launches an app, requests sign-in or changes install/schedule state.

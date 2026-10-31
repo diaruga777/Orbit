@@ -14,9 +14,12 @@ public enum OrbitAppDiagnostics {
     }
     public static func record(_ category: String, _ name: String) {
         guard validLabel(category), validLabel(name) else { return }
-        journal.record(category, name, ["bundle": Bundle.main.bundleIdentifier ?? "unknown",
+        journal.record(category, name, metadata)
+    }
+    public static var metadata: [String: String] {
+        ["bundle": Bundle.main.bundleIdentifier ?? "unknown",
             "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
-            "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""])
+            "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""]
     }
     public static func action(_ name: String) { record("action", name) }
     public static func screen(_ name: String) { record("screen", name) }
@@ -24,6 +27,8 @@ public enum OrbitAppDiagnostics {
     public static func failure(_ operation: String, _ error: Error) {
         guard validLabel(operation) else { return }
         let error = error as NSError
-        journal.record("error", operation, ["errorDomain": error.domain, "errorCode": String(error.code)])
+        var fields = metadata
+        fields["errorDomain"] = error.domain; fields["errorCode"] = String(error.code)
+        journal.record("error", operation, fields)
     }
 }

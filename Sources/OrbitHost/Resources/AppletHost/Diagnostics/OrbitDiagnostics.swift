@@ -7,6 +7,8 @@ public struct OrbitDiagnosticEvent: Codable, Sendable, Equatable {
     public var category: String
     public var name: String
     public var fields: [String: String]
+    /// Monotonic within a writer session; optional for older journals.
+    public var sequence: UInt64?
 }
 
 /// Private, bounded JSON-lines journals. Callers supply event metadata only,
@@ -33,7 +35,8 @@ public final class OrbitDiagnostics: @unchecked Sendable {
         return root.appendingPathComponent("Logs")
     }
     public let directory: URL
-    private let lock = NSLock()
+    private let lock = NSRecursiveLock()
+    private var nextSequence: UInt64 = 0
     private let session = UUID().uuidString
     private let limit: Int
     private let count: Int
@@ -42,8 +45,10 @@ public final class OrbitDiagnostics: @unchecked Sendable {
         self.directory = directory; limit = max(4096, fileBytes); count = max(2, fileCount)
     }
     public func record(_ category: String, _ name: String, _ fields: [String: String] = [:]) {
+        lock.lock(); defer { lock.unlock() }
+        nextSequence += 1
         let event = OrbitDiagnosticEvent(id: UUID().uuidString, time: Date(), session: session,
-            category: category, name: name, fields: fields)
+            category: category, name: name, fields: fields, sequence: nextSequence)
         do { try append([event]) } catch { /* Diagnostics must never stop a user action. */ }
     }
     public func error(_ category: String, _ name: String, _ error: Error, _ fields: [String: String] = [:]) {

@@ -31,6 +31,7 @@ final class OrbitDiagnosticsTests: XCTestCase {
         let journal = OrbitDiagnostics(directory: root)
         DispatchQueue.concurrentPerform(iterations: 100) { index in journal.record("test", "concurrent", ["index": String(index)]) }
         let events = journal.recent(maximum: 500)
+        XCTAssertEqual(events.compactMap(\.sequence), Array(1...100).map(UInt64.init))
         XCTAssertEqual(events.count, 100); XCTAssertEqual(Set(events.map(\.id)).count, 100)
     }
     func testPhoneUploadIsAuthenticatedBoundedAndIdempotentAfterRestart() async throws {
