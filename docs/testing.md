@@ -756,3 +756,32 @@ Exercise a real Mac-initiated update and a paired-phone request separately; a
 Simulator fixture establishes UI behavior only. macOS TCC folder permission
 acceptance requires the intended logged-in user's session. Physical phone
 installation/renewal and public notarization/marketplace listing remain separate.
+
+
+Canonical-update verification (2026-11-01): bootstrap generated native dependencies
+in committed detached source. All 224 Swift tests passed (five optional fixtures
+skipped), along with 28 Python MCP/configuration/update checks, both Go race
+suites and helper vet. The iOS Simulator client, native `OrbitMacBuild` Mac client,
+complete signed package and shared `OrbitMac` installer scheme built. The packaged
+phone-source extraction/resume fixture passed. Four Simulator UI checks passed:
+Mac update/reconnect, Mac failure/retry/log, Apps list failure/empty state and the
+existing phone-app build/progress/completion flow. The separate Mac section and
+completion screenshot were reviewed.
+
+Actual canonical Mac installation and the running Host's self-update request
+preserved the leaf certificate, designated requirement, bundle ID, absolute state
+root, all six existing targets and both paired identities. The reopened app
+reported its expected committed revision at `~/Applications/Orbit Mac.app`, with
+one matching process; a protected Desktop-folder browse still succeeded. Updates
+executed from a primary checkout with existing scheme edits, which remained
+uncommitted. The worker survived the old Host's shutdown and persisted success.
+Repeated-build testing exposed absolute cached artifact paths; a stable fresh
+detached checkout plus explicit scratch path fixed them. The first real GUI-owned
+update exposed an inherited Command Line Tools SDK/compiler mismatch; resolving
+compiler and SDK from the same full Xcode fixed the live retry. Failure left the
+installed app running and retained a durable log.
+
+The Mac was locked, so interactive Xcode Run/debugger and Mac button click-through
+remain unverified; the Xcode build/install path and same Host update handler were
+exercised. No Apple sign-in, physical phone access/installation/renewal, physical
+phone UI acceptance, public notarization or marketplace listing was performed.
