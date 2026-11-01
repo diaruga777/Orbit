@@ -1,6 +1,26 @@
 import XCTest
 
 final class CodeEditorUITests: XCTestCase {
+    func testMacUpdateHasSeparateSectionAndReconnects() {
+        let app = XCUIApplication(); app.launchArguments = ["--target-build-preview"]; app.launch()
+        let rebuild = app.buttons["OrbitMacRebuild"]
+        XCTAssertTrue(rebuild.waitForExistence(timeout: 10)); rebuild.tap()
+        XCTAssertTrue(app.cells["OrbitMacUpdate"].staticTexts["Updating Orbit Mac…"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.cells["OrbitTarget:fixture"].exists)
+        XCTAssertTrue(app.staticTexts["Orbit Mac is up to date."].waitForExistence(timeout: 20))
+        XCTAssertTrue(rebuild.isEnabled)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+    func testMacUpdateFailureKeepsRetryAndLog() {
+        let app = XCUIApplication(); app.launchArguments = ["--target-build-preview", "--target-mac-update-failure", "--target-list-empty"]; app.launch()
+        let rebuild = app.buttons["OrbitMacRebuild"]
+        XCTAssertTrue(rebuild.waitForExistence(timeout: 10)); rebuild.tap()
+        XCTAssertTrue(app.staticTexts["Fixture Mac signing failed."].waitForExistence(timeout: 20))
+        XCTAssertTrue(rebuild.isEnabled)
+        app.cells["OrbitMacUpdate"].tap()
+        XCTAssertTrue(app.alerts["Orbit Mac Update"].staticTexts["Fixture Mac build output\n"].waitForExistence(timeout: 3))
+    }
+
     func testAppsListFailureCanRetryAndEmptyCatalogExplainsAdd() {
         let app = XCUIApplication()
         app.launchArguments = ["--target-build-preview", "--target-list-retry"]

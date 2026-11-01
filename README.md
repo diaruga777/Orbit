@@ -178,15 +178,40 @@ Use your own unique reverse-DNS prefix and your team identifier from Xcode. The 
 
 Open `Orbit.xcodeproj`. Select the **Orbit** scheme and your phone, then Run. Xcode uses automatic development signing. The phone may ask you to trust your development certificate in Settings → General → VPN & Device Management. Keep the app installed; reinstalling from scratch can discard its local drafts and pairing identity.
 
-To build the complete Mac app, including its optional remote-install helper:
+For the Mac, choose **OrbitMac → My Mac → Run** in Xcode, or run:
 
 ```sh
-security find-identity -v -p codesigning
-ORBIT_MAC_SIGNING_IDENTITY='EXACT APPLE DEVELOPMENT CERTIFICATE NAME OR SHA-1' \
-  ./scripts/build_and_run.sh
+./scripts/build_and_run.sh
 ```
 
-The script builds, signs and installs `~/Applications/Orbit Mac.app`, then opens it. Keep the same certificate, bundle ID and installed path between updates so macOS file-access permissions persist. `--build-only` produces a separate `dist/Orbit Mac.app` for inspection and never replaces the installed app. Xcode's **OrbitMac** scheme also bundles the native Apple helper for pairing-file export and remote installation. Use the script for the complete setup/source/plugin resources.
+Both build the latest **committed** revision and install the complete app at
+**~/Applications/Orbit Mac.app**. Commit your changes first. Xcode Run launches
+and debugs that same copy. Agents use the same script. Builds use a detached
+worktree and leave your working files and index alone.
+
+Orbit remembers the installed bundle ID, exact signing certificate, source
+checkout and state folder. Updates verify the old signing requirement before
+closing Orbit, then replace the bundle at its fixed path. The first update can
+adopt the certificate of an older running Xcode copy. If several development
+certificates match on first installation, select one once with
+`ORBIT_MAC_SIGNING_IDENTITY='EXACT CERTIFICATE NAME OR SHA-1'`. Future builds
+reuse it automatically. A missing certificate or changed identity stops the
+update. Pairing, app lists and jobs stay in the same `~/.orbit` folder; existing
+custom state roots are pinned too. macOS owns its permission grants; keeping the
+same signing requirement, identity and location prevents routine rebuild drift.
+
+In either client, open **Apps → Orbit Mac → Rebuild Orbit Mac** to apply the
+latest local commit. Orbit Mac has its own section, separate from phone apps.
+The worker keeps running while Orbit restarts; progress, logs and failures survive
+reconnection. Success requires the reopened canonical app to report the expected
+revision. Finish phone builds first. The Mac must be awake and logged in, with
+its source checkout and signing key available. This action never fetches, commits
+or discards source changes.
+
+`--build-only` creates a separate `dist/Orbit Mac.app` review artifact without
+replacing the installed app. The **OrbitMacBuild** scheme is for native Xcode
+compilation checks; use **OrbitMac** for everyday Run. Both package the native
+Apple helper. The normal Run flow also includes setup source and agent resources.
 
 Allow Local Network access on both devices. Grant the Mac app access to source folders when macOS asks. If projects live under Desktop/Documents or other protected locations, access depends on macOS permissions. Move projects to a normal development folder if that is more convenient.
 

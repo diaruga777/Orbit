@@ -19,6 +19,8 @@ public actor OrbitHost {
     public func canonicalPeer(_ peer: String) -> String {
         configuration.peerAliases?[peer] ?? peer
     }
+    private var startingMacUpdate = false
+    private let macUpdate: OrbitMacUpdate
     private let stateLock: OrbitStateLock
     public let root: URL
     private let appDiagnostics: OrbitAppDiagnosticCollector
@@ -35,6 +37,7 @@ public actor OrbitHost {
     public private(set) var pairingUntil = Date.distantPast
     public init(root: URL = OrbitPaths.root) throws {
         self.root = root
+        macUpdate = OrbitMacUpdate(root: root)
         appDiagnostics = try OrbitAppDiagnosticCollector(root: root.appendingPathComponent("Logs/Apps"))
         diagnostics = OrbitDiagnostics.store(directory: root.appendingPathComponent("Logs"))
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -139,6 +142,21 @@ public actor OrbitHost {
                     "apps": try object(await appDiagnostics.list()),
                     "phones": configuration.trustedPeers,
                     "events": try object(diagnostics.recent(maximum: limit))]
+        case "mac_update_status":
+            let value = await macUpdate.status()
+            if !startingMacUpdate, !(await macUpdate.isActive()) { await service.endMacUpdate() }
+            return value
+        case "mac_update_prepare":
+            guard peer == nil else { throw CodeFailure("Start the update from Orbit’s Mac section.") }
+            try await service.beginMacUpdate()
+            return ["ready": true]
+        case "mac_update":
+            if startingMacUpdate || (await macUpdate.isActive()) { return await macUpdate.status() }
+            startingMacUpdate = true
+            defer { startingMacUpdate = false }
+            try await service.beginMacUpdate()
+            do { return try await macUpdate.start() }
+            catch { await service.endMacUpdate(); throw error }
         case "status": return ["product": "Orbit", "targets": targets.count, "configuration": try object(configuration)]
         case "code":
             let data = try JSONSerialization.data(withJSONObject: p)
@@ -467,6 +485,8 @@ public actor OrbitHost {
         return value
     }
     public func tick(at date: Date = Date()) async {
+        if startingMacUpdate || (await macUpdate.isActive()) { return }
+        await service.endMacUpdate()
         for id in targets.map(\.id) {
             guard let i = targets.firstIndex(where: { $0.id == id }) else { continue }
             if let jobID = targets[i].jobID {

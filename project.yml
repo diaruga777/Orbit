@@ -1,5 +1,6 @@
 name: Orbit
 options:
+  postGenCommand: python3 scripts/configure_mac_scheme.py
   minimumXcodeGenVersion: 2.44.0
   deploymentTarget:
     iOS: '26.0'
@@ -161,6 +162,16 @@ targets:
     dependencies:
       - package: Orbit
         product: OrbitHost
+aggregateTargets:
+  OrbitMacInstall:
+    settings:
+      SUPPORTED_PLATFORMS: macosx
+      SDKROOT: macosx
+      ENABLE_USER_SCRIPT_SANDBOXING: NO
+    buildScripts:
+      - name: Build and install canonical Orbit Mac
+        script: '"$SRCROOT/scripts/build_and_run.sh" --install-only'
+        basedOnDependencyAnalysis: false
 schemes:
   Orbit:
     build:
@@ -169,6 +180,12 @@ schemes:
     test:
       targets: [OrbitUITests]
   OrbitMac:
+    build:
+      targets:
+        OrbitMacInstall: all
+    run:
+      macroExpansion: OrbitMacClient
+  OrbitMacBuild:
     build:
       targets:
         OrbitMacClient: all

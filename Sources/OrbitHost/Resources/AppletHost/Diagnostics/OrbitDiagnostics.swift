@@ -27,7 +27,7 @@ public final class OrbitDiagnostics: @unchecked Sendable {
     }
     public static var defaultDirectory: URL {
         #if os(macOS)
-        let root = ProcessInfo.processInfo.environment["ORBIT_HOME"].map { URL(fileURLWithPath: $0) }
+        let root = ((Bundle.main.object(forInfoDictionaryKey: "OrbitStateRoot") as? String) ?? ProcessInfo.processInfo.environment["ORBIT_HOME"]).map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".orbit")
         #else
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Orbit")

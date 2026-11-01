@@ -2,6 +2,18 @@ import Foundation
 import OrbitCore
 
 public actor CodeService {
+    private var macUpdating = false
+    private var buildRequests = 0
+    public func beginMacUpdate() async throws {
+        guard buildRequests == 0 else { throw CodeFailure("Let your app builds finish before updating Orbit Mac.") }
+        macUpdating = true
+        do {
+            let active = await jobs.hasActiveJobs()
+            let retained = try await overnight.status()
+            guard !active, !retained.contains(where: { [.accepted, .building, .installing].contains($0.state) }) else { throw CodeFailure("Let your app builds finish before updating Orbit Mac.") }
+        } catch { macUpdating = false; throw error }
+    }
+    public func endMacUpdate() { macUpdating = false }
     private let refreshExport = CodeRefreshExport()
     private let files = CodeFiles()
     private let jobs: CodeJobs
@@ -86,6 +98,12 @@ public actor CodeService {
             let request = try JSONDecoder().decode(CodeRequest.self, from: data)
             fields = ["request": request.id, "operation": request.operation.rawValue]
             diagnostics.record("code", "started", fields)
+            let builds = [.prepare, .build, .deploy, .runOnDevice, .overnightSubmit, .overnightInstall] as [CodeRequest.Operation]
+            if macUpdating, builds.contains(request.operation) {
+                throw CodeFailure("Orbit Mac is updating. Try your app build again when it reconnects.")
+            }
+            if builds.contains(request.operation) { buildRequests += 1 }
+            defer { if builds.contains(request.operation) { buildRequests -= 1 } }
             let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
             let canonical = try encoder.encode(request)
             if let previous = savedReplies[request.id] {

@@ -30,6 +30,7 @@ struct OrbitMacView: View {
                     Text(model.status).textSelection(.enabled)
                     HStack { Button("Connect a Phone", action: model.pair); Button("Copy Pairing Code") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(model.pairing, forType: .string) }.disabled(model.pairing.isEmpty) }
                     if !model.pairing.isEmpty { Text(model.pairing).font(.caption.monospaced()).textSelection(.enabled) }
+                    OrbitMacUpdateView(model: model)
                     Text("Apps").font(.title2)
                     if !model.addedName.isEmpty {
                         HStack {

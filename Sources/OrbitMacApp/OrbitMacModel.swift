@@ -12,6 +12,8 @@ import UniformTypeIdentifiers
     @Published var scriptMessage = ""
     @Published var scriptIssues: [String] = []
     @Published var scriptImportFailed = false
+    @Published var macUpdate: [String: Any] = [:]
+    @Published var startingMacUpdate = false
     @Published var status = "Starting…"
     @Published var pairing = ""
     @Published var targets: [[String: Any]] = []
@@ -65,6 +67,7 @@ import UniformTypeIdentifiers
     var host: OrbitHost?
     var server: OrbitServer?
     init() {
+        guard OrbitMacInstance.claim() else { return }
         if let data = try? Data(contentsOf: previewURL), let cache = try? JSONDecoder().decode([String: [CodeBuildApp]].self, from: data) {
             previews = cache; detectedProjects = cache.keys.sorted()
         }
@@ -100,7 +103,18 @@ import UniformTypeIdentifiers
             let rows = try await rpc("targets") as? [[String: Any]] ?? []
             if revision == targetRevision { targets = rows }
         } catch { OrbitDiagnostics.shared.error("mac", "failed", error); status = error.localizedDescription }
+        do { macUpdate = try await rpc("mac_update_status") as? [String: Any] ?? [:] }
+        catch { macUpdate["failure"] = error.localizedDescription }
         await refreshScripts()
+    }
+    func rebuildMac() {
+        guard !startingMacUpdate else { return }
+        startingMacUpdate = true
+        Task {
+            defer { startingMacUpdate = false }
+            do { macUpdate = try await rpc("mac_update") as? [String: Any] ?? [:] }
+            catch { macUpdate["failure"] = error.localizedDescription }
+        }
     }
     func refreshScripts() async {
         do {

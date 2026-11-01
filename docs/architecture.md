@@ -25,8 +25,40 @@ The iOS master is opaque and square for system masking; the Mac artwork includes
 transparent padding and rounded corners. Both use solid white device silhouettes
 on black, subtle glass edges on the devices, and a thin white orbit that tapers
 before the phone. See [app icons](design/app-icons.md).
-The `OrbitMac` Xcode scheme builds the `OrbitMacClient` app target, keeping its
-build intermediates separate from the `OrbitMac` package library.
+The everyday `OrbitMac` scheme builds `OrbitMacInstall`, an aggregate target that
+runs the same `scripts/build_and_run.sh --install-only` entrypoint as agents and
+in-app updates. Its Run/Profile executable is `$(HOME)/Applications/Orbit Mac.app`.
+XcodeGen's post-generation script preserves that executable and macro expansion.
+`OrbitMacBuild` retains the native `OrbitMacClient` target for compilation checks.
+
+The coordinator in `scripts/mac_build.py` serializes builds with a per-user flock,
+validates ignored local identity, and packages only a committed HEAD in a detached
+worktree. Native archives and private local config are copied; an independent
+serialized SwiftPM cache never mutates the working checkout's build tree. The
+complete packager is `package_mac_app.sh`. Development packages support debugger
+attachment; public release packages retain hardened runtime/notarization rules.
+
+`~/.orbit/mac-installation.json` pins the canonical path, bundle ID, leaf-certificate
+SHA-1, designated requirement, original checkout and absolute state root. The
+first migration can adopt a running development copy's certificate. Each update
+verifies the staged signature, exact certificate and old requirement before
+stopping any process. It stops only matching bundle IDs, stages a full replacement
+beside the destination, and restores the previous bundle if replacement fails.
+Canonical bundle metadata pins state independently of Xcode/agent environment;
+UserDefaults continue using the same bundle ID. Obsolete copies redirect to the
+canonical app; additional processes focus the existing copy before starting Host.
+
+Host's authenticated `mac_update` and `mac_update_status` methods are separate from
+the phone target catalog. No caller supplies executable paths or revisions. The
+installed worker reads the original checkout and builds its local committed HEAD,
+without fetch/reset/commit. A detached process inherits the update lock and writes
+an owner-only durable `MacUpdate/job.json` and log. Both clients show a separate
+Orbit Mac section; phone reconnection resumes status reads. Phone compilation and
+installation are gated during Mac maintenance, and active builds prevent update
+start. The reopened canonical bundle's path and revision must match the journal
+before success; a lost reopen readback stays uncertain. Failures and dead workers
+are retained for retry. Xcode's install-only action waits for Run to reopen the app.
+The state, pairing identities and installation journals are never recreated.
 
 ## Mac setup and optional setup
 

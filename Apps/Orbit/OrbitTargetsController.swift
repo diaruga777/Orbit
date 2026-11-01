@@ -8,6 +8,8 @@ import OrbitUI
     private let monitor: CodeBuildMonitor?
     private let peerID: () -> String
     private let refreshInterval: TimeInterval
+    private var macUpdate: [String: Any] = [:]
+    private var startingMacUpdate = false
     private var jobs: [String: CodeJob] = [:]
     private var starting: String?
     private var poll: Timer?
@@ -47,18 +49,10 @@ import OrbitUI
         Task { await refreshTargets(showError: true) }
     }
     private func updateListMessage() {
-        guard !searching, apps.isEmpty else { tableView.backgroundView = nil; return }
-        let label = UILabel(); label.numberOfLines = 0; label.textAlignment = .center; label.textColor = .secondaryLabel
-        label.text = listMessage ?? (loaded ? "No apps yet. Tap + to add one from your Mac." : "Loading apps…")
-        label.accessibilityIdentifier = "OrbitTargetsMessage"
-        let retry = UIButton(type: .system); retry.setTitle("Retry", for: .normal)
-        retry.isHidden = refreshing || listMessage == nil
-        retry.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .touchUpInside)
-        let stack = UIStackView(arrangedSubviews: [label, retry]); stack.axis = .vertical; stack.spacing = 12
-        let container = UIView(); container.addSubview(stack); stack.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([stack.centerYAnchor.constraint(equalTo: container.centerYAnchor), stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -24)])
-        tableView.backgroundView = container
+        // Empty/error messaging belongs to Apps; keep the Mac section visible.
+        tableView.backgroundView = nil
     }
+
     private func refreshTargets(showError: Bool) async {
         guard !refreshing else { return }
         refreshing = true
@@ -66,7 +60,13 @@ import OrbitUI
         updateListMessage()
         defer { refreshing = false; refreshControl?.endRefreshing(); updateListMessage() }
         let origin = peerID()
-        if peer != origin { peer = origin; jobs = [:]; apps = []; starting = nil; loaded = false; tableView.reloadData() }
+        if peer != origin { peer = origin; jobs = [:]; apps = []; macUpdate = [:]; startingMacUpdate = false; starting = nil; loaded = false; tableView.reloadData() }
+        do {
+            let value = try await rpc("mac_update_status", [:]) as? [String: Any] ?? [:]
+            if origin == peerID() { macUpdate = value; tableView.reloadData() }
+        } catch {
+            if origin == peerID(), macBusy { macUpdate["stage"] = "Reconnecting to Orbit Mac…" }
+        }
         do {
             guard let rows = try await rpc("targets", [:]) as? [[String: Any]], rows.allSatisfy({ $0["id"] is String && $0["name"] is String }) else { throw CodeFailure("Your Mac sent an invalid app list. Update Orbit Mac and retry.") }
             guard origin == peerID() else { return }
@@ -96,7 +96,7 @@ import OrbitUI
         if let job = monitor?.job { jobs[job.id] = job }
         guard !searching else { return }
         for cell in tableView.visibleCells {
-            guard let index = tableView.indexPath(for: cell), apps.indices.contains(index.row) else { continue }
+            guard let index = tableView.indexPath(for: cell), index.section == 1, apps.indices.contains(index.row) else { continue }
             configure(cell, row: apps[index.row])
         }
         tableView.beginUpdates(); tableView.endUpdates()
@@ -129,18 +129,61 @@ import OrbitUI
         searchTask = Task { do { try await Task.sleep(for: .milliseconds(400)); let rows = try await rpc("repo_search", ["query": query]) as? [[String: Any]] ?? []; guard !Task.isCancelled else { return }; repositories = rows; tableView.reloadData() } catch is CancellationError { } catch { show(error.localizedDescription) } }
     }
     private var searching: Bool { !(search.searchBar.text ?? "").isEmpty }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { searching ? repositories.count : apps.count }
+    private var macBusy: Bool { startingMacUpdate || ["accepted", "building", "installing", "restarting", "installed"].contains(macUpdate["state"] as? String ?? "") }
+    override func numberOfSections(in tableView: UITableView) -> Int { searching ? 1 : 2 }
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { searching ? nil : section == 0 ? "Orbit Mac" : "Apps" }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { searching ? repositories.count : section == 0 ? 1 : max(1, apps.count) }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if !searching, indexPath.section == 0 {
+            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+            cell.textLabel?.text = macBusy ? "Updating Orbit Mac…" : "Rebuild Orbit Mac"
+            cell.detailTextLabel?.text = macUpdate["failure"] as? String ?? macUpdate["stage"] as? String ?? "Update Orbit Mac from Xcode once to enable this."
+            cell.detailTextLabel?.numberOfLines = 0
+            cell.imageView?.image = UIImage(systemName: "desktopcomputer")
+            let button = UIButton(type: .system)
+            button.configuration = .tinted(); button.setImage(UIImage(systemName: "arrow.triangle.2.circlepath"), for: .normal)
+            button.configuration?.showsActivityIndicator = macBusy
+            button.isEnabled = !macBusy && macUpdate["available"] as? Bool == true
+            button.accessibilityLabel = "Rebuild Orbit Mac"; button.accessibilityIdentifier = "OrbitMacRebuild"
+            button.addAction(UIAction { [weak self] _ in self?.rebuildMac() }, for: .touchUpInside)
+            button.sizeToFit(); cell.accessoryView = button
+            cell.accessibilityIdentifier = "OrbitMacUpdate"
+            return cell
+        }
+        if !searching, apps.isEmpty {
+            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+            cell.textLabel?.text = listMessage ?? "No apps yet. Tap + to add one from your Mac."
+            cell.textLabel?.numberOfLines = 0
+            cell.textLabel?.accessibilityIdentifier = "OrbitTargetsMessage"
+            if listMessage != nil {
+                let retry = UIButton(type: .system); retry.setTitle("Retry", for: .normal)
+                retry.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .touchUpInside)
+                retry.sizeToFit(); cell.accessoryView = retry
+            }
+            return cell
+        }
         let cell = searching ? UITableViewCell(style: .subtitle, reuseIdentifier: nil) : OrbitTargetCell()
         let row = searching ? repositories[indexPath.row] : apps[indexPath.row]
         if searching {
             var content = cell.defaultContentConfiguration()
             content.text = row["repository"] as? String; content.secondaryText = row["description"] as? String
             cell.contentConfiguration = content
-        } else {
-            configure(cell, row: row)
-        }
+        } else { configure(cell, row: row) }
         cell.accessoryType = .disclosureIndicator; return cell
+    }
+    private func rebuildMac() {
+        guard !macBusy else { return }
+        let origin = peerID()
+        startingMacUpdate = true; tableView.reloadData()
+        Task {
+            defer { if origin == peerID() { startingMacUpdate = false; tableView.reloadData() } }
+            do {
+                let result = try await rpc("mac_update", [:]) as? [String: Any] ?? [:]
+                if origin == peerID() { macUpdate = result }
+            } catch {
+                if origin == peerID() { show("Couldn’t confirm the update request. Check Mac update progress before trying again.\n\n" + error.localizedDescription) }
+            }
+        }
     }
     private func configure(_ cell: UITableViewCell, row: [String: Any]) {
         let id = row["id"] as? String ?? ""
@@ -171,6 +214,12 @@ import OrbitUI
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
+        if !searching, indexPath.section == 0 {
+            let alert = UIAlertController(title: "Orbit Mac Update", message: macUpdate["log"] as? String ?? macUpdate["stage"] as? String, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Done", style: .cancel)); present(alert, animated: true)
+            return
+        }
+        if !searching, apps.isEmpty { refresh(); return }
         if searching {
             let repository = repositories[indexPath.row]["repository"] as? String ?? ""
             Task { do {

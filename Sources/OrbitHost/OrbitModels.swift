@@ -45,6 +45,7 @@ public struct OrbitConfiguration: Codable, Sendable {
 }
 public enum OrbitPaths {
     public static var root: URL {
+        if let path = Bundle.main.object(forInfoDictionaryKey: "OrbitStateRoot") as? String, path.hasPrefix("/") { return URL(fileURLWithPath: path) }
         if let path = ProcessInfo.processInfo.environment["ORBIT_HOME"], path.hasPrefix("/") { return URL(fileURLWithPath: path) }
         return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".orbit", isDirectory: true)
     }

@@ -27,6 +27,7 @@ public actor CodeJobs {
             }
         }
     }
+    public func hasActiveJobs() -> Bool { jobs.values.contains { $0.state == .running } }
     public func derivedData(_ project: CodeProject) -> URL {
         let key = SHA256.hash(data: Data((project.path + project.scheme).utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
         return root.appendingPathComponent("DerivedData-" + key)

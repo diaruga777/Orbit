@@ -22,6 +22,12 @@ import OrbitUI
         environment.builds.activated()
         let controller = OrbitTargetsController(rpc: { method, params in
             switch method {
+            case "mac_update":
+                await fixture.beginMacUpdate()
+                return await fixture.macStatus()
+            case "mac_update_status":
+                if await fixture.macDisconnected() { throw CodeFailure("Fixture Mac is restarting") }
+                return await fixture.macStatus()
             case "targets":
                 if ProcessInfo.processInfo.arguments.contains("--target-list-retry"), await fixture.failList() { throw CodeFailure("Fixture Mac unavailable. Retry to load apps.") }
                 if ProcessInfo.processInfo.arguments.contains("--target-list-empty") { return [[String: Any]]() }
@@ -39,6 +45,20 @@ import OrbitUI
         return UINavigationController(rootViewController: controller)
     }
     actor Fixture {
+        private var macStarted: Date?
+        func beginMacUpdate() { macStarted = Date() }
+        func macDisconnected() -> Bool {
+            guard let macStarted else { return false }
+            return Date().timeIntervalSince(macStarted) > 2 && Date().timeIntervalSince(macStarted) < 6
+        }
+        func macStatus() -> [String: Any] {
+            guard let macStarted else { return ["available": true, "stage": "Build the latest saved commit on your Mac."] }
+            let done = Date().timeIntervalSince(macStarted) > 7
+            let failed = ProcessInfo.processInfo.arguments.contains("--target-mac-update-failure")
+            return ["available": true, "id": "mac-fixture", "state": done ? (failed ? "failed" : "succeeded") : "building",
+                    "stage": done ? (failed ? "Fixture Mac signing failed." : "Orbit Mac is up to date.") : "Building committed source…",
+                    "log": "Fixture Mac build output\n"]
+        }
         var started = false
         private var listFailed = false
         func failList() -> Bool { if listFailed { return false }; listFailed = true; return true }

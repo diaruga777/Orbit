@@ -189,7 +189,7 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         if method == "code" {
             return ["open", "schemes", "apps", "devices", "branches", "job", "overnightCapabilities", "overnightStatus", "overnightDiagnostics", "endpointStatus"].contains(params["operation"] as? String ?? "")
         }
-        return ["targets", "status", "job", "connection_status", "browse", "widgets", "applets", "installed_apps", "projects_detect", "project_preview", "project_apps", "repo_search", "repo_inspect", "artifact", "diagnostics_upload"].contains(method)
+        return ["mac_update_status", "targets", "status", "job", "connection_status", "browse", "widgets", "applets", "installed_apps", "projects_detect", "project_preview", "project_apps", "repo_search", "repo_inspect", "artifact", "diagnostics_upload"].contains(method)
     }
     private func routeKind(_ route: OrbitPeerAddress) -> String {
         switch route { case .dumbpipe: return "iroh"; case .relay: return "relay"; case .tcp: return "tcp"; case .tailscale: return "tailscale" }

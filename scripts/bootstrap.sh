@@ -19,6 +19,8 @@ from pathlib import Path
 root=Path(os.environ.get('ORBIT_HOME',str(Path.home()/'.orbit')))
 root.mkdir(parents=True,exist_ok=True); root.chmod(0o700)
 path=root/'installation.json'
-path.write_text(json.dumps({'checkout':sys.argv[1]})); path.chmod(0o600)
+source=Path(sys.argv[1])
+common=__import__('subprocess').check_output(['git','rev-parse','--path-format=absolute','--git-common-dir'],cwd=source,text=True).strip()
+path.write_text(json.dumps({'checkout':str(Path(common).parent)})); path.chmod(0o600)
 PYSETUP
 echo 'Orbit is ready. Follow README.md to build the Mac and phone apps.'

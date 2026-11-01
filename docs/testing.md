@@ -25,7 +25,7 @@ scripts/build_and_run.sh --build-only
 
 For app-icon changes, regenerate the project with XcodeGen and verify the iOS
 build contains `Assets.car` and declares `CFBundleIcons` / `AppIcon`. Also build
-the `OrbitMac` Xcode scheme and check its icon metadata. The script-built Mac
+the `OrbitMacBuild` native Xcode scheme and check its icon metadata. The script-built Mac
 bundle must declare `CFBundleIconFile = Orbit.icns`, contain that ICNS with all
 16–1024px representations, and still pass `codesign --verify --deep --strict`.
 Inspect both artwork masters and small-size exports. Home Screen and Dock visual
@@ -728,3 +728,31 @@ lock/reconnect acceptance remain manual checks on the intended hardware.
 ## Mac bundle identity
 
 Open **Orbit Mac → About Orbit Mac** during setup and after setup. Verify the selectable bundle ID matches the running app bundle’s `CFBundleIdentifier`, including for independently installed copies.
+
+
+## Canonical Mac builds and self-update
+
+Python Mac-update tests cover exact leaf-certificate selection, same-team key
+rejection, ambiguous first installs, detached committed source with staged and
+working edits preserved, fragmented production local RPC framing, signing failure
+before stopping the app, exact bundle replacement, rollback and durable exclusive
+jobs. Swift tests cover maintenance gating, status across restart, interrupted
+workers and trusted-peer restrictions. Simulator fixtures cover the separate Mac
+section, rebuild request, reconnect, failure/log and empty Apps behavior.
+
+Run the regular suite above in committed detached source, then check both paths:
+
+```sh
+xcodebuild -project Orbit.xcodeproj -scheme OrbitMacBuild \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath /tmp/OrbitMacNative build
+scripts/build_and_run.sh --verify
+```
+
+The second command updates the actual installed Mac app. Verify one matching
+process, canonical bundle path, unchanged certificate/designated requirement,
+bundle ID, state root and target/phone IDs. Xcode's **OrbitMac → Run** should build
+the same committed revision and launch that exact copy with debugger attachment.
+Exercise a real Mac-initiated update and a paired-phone request separately; a
+Simulator fixture establishes UI behavior only. macOS TCC folder permission
+acceptance requires the intended logged-in user's session. Physical phone
+installation/renewal and public notarization/marketplace listing remain separate.
