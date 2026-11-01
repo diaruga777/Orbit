@@ -750,7 +750,10 @@ scripts/build_and_run.sh --verify
 
 The second command updates the actual installed Mac app. Verify one matching
 process, canonical bundle path, unchanged certificate/designated requirement,
-bundle ID, state root and target/phone IDs. Xcode's **OrbitMac → Run** should build
+bundle ID, state root and target/phone IDs. Verify the Xcode product resolves to
+the canonical app, the app remains signed after build and Clean Build Folder,
+and a failed installer prevents Run from launching an older product.
+Xcode's **OrbitMac → Run** should build
 the same committed revision and launch that exact copy with debugger attachment.
 Exercise a real Mac-initiated update and a paired-phone request separately; a
 Simulator fixture establishes UI behavior only. macOS TCC folder permission
@@ -815,3 +818,26 @@ Wi-Fi guidance screenshot. The initial UI assertion expected a literal newline
 in an accessibility label; matching its request-count text fixed that test.
 No physical phone access, Apple sign-in, actual installation/renewal, public
 notarization or marketplace acceptance was performed.
+
+## Xcode canonical Run repair (2026-11-01)
+
+The `OrbitMac` scheme now resolves a native application product linked to the
+canonical app, replacing the literal `$(HOME)` PathRunnable. `OrbitMacBuild` and
+its native output agree on `OrbitMacClient.app`. Bootstrap and a fresh source
+transport build completed in committed detached source. All 224 Swift tests
+completed with zero failures (five optional fixtures skipped), all 32 Python
+checks passed, both Go race suites and helper vet passed, and the iOS Simulator,
+native Mac client and canonical Xcode installer builds succeeded.
+
+Launching the Xcode product through Launch Services reopened exactly one process
+at the canonical path with the expected revision. The pinned certificate,
+designated requirement, bundle ID and state root were preserved. An actual Xcode
+Clean against a product linked to a disposable signed app preserved that app's
+signature and contents. A deliberately unavailable certificate failed the Xcode
+installer phase and left the existing canonical app running and signed. New
+regression checks cover product replacement, missing installation, refusal to
+delete unexpected files, clean semantics and product-based Run/Profile schemes.
+
+The Mac was locked, so interactive Play/debugger attachment remains unverified.
+No physical-device access, Apple sign-in, phone acceptance, public notarization or
+marketplace listing was performed.

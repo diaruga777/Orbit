@@ -188,7 +188,8 @@ For the Mac, choose **OrbitMac → My Mac → Run** in Xcode, or run:
 
 Both build the latest **committed** revision and install the complete app at
 **~/Applications/Orbit Mac.app**. Commit your changes first. Xcode Run launches
-and debugs that same copy. Agents use the same script. Builds use a detached
+and debugs that same copy. Its build product links to the installed app, so
+Clean Build Folder leaves the installed app intact. Agents use the same script. Builds use a detached
 worktree and leave your working files and index alone.
 
 Orbit remembers the installed bundle ID, exact signing certificate, source
@@ -213,7 +214,7 @@ or discards source changes.
 
 `--build-only` creates a separate `dist/Orbit Mac.app` review artifact without
 replacing the installed app. The **OrbitMacBuild** scheme is for native Xcode
-compilation checks; use **OrbitMac** for everyday Run. Both package the native
+compilation checks and produces `OrbitMacClient.app`; use **OrbitMac** for everyday Run. Both package the native
 Apple helper. The normal Run flow also includes setup source and agent resources.
 
 Allow Local Network access on both devices. Grant the Mac app access to source folders when macOS asks. If projects live under Desktop/Documents or other protected locations, access depends on macOS permissions. Move projects to a normal development folder if that is more convenient.

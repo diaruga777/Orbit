@@ -299,6 +299,7 @@ def mac_environment():
 
 def build(source, mode, installation=None, job=None):
     revision = run(['/usr/bin/git', 'rev-parse', 'HEAD^{commit}'], cwd=source)
+    print(f'Building Orbit Mac from commit {revision[:12]}…', flush=True)
     if installation and running_apps(installation['bundleID']):
         response = local_rpc(installation['stateRoot'], 'mac_update_prepare')
         if 'error' in response and not response['error'].startswith('Unknown Orbit method:'):
@@ -341,6 +342,7 @@ def build(source, mode, installation=None, job=None):
         install(staged, installation)
         update_job(job, state='installed', stage='Waiting for Orbit Mac to reopen…')
         if mode == '--install-only':
+            print(f'Installed Orbit Mac at {installation["path"]}', flush=True)
             return
         update_job(job, state='restarting', stage='Reconnecting to Orbit Mac…')
         run(['/usr/bin/open', installation['path']])
@@ -350,6 +352,7 @@ def build(source, mode, installation=None, job=None):
                 status = local_rpc(installation['stateRoot'], 'mac_update_status').get('result', {})
                 if status.get('runningRevision') == revision and status.get('runningPath') == installation['path']:
                     update_job(job, state='succeeded', stage='Orbit Mac is up to date.')
+                    print(f'Orbit Mac is running at {installation["path"]}', flush=True)
                     return
             except (OSError, ValueError):
                 pass

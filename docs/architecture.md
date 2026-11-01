@@ -25,11 +25,18 @@ The iOS master is opaque and square for system masking; the Mac artwork includes
 transparent padding and rounded corners. Both use solid white device silhouettes
 on black, subtle glass edges on the devices, and a thin white orbit that tapers
 before the phone. See [app icons](design/app-icons.md).
-The everyday `OrbitMac` scheme builds `OrbitMacInstall`, an aggregate target that
-runs the same `scripts/build_and_run.sh --install-only` entrypoint as agents and
-in-app updates. Its Run/Profile executable is `$(HOME)/Applications/Orbit Mac.app`.
-XcodeGen's post-generation script preserves that executable and macro expansion.
-`OrbitMacBuild` retains the native `OrbitMacClient` target for compilation checks.
+The everyday `OrbitMac` scheme builds `OrbitMacInstall`, a native application
+product whose script runs the same `scripts/build_and_run.sh --install-only`
+entrypoint as agents and in-app updates. After successful installation,
+`scripts/xcode_mac_product.py` atomically links its DerivedData product to
+`~/Applications/Orbit Mac.app`. Run/Profile use `BuildableProductRunnable`, so
+Xcode resolves the app through build settings instead of a literal `$(HOME)`
+PathRunnable (which Xcode does not expand). The script declares the installed
+Info.plist/executable as outputs; Xcode does not compile, generate metadata for,
+or re-sign this product. Clean removes the DerivedData link, leaving the installed
+app intact. No generated scheme contains a developer's absolute home path.
+`OrbitMacBuild` retains the native `OrbitMacClient` target for compilation checks;
+its product and scheme consistently name `OrbitMacClient.app`.
 
 The coordinator in `scripts/mac_build.py` serializes builds with a per-user flock,
 validates ignored local identity, and packages only a committed HEAD in a detached

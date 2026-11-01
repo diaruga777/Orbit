@@ -1,6 +1,5 @@
 name: Orbit
 options:
-  postGenCommand: python3 scripts/configure_mac_scheme.py
   minimumXcodeGenVersion: 2.44.0
   deploymentTarget:
     iOS: '26.0'
@@ -142,7 +141,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).mac
-        PRODUCT_NAME: OrbitMac
+        PRODUCT_NAME: OrbitMacClient
         PRODUCT_MODULE_NAME: OrbitMacClient
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -162,15 +161,28 @@ targets:
     dependencies:
       - package: Orbit
         product: OrbitHost
-aggregateTargets:
+  # A native product lets Xcode resolve the installed executable for Run/debugging.
+  # The shared installer owns every byte of the signed bundle.
   OrbitMacInstall:
+    type: application
+    platform: macOS
     settings:
-      SUPPORTED_PLATFORMS: macosx
-      SDKROOT: macosx
-      ENABLE_USER_SCRIPT_SANDBOXING: NO
-    buildScripts:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).mac
+        EXECUTABLE_NAME: OrbitMacApp
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        CODE_SIGNING_ALLOWED: NO
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    preBuildScripts:
       - name: Build and install canonical Orbit Mac
-        script: '"$SRCROOT/scripts/build_and_run.sh" --install-only'
+        script: |
+          set -eu
+          "$SRCROOT/scripts/build_and_run.sh" --install-only
+          python3 "$SRCROOT/scripts/xcode_mac_product.py" "$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME"
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
+          - $(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)
         basedOnDependencyAnalysis: false
 schemes:
   Orbit:
@@ -183,8 +195,6 @@ schemes:
     build:
       targets:
         OrbitMacInstall: all
-    run:
-      macroExpansion: OrbitMacClient
   OrbitMacBuild:
     build:
       targets:
