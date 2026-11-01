@@ -19,7 +19,7 @@ struct OrbitAddAppView: View {
                     Text("iPhone").tag("iOS")
                     Text("This Mac").tag("macOS")
                 }.pickerStyle(.segmented).frame(maxWidth: 320)
-                    .onChange(of: model.addPlatform) { _, _ in model.project = ""; model.scheme = ""; model.addError = "" }
+                    .onChange(of: model.addPlatform) { _, platform in model.project = ""; model.scheme = ""; model.addError = ""; model.scheduled = platform == "iOS" }
                 Picker("Source", selection: Binding(get: { model.addSource }, set: { model.changeSource($0) })) {
                     Text("On This Mac").tag("local")
                     Text("GitHub").tag("github")

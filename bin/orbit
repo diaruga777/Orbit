@@ -82,7 +82,7 @@ TOOLS = [
 
 def tool_specs():
     return [{'name':name,'description':desc,'inputSchema':{'type':'object','properties':props,'required':required,'additionalProperties':False},
-             'annotations':{'readOnlyHint':method in {'mac_update_status','app_debug_setup','diagnostics','status','devices','targets','job','repo_search','repo_inspect','widgets','applets','applet_prompt'},'openWorldHint':method in {'repo_search','repo_inspect','repo_add'}}}
+             'annotations':{'readOnlyHint':method in {'mac_update_status','app_debug_setup','diagnostics','status','devices','targets','repo_search','repo_inspect','widgets','applets','applet_prompt'},'openWorldHint':method in {'repo_search','repo_inspect','repo_add'}}}
             for name,method,desc,props,required in TOOLS]
 
 def handle_mcp(message):

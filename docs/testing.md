@@ -862,3 +862,19 @@ at the same path plus unchanged identity/preferences. Run an independent committ
 Xcode Mac fixture too. This is desktop acceptance; it does not establish physical
 phone installation, live reconnection while the phone is asleep, Apple account
 sign-in, public notarization or marketplace readiness.
+
+
+Mac-target acceptance (2026-11-01): 227 Swift tests passed (five optional fixtures
+skipped), 48 Python tests passed, both Go race suites and helper vet passed.
+Bootstrap generated the transport with the installed full Xcode; the iOS
+Simulator client and complete signed Mac client built from committed detached
+source. The live Host catalog registered Luna Vault’s Swift package, built its
+committed main revision, replaced the already-running .app and confirmed a new
+process at the original installation path. Bundle ID, exact leaf certificate,
+designated requirement, pairing/client preference hashes and transport identity
+file hashes all matched the pre-update snapshot. No Apple credentials were read.
+A separate committed native Xcode Mac fixture also built, installed and launched
+through the same Host RPCs. The fixture was removed afterward; Luna remains
+registered for manual builds. The locked Mac prevented visual review. No phone
+installation/sign-in, live phone reconnection, distribution notarization or
+marketplace listing was performed by these checks.

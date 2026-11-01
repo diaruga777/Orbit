@@ -508,7 +508,8 @@ launch restores/reopens the previous bundle. Installation/launch phases reject
 cancellation. Build cancellation signals only the isolated worker group.
 
 A dead worker before replacement becomes a durable failure; during replacement,
-status reconciles only a matching installed executable and requested running
-path. Unconfirmed installation remains `unknownCompletion`, retaining transaction
+status confirms only a matching installed executable and requested running
+path. If a crash leaves only a verified rollback bundle, it restores/reopens
+the original and records failure so a new build can be requested. Unconfirmed installation remains `unknownCompletion`, retaining transaction
 files and blocking schedule success or automatic retry. Later status reads retry
 that verification. Mac jobs never create phone installation/profile evidence.
