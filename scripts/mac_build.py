@@ -56,7 +56,7 @@ def certificate(app):
     # Pin the actual leaf certificate, not its display name or the team alone.
     with tempfile.TemporaryDirectory(prefix='orbit-certificate-') as folder:
         prefix = str(Path(folder) / 'cert')
-        run(['/usr/bin/codesign', '-d', '--extract-certificates', prefix, app])
+        run(['/usr/bin/codesign', '-d', '--extract-certificates=' + prefix, app])
         return hashlib.sha1(Path(prefix + '0').read_bytes()).hexdigest().upper()
 
 
@@ -228,6 +228,31 @@ def checkout(source, revision, folder):
             shutil.copytree(native, folder / relative, symlinks=True)
 
 
+def select_xcode():
+    candidates = []
+    if os.environ.get('DEVELOPER_DIR'):
+        candidates.append(Path(os.environ['DEVELOPER_DIR']))
+    try: candidates.append(Path(run(['/usr/bin/xcode-select', '-p'])))
+    except subprocess.CalledProcessError: pass
+    for _, app in running_apps_for_xcode(): candidates.append(app / 'Contents/Developer')
+    def version(app):
+        try: return tuple(int(part) for part in info(app).get('CFBundleShortVersionString', '0').split('.'))
+        except (ValueError, OSError): return (0,)
+    candidates += [app / 'Contents/Developer' for app in sorted(Path('/Applications').glob('Xcode*.app'), key=version, reverse=True)]
+    for candidate in candidates:
+        if (candidate / 'Platforms/iPhoneOS.platform/Developer/SDKs').is_dir(): return str(candidate)
+    raise ValueError('Open a full Xcode with the iPhone SDK installed, then rebuild Orbit Mac.')
+
+
+def running_apps_for_xcode():
+    copies = []
+    for line in run(['/bin/ps', '-axo', 'pid=,comm=']).splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and parts[1].endswith('.app/Contents/MacOS/Xcode'):
+            copies.append((int(parts[0]), Path(parts[1].split('.app/Contents/MacOS/')[0] + '.app')))
+    return copies
+
+
 def build(source, mode, installation=None, job=None):
     revision = run(['/usr/bin/git', 'rev-parse', 'HEAD^{commit}'], cwd=source)
     if installation and running_apps(installation['bundleID']):
@@ -243,6 +268,7 @@ def build(source, mode, installation=None, job=None):
             env = os.environ.copy()
             # No Xcode parent build settings may leak into the SwiftPM packager.
             env['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + env.get('PATH', '/usr/bin:/bin')
+            env['DEVELOPER_DIR'] = select_xcode()
             if installation:
                 env.update(ORBIT_MAC_SIGNING_IDENTITY=installation['certificate'], ORBIT_CANONICAL_BUILD='1',
                            ORBIT_SOURCE_ROOT=installation['sourceRoot'], ORBIT_STATE_ROOT=installation['stateRoot'])
