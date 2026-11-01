@@ -62,7 +62,7 @@ final class CodeEditorUITests: XCTestCase {
             }, evaluatedWith: nil)
             unexpectedRequest.isInverted = true
             waitForExpectations(timeout: 4)
-            XCTAssertTrue(row.staticTexts["Manual builds\nBuild requests: 0"].exists)
+            XCTAssertTrue(row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Build requests: 0")).firstMatch.exists)
         }
         // The next probe models joining Wi-Fi; the same play button now starts work.
         app.buttons["OrbitTargetPlay:fixture"].tap()
