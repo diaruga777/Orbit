@@ -33,8 +33,12 @@ XcodeGen's post-generation script preserves that executable and macro expansion.
 
 The coordinator in `scripts/mac_build.py` serializes builds with a per-user flock,
 validates ignored local identity, and packages only a committed HEAD in a detached
-worktree. Native archives and private local config are copied; an independent
-serialized SwiftPM cache never mutates the working checkout's build tree. The
+worktree. Native archives and private local config are copied. Each fresh detached checkout
+uses the reserved `~/.orbit/MacBuildSource` path, and SwiftPM uses an explicit
+`MacBuildCache` scratch path, so binary-artifact paths survive repeated builds.
+A stale reserved checkout is removed only if Git registers it as detached in the
+same repository; a branch or unknown folder stops recovery. User build trees are
+never reused. The
 complete packager is `package_mac_app.sh`. Development packages support debugger
 attachment; public release packages retain hardened runtime/notarization rules.
 
@@ -48,7 +52,8 @@ Canonical bundle metadata pins state independently of Xcode/agent environment;
 UserDefaults continue using the same bundle ID. Obsolete copies redirect to the
 canonical app; additional processes focus the existing copy before starting Host.
 
-Host's authenticated `mac_update` and `mac_update_status` methods are separate from
+Host's authenticated `mac_update` and `mac_update_status` methods (also exposed
+through the shared CLI/MCP) are separate from
 the phone target catalog. No caller supplies executable paths or revisions. The
 installed worker reads the original checkout and builds its local committed HEAD,
 without fetch/reset/commit. A detached process inherits the update lock and writes

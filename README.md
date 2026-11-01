@@ -202,7 +202,8 @@ same signing requirement, identity and location prevents routine rebuild drift.
 
 In either client, open **Apps → Orbit Mac → Rebuild Orbit Mac** to apply the
 latest local commit. Orbit Mac has its own section, separate from phone apps.
-The worker keeps running while Orbit restarts; progress, logs and failures survive
+Agents can use `orbit_mac_update` and `orbit_mac_update_status` through MCP, or
+`bin/orbit mac-update` and `bin/orbit mac-update-status`. The worker keeps running while Orbit restarts; progress, logs and failures survive
 reconnection. Success requires the reopened canonical app to report the expected
 revision. Finish phone builds first. The Mac must be awake and logged in, with
 its source checkout and signing key available. This action never fetches, commits

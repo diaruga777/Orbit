@@ -34,6 +34,28 @@ def run(args, cwd=None, capture=True, env=None):
     return result.stdout.decode().strip() if capture else ''
 
 
+def stream_package(arguments, directory, env, log=None):
+    output = None
+    if log:
+        log = Path(log)
+        descriptor = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        if os.fstat(descriptor).st_ino == os.fstat(sys.stdout.fileno()).st_ino:
+            os.close(descriptor)  # A detached worker already writes here.
+        else:
+            output = os.fdopen(descriptor, 'ab')
+    try:
+        with subprocess.Popen([str(a) for a in arguments], cwd=directory, env=env,
+                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as process:
+            while True:
+                data = process.stdout.read1(16384)
+                if not data: break
+                sys.stdout.buffer.write(data); sys.stdout.buffer.flush()
+                if output: output.write(data); output.flush()
+            if process.wait() != 0: raise subprocess.CalledProcessError(process.returncode, arguments)
+    finally:
+        if output: output.close()
+
+
 def read(path, default=None):
     return json.loads(Path(path).read_text()) if Path(path).exists() else default
 
@@ -298,7 +320,7 @@ def build(source, mode, installation=None, job=None):
         saved = read(state, {}).get('object', {})
         if any(not Path(artifact.get('path', '')).exists() for artifact in saved.get('artifacts', [])):
             state.unlink(missing_ok=True)
-        run(['/bin/bash', folder / 'scripts/package_mac_app.sh', '--build-only'], cwd=folder, env=env, capture=False)
+        stream_package(['/bin/bash', folder / 'scripts/package_mac_app.sh', '--build-only'], folder, env, read(job, {}).get('logPath') if job else None)
         staged = folder / 'dist/Orbit Mac.app'
         if mode == '--build-only':
             destination = source / 'dist/Orbit Mac.app'
@@ -375,7 +397,7 @@ def main():
             run(['/usr/bin/log', 'stream', '--info', '--predicate', 'process == \"OrbitMacApp\"'], capture=False)
     except BaseException as error:
         if job and read(job, {}).get('state') != 'unknownCompletion':
-            update_job(job, state='failed', stage='Update stopped. Your app and data are safe.', failure=str(error))
+            update_job(job, state='failed', stage='Update stopped.', failure='The build failed. Open the log for details.' if isinstance(error, subprocess.CalledProcessError) else str(error))
         raise
     finally:
         os.close(descriptor)

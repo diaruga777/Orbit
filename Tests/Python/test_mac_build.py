@@ -103,6 +103,35 @@ class MacBuildTests(unittest.TestCase):
                 self.assertFalse((installed/'break').exists())
                 self.assertTrue((installed/'new').exists())
 
+    def test_repeated_builds_use_fresh_detached_source_at_stable_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root/'repo'; source.mkdir()
+            def git(*args): return subprocess.check_output(['git','-C',str(source),*args])
+            git('init','-q','-b','main')
+            (source/'scripts').mkdir(); (source/'Config').mkdir()
+            (source/'Config/Local.xcconfig').write_text('private')
+            (source/'.gitignore').write_text('Config/Local.xcconfig\ndist/\n')
+            (source/'scripts/package_mac_app.sh').write_text("#!/bin/bash\nset -eu\nmkdir -p \"$ORBIT_MAC_BUILD_CACHE/artifacts/fixture\" 'dist/Orbit Mac.app'\nprintf '%s' \"$PWD\" > 'dist/Orbit Mac.app/source-path'\n")
+            git('add','.'); git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture')
+            registry = root/'state/mac-installation.json'; registry.parent.mkdir()
+            original_run = mac.run
+            def command(args, **kwargs):
+                if str(args[0]) == '/usr/bin/ditto':
+                    shutil.copytree(args[1],args[2]); return ''
+                return original_run(args, **kwargs)
+            with patch.object(mac,'REGISTRY',registry), patch.object(mac,'select_xcode',return_value='/fixture/Xcode'), patch.object(mac,'run',side_effect=command):
+                mac.build(source,'--build-only')
+                first = (source/'dist/Orbit Mac.app/source-path').read_text()
+                self.assertFalse((registry.parent/'MacBuildSource').exists())
+                mac.build(source,'--build-only')
+                self.assertEqual((source/'dist/Orbit Mac.app/source-path').read_text(), first)
+                self.assertFalse((registry.parent/'MacBuildSource').exists())
+                self.assertEqual(git('status','--porcelain'), b'')
+                git('worktree','add','-b','protected',str(registry.parent/'MacBuildSource'))
+                with self.assertRaises(ValueError): mac.build(source,'--build-only')
+                self.assertTrue((registry.parent/'MacBuildSource/scripts/package_mac_app.sh').exists())
+                git('worktree','remove','--force',str(registry.parent/'MacBuildSource'))
+
     def test_durable_job_and_exclusive_lock(self):
         with tempfile.TemporaryDirectory() as temporary, patch.object(mac, 'REGISTRY', Path(temporary)/'registry.json'):
             fd = mac.lock()

@@ -16,6 +16,20 @@ spec = importlib.util.spec_from_loader(loader.name, loader)
 orbit = importlib.util.module_from_spec(spec); loader.exec_module(orbit)
 
 class MCPTests(unittest.TestCase):
+    def test_mac_update_has_fixed_source_and_separate_durable_status(self):
+        tools = {t['name']:t for t in orbit.tool_specs()}
+        self.assertFalse(tools['orbit_mac_update']['annotations']['readOnlyHint'])
+        self.assertTrue(tools['orbit_mac_update_status']['annotations']['readOnlyHint'])
+        with patch.object(orbit, 'rpc', return_value={'id':'mac-job','state':'accepted'}) as rpc:
+            reply = orbit.handle_mcp({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'orbit_mac_update','arguments':{}}})
+            rpc.assert_called_once_with('mac_update', {})
+            self.assertFalse(reply['result']['isError'])
+            rpc.reset_mock()
+            rejected = orbit.handle_mcp({'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'orbit_mac_update','arguments':{'source':'/another/repo'}}})
+            self.assertTrue(rejected['result']['isError']); rpc.assert_not_called()
+        with patch.object(orbit, 'rpc', return_value={}) as rpc, patch('sys.argv', ['orbit','mac-update-status']):
+            orbit.main(); rpc.assert_called_once_with('mac_update_status', {})
+
     def test_initialize_and_tool_inventory(self):
         value = orbit.handle_mcp({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05'}})
         self.assertEqual(value['result']['protocolVersion'],'2024-11-05')
