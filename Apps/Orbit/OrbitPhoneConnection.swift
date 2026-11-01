@@ -162,7 +162,7 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                     }
                     fields["route"] = routeKind(route)
                     let data: Data
-                    do { data = try await OrbitRPC.exchange(payload, stream: stream, timeout: method == "targets" ? 30 : 180) }
+                    do { data = try await OrbitRPC.exchange(payload, stream: stream, timeout: ["targets", "mac_update_status"].contains(method) ? 30 : 180) }
                     catch {
                         if logging { OrbitDiagnostics.shared.error("rpc", "exchange_failed", error, fields) }
                         // The Mac may have accepted a mutation. Never resend a build/save

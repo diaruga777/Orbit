@@ -272,60 +272,72 @@ def build(source, mode, installation=None, job=None):
             raise ValueError(response['error'])
     if job:
         update_job(job, state='building', stage='Building committed source…', revision=revision, pid=os.getpid())
-    with tempfile.TemporaryDirectory(prefix='orbit-mac-build-') as temporary:
-        folder = Path(temporary) / 'Source'
-        try:
-            checkout(source, revision, folder)
-            env = os.environ.copy()
-            # No Xcode parent build settings may leak into the SwiftPM packager.
-            env['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + env.get('PATH', '/usr/bin:/bin')
-            env['DEVELOPER_DIR'] = select_xcode()
-            if installation:
-                env.update(ORBIT_MAC_SIGNING_IDENTITY=installation['certificate'], ORBIT_CANONICAL_BUILD='1',
-                           ORBIT_SOURCE_ROOT=installation['sourceRoot'], ORBIT_STATE_ROOT=installation['stateRoot'])
-            # Stable, serialized build cache; never use the user's working build tree.
-            cache = REGISTRY.parent / 'MacBuildCache'
-            cache.mkdir(exist_ok=True, mode=0o700)
-            (folder / '.build').symlink_to(cache, target_is_directory=True)
-            run(['/bin/bash', folder / 'scripts/package_mac_app.sh', '--build-only'], cwd=folder, env=env, capture=False)
-            staged = folder / 'dist/Orbit Mac.app'
-            if mode == '--build-only':
-                destination = source / 'dist/Orbit Mac.app'
-                destination.parent.mkdir(exist_ok=True)
-                if destination.exists(): shutil.rmtree(destination)
-                run(['/usr/bin/ditto', staged, destination])
-                print(destination)
-                return
-            update_job(job, state='installing', stage='Installing Orbit Mac…')
-            install(staged, installation)
-            update_job(job, state='installed', stage='Waiting for Orbit Mac to reopen…')
-            if mode == '--install-only':
-                return
-            update_job(job, state='restarting', stage='Reconnecting to Orbit Mac…')
-            run(['/usr/bin/open', installation['path']])
-            deadline = time.monotonic() + 45
-            while time.monotonic() < deadline:
-                try:
-                    status = local_rpc(installation['stateRoot'], 'mac_update_status').get('result', {})
-                    if status.get('runningRevision') == revision and status.get('runningPath') == installation['path']:
-                        update_job(job, state='succeeded', stage='Orbit Mac is up to date.')
-                        return
-                except (OSError, ValueError):
-                    pass
-                time.sleep(0.5)
-            update_job(job, state='unknownCompletion', stage='Installed. Reopen Orbit Mac to confirm the update.')
-            raise ValueError('The app was installed, but Orbit could not confirm it reopened. Reopen ~/Applications/Orbit Mac.app.')
-        finally:
-            if folder.exists():
-                subprocess.run(['/usr/bin/git', 'worktree', 'remove', '--force', str(folder)], cwd=source, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
+    folder = REGISTRY.parent / 'MacBuildSource'
+    if folder.exists():
+        records = run(['/usr/bin/git', 'worktree', 'list', '--porcelain'], cwd=source).split('\n\n')
+        record = next((r for r in records if r.splitlines()[0] == 'worktree ' + str(folder)), '')
+        if '\ndetached' not in record:
+            raise ValueError('Orbit’s reserved build folder contains another checkout. Leave it intact and choose a different state setup.')
+        run(['/usr/bin/git', 'worktree', 'remove', '--force', folder], cwd=source)
+    try:
+        checkout(source, revision, folder)
+        env = os.environ.copy()
+        # No Xcode parent build settings may leak into the SwiftPM packager.
+        env['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + env.get('PATH', '/usr/bin:/bin')
+        env['DEVELOPER_DIR'] = select_xcode()
+        if installation:
+            env.update(ORBIT_MAC_SIGNING_IDENTITY=installation['certificate'], ORBIT_CANONICAL_BUILD='1',
+                       ORBIT_SOURCE_ROOT=installation['sourceRoot'], ORBIT_STATE_ROOT=installation['stateRoot'])
+        # Stable, serialized build cache; never use the user's working build tree.
+        cache = REGISTRY.parent / 'MacBuildCache'
+        cache.mkdir(exist_ok=True, mode=0o700)
+        env['ORBIT_MAC_BUILD_CACHE'] = str(cache)
+        # Migrate caches from earlier temporary paths; artifact records contain
+        # absolute paths, so a dangling record must be resolved again.
+        state = cache / 'workspace-state.json'
+        saved = read(state, {}).get('object', {})
+        if any(not Path(artifact.get('path', '')).exists() for artifact in saved.get('artifacts', [])):
+            state.unlink(missing_ok=True)
+        run(['/bin/bash', folder / 'scripts/package_mac_app.sh', '--build-only'], cwd=folder, env=env, capture=False)
+        staged = folder / 'dist/Orbit Mac.app'
+        if mode == '--build-only':
+            destination = source / 'dist/Orbit Mac.app'
+            destination.parent.mkdir(exist_ok=True)
+            if destination.exists(): shutil.rmtree(destination)
+            run(['/usr/bin/ditto', staged, destination])
+            print(destination)
+            return
+        update_job(job, state='installing', stage='Installing Orbit Mac…')
+        install(staged, installation)
+        update_job(job, state='installed', stage='Waiting for Orbit Mac to reopen…')
+        if mode == '--install-only':
+            return
+        update_job(job, state='restarting', stage='Reconnecting to Orbit Mac…')
+        run(['/usr/bin/open', installation['path']])
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
+            try:
+                status = local_rpc(installation['stateRoot'], 'mac_update_status').get('result', {})
+                if status.get('runningRevision') == revision and status.get('runningPath') == installation['path']:
+                    update_job(job, state='succeeded', stage='Orbit Mac is up to date.')
+                    return
+            except (OSError, ValueError):
+                pass
+            time.sleep(0.5)
+        update_job(job, state='unknownCompletion', stage='Installed. Reopen Orbit Mac to confirm the update.')
+        raise ValueError('The app was installed, but Orbit could not confirm it reopened. Reopen ~/Applications/Orbit Mac.app.')
+    finally:
+        if folder.exists():
+            subprocess.run(['/usr/bin/git', 'worktree', 'remove', '--force', str(folder)], cwd=source, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', nargs='?', default='run', choices=['run', '--unused'])
+    parser.add_argument('mode', nargs='?', default='run', choices=['run'])
     parser.add_argument('--build-only', action='store_true')
     parser.add_argument('--install-only', action='store_true')
     parser.add_argument('--verify', action='store_true')
+    parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--logs', '--telemetry', action='store_true', dest='logs')
     parser.add_argument('--start', action='store_true')
     parser.add_argument('--worker', action='store_true')
     parser.add_argument('--lock-fd', type=int)
@@ -356,7 +368,11 @@ def main():
                 value = update_job(job, pid=child.pid)
                 print(json.dumps(value))
                 return
-        build(source, '--install-only' if args.install_only else 'run', installation, job)
+        build(source, '--install-only' if args.install_only or args.debug else 'run', installation, job)
+        if args.debug:
+            os.execv('/usr/bin/xcrun', ['xcrun', 'lldb', '--', str(CANONICAL / 'Contents/MacOS/OrbitMacApp')])
+        if args.logs:
+            run(['/usr/bin/log', 'stream', '--info', '--predicate', 'process == \"OrbitMacApp\"'], capture=False)
     except BaseException as error:
         if job and read(job, {}).get('state') != 'unknownCompletion':
             update_job(job, state='failed', stage='Update stopped. Your app and data are safe.', failure=str(error))

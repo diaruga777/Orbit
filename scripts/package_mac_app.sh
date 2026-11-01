@@ -12,8 +12,8 @@ IDENTITY="${ORBIT_MAC_SIGNING_IDENTITY:-}"
 BUNDLE="$ROOT/dist/Orbit Mac.app"
 # Build-only output is a separate review artifact; it never overwrites an installed client.
 if [[ "$MODE" == --build-only ]]; then BUNDLE="$ROOT/dist/Orbit Mac.app"; fi
-swift build --build-system native --product OrbitMacApp -Xswiftc -debug-prefix-map -Xswiftc "$ROOT=${ORBIT_SOURCE_ROOT:-$ROOT}"
-BUILD="$(swift build --build-system native --show-bin-path)"
+swift build --scratch-path "${ORBIT_MAC_BUILD_CACHE:-$ROOT/.build}" --build-system native --product OrbitMacApp -Xswiftc -debug-prefix-map -Xswiftc "$ROOT=${ORBIT_SOURCE_ROOT:-$ROOT}"
+BUILD="$(swift build --scratch-path "${ORBIT_MAC_BUILD_CACHE:-$ROOT/.build}" --build-system native --show-bin-path)"
 "$ROOT/scripts/build_apple_adapter.sh" "$BUILD/orbit-apple-adapter" "$BUILD/apple-adapter-notices"
 STAGE="$(mktemp -d /tmp/orbit-app.XXXXXX)"; trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/Orbit Mac.app"
