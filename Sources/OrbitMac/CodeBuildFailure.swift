@@ -28,19 +28,36 @@ enum CodeBuildFailure {
             $0.contains("provisioning profile") &&
             ($0.contains("doesn't include") || $0.contains("does not include") || $0.contains("doesn't support"))
         }
+        let expiredSession = errors.contains { $0.contains("session has expired") }
         let accountFailure = errors.contains {
             $0.contains("no accounts") || $0.contains("no account for team") ||
-            $0.contains("authentication credentials") || $0.contains("session has expired")
+            $0.contains("authentication credentials")
         }
         var messages: [String] = []
-        if accountFailure {
-            messages.append("Xcode couldn’t use your signing account. On your Mac, open Xcode → Settings → Accounts and sign in again, then retry.")
-        }
+        // Lead with the concrete provisioning failure. “No Accounts” can mean
+        // xcodebuild cannot provision a target, even with an account in Xcode.
         if profileMismatch {
-            if errors.contains(where: { $0.contains("time sensitive notifications") || $0.contains("com.apple.developer.usernotifications.time-sensitive") }) {
-                messages.append("The app’s provisioning profile is missing Time Sensitive Notifications. In the source project’s Signing & Capabilities, check the selected team and refresh automatic signing with an account that supports this capability.")
+            let profileErrors = errors.filter { $0.contains("provisioning profile") }
+            if profileErrors.contains(where: { $0.contains("app groups") || $0.contains("com.apple.security.application-groups") }) {
+                messages.append("The app or an extension needs an App Groups provisioning profile. On your Mac, open its Signing & Capabilities in Xcode and refresh automatic signing for the selected team.")
+            }
+            if profileErrors.contains(where: { $0.contains("time sensitive notifications") || $0.contains("com.apple.developer.usernotifications.time-sensitive") }) {
+                messages.append("The app’s provisioning profile is missing Time Sensitive Notifications. On your Mac, refresh its automatic signing in Xcode → Signing & Capabilities.")
+            }
+            if messages.isEmpty {
+                messages.append("The app or an extension has a provisioning profile that’s missing a required capability. On your Mac, check its team and refresh signing in Xcode → Signing & Capabilities.")
+            }
+        }
+        if expiredSession {
+            messages.append("Xcode reports that its signing session expired. On your Mac, open Xcode → Settings → Accounts and sign in again, then retry.")
+        } else if accountFailure {
+            let missingToken = output.lowercased().components(separatedBy: .newlines).contains {
+                $0.contains("dvtdeveloperaccountmanager") && $0.contains("missing xcode-token")
+            }
+            if missingToken {
+                messages.append("Xcode’s build tools couldn’t load the saved signing session. Your account may still appear signed in. On your Mac, check the account and selected team in Xcode → Settings → Accounts, then retry.")
             } else {
-                messages.append("The app’s provisioning profile is missing a required capability. In the source project’s Signing & Capabilities, check the selected team and refresh signing with an account that supports the app’s capabilities.")
+                messages.append("Xcode couldn’t provision this build with the selected team. On your Mac, check the team for the app and its extensions in Signing & Capabilities and Xcode → Settings → Accounts.")
             }
         }
         return messages.isEmpty ? fallback : messages.joined(separator: "\n\n")

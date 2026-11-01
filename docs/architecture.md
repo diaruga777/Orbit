@@ -399,7 +399,7 @@ phone app's exact identity and controls extension IDs and shared Keychain access
 The Mac ID stays prefix-plus-`.mac`. The setup wizard creates local config only
 inside its private extracted source; source/developer checkouts own theirs.
 
-Known Xcode signing failures are summarized from bounded startup and tail log reads. Account authentication and capability/profile mismatches can appear together, so both recovery steps reach the durable job failure shown by Mac, phone and CLI/MCP. Unrelated account warnings do not replace a compiler failure. Summaries contain fixed recovery copy; raw account names, project paths and repository output remain in the job log. Orbit preserves the requested entitlements and leaves account authentication and profile updates to Xcode.
+Known Xcode signing failures are summarized from bounded startup and tail log reads. Capability/profile mismatches lead the durable job failure shown by Mac, phone and CLI/MCP. App Groups and Time Sensitive Notifications have specific recovery copy that includes embedded extensions. A generic “No Accounts” error directs users to check target/team provisioning without assuming they signed out. A correlated missing-token diagnostic explains that command-line signing can be unavailable while the account still appears signed in; only an explicit expired-session error prescribes signing in again. Unrelated account warnings do not replace a compiler failure. Summaries contain fixed recovery copy; raw account names, project paths and repository output remain in the job log. Orbit preserves the requested entitlements and leaves account authentication and profile updates to Xcode.
 
 ## Client diagnostics
 

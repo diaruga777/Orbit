@@ -878,3 +878,13 @@ through the same Host RPCs. The fixture was removed afterward; Luna remains
 registered for manual builds. The locked Mac prevented visual review. No phone
 installation/sign-in, live phone reconnection, distribution notarization or
 marketplace listing was performed by these checks.
+
+
+## Signing session versus extension provisioning
+
+`CodeBuildFailureTests` covers LunaMusic-style Share extension App Groups failures
+with a wildcard profile and simultaneous `No Accounts`/missing-token diagnostics.
+It verifies capability-first guidance, no inferred sign-out, explicit expired-session
+recovery, multiple missing capabilities, ignored warnings and private-detail exclusion.
+Fixtures use synthetic logs and never access credentials, profiles or devices.
+A signed build with the correct profile remains separate from these diagnostics tests.

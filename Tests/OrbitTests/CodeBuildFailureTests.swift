@@ -18,7 +18,8 @@ final class CodeBuildFailureTests: XCTestCase {
 
     func testAccountFailureWithoutCapabilityAndCapabilityWithoutAccount() {
         let account = CodeBuildFailure.message(output: accountError)
-        XCTAssertTrue(account.contains("sign in again"))
+        XCTAssertTrue(account.contains("selected team"))
+        XCTAssertFalse(account.contains("sign in again"))
         XCTAssertFalse(account.contains("capability"))
         let capability = CodeBuildFailure.message(output: capabilityError)
         XCTAssertTrue(capability.contains("Time Sensitive Notifications"))
@@ -39,6 +40,34 @@ final class CodeBuildFailureTests: XCTestCase {
         for error in ["No Account for Team TESTTEAM00", "Your session has expired. Please log in.", "Unable to authenticate with authentication credentials"] {
             XCTAssertTrue(CodeBuildFailure.message(output: "error: " + error).contains("Settings → Accounts"))
         }
+    }
+
+    func testShareExtensionAppGroupsFailureDoesNotPrescribeSigningOut() {
+        let profile = "App.xcodeproj: error: Provisioning profile \"iOS Team Provisioning Profile: *\" doesn't include the App Groups capability. (in target 'PrivateShare' from project 'Private')"
+        let message = CodeBuildFailure.message(output: [warning, accountError, profile].joined(separator: "\n"))
+        XCTAssertTrue(message.hasPrefix("The app or an extension needs an App Groups provisioning profile."))
+        XCTAssertTrue(message.contains("may still appear signed in"))
+        XCTAssertFalse(message.contains("sign in again"))
+        XCTAssertFalse(message.contains("PrivateShare"))
+        XCTAssertFalse(message.contains("developer@example.test"))
+        let entitlement = "error: Provisioning profile doesn't include the com.apple.security.application-groups entitlement."
+        XCTAssertTrue(CodeBuildFailure.message(output: entitlement).contains("App Groups"))
+    }
+
+    func testMissingTokenWarningAloneIsNotAnAuthenticationFailure() {
+        XCTAssertEqual(CodeBuildFailure.message(output: warning), CodeBuildFailure.fallback)
+        XCTAssertFalse(CodeBuildFailure.message(output: warning + "\n" + capabilityError).contains("saved signing session"))
+        XCTAssertTrue(CodeBuildFailure.message(output: "error: Your session has expired.").contains("sign in again"))
+        XCTAssertFalse(CodeBuildFailure.message(output: accountError).contains("saved signing session"))
+    }
+
+    func testMultipleCapabilityFailuresAreKeptAndWarningsDoNotNameCapabilities() {
+        let groups = "error: Provisioning profile doesn't include the App Groups capability."
+        let message = CodeBuildFailure.message(output: groups + "\n" + capabilityError)
+        XCTAssertTrue(message.contains("App Groups"))
+        XCTAssertTrue(message.contains("Time Sensitive Notifications"))
+        let warning = "warning: Time Sensitive Notifications disabled"
+        XCTAssertFalse(CodeBuildFailure.message(output: groups + "\n" + warning).contains("Time Sensitive"))
     }
 
     func testBoundedReadIncludesStartupAndTailOfLargeLog() throws {
