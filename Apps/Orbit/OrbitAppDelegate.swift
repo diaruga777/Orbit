@@ -115,7 +115,7 @@ import OrbitWire
                 return CodeBrowserPage(items: items, next: (result["next"] as? NSNumber)?.int64Value)
             }, pairing: { OrbitConnectionController(connection: connection) }, peerID: { connection.peerID }, jobStatus: { id in
                 try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: await connection.rpc("job", ["id": id])))
-            })
+            }, preparePhoneInstall: { try await OrbitInstallNetwork.requireWiFi() })
             environment.builds.activated()
             let project = CodeWorkspaceController(environment: environment)
             project.tabBarItem = UITabBarItem(title: "Project", image: UIImage(systemName: "curlybraces"), tag: 0)

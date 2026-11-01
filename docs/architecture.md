@@ -207,6 +207,17 @@ A control pipe by itself does not expose Apple's installation services. Native d
 
 No arbitrary host/port proxy, host-key export, new device pairing, Developer Mode enablement or UI automation is offered by this path. Self-replacement of the app carrying the forwarding session is rejected. Updating Orbit itself requires the independent native Apple path or the separate phone-side LocalDevVPN refresh connection.
 
+Before a phone-initiated Build and Install request, the Apps controller (play
+button and row menu) and editor phone-build list check a fresh Wi-Fi-specific
+`NWPathMonitor` observation. The transport check waits for the first update,
+bounds the wait to two seconds, and fails closed without a Wi-Fi path. It does
+not infer Wi-Fi from a working control pipe, a VPN or an expensive-path flag;
+Wi-Fi hotspots remain eligible. Rejection shows Wi-Fi guidance before starting
+build monitoring or sending the build RPC. Retrying probes the network again.
+Mac rebuilds, source editing, catalog reads and compilation-only jobs remain
+available. This preflight does not prove Apple-service availability or confirmed
+installation, and network changes after acceptance still use existing recovery.
+
 The iOS client offers readiness in the foreground and requests BGProcessing windows for later attempts. iOS decides whether and when a background window runs; expiry, lock state, Wi-Fi policy and Apple's device services can prevent installation. Artifacts remain waiting, and uncertain completion is reconciled before retry. The inherited implementation has synthetic Apple/TLS/relay coverage; **the standalone Orbit extraction has not been accepted on a physical phone or a free Personal Team in CI**. Do not infer those results from simulator builds.
 
 ## Known boundaries

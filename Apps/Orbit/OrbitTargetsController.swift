@@ -2,11 +2,14 @@ import UIKit
 import OrbitCore
 import OrbitRefresh
 import OrbitUI
+import OrbitTransport
 
 @MainActor final class OrbitTargetsController: UITableViewController, UISearchResultsUpdating {
     private let rpc: (String, [String: Any]) async throws -> Any
     private let monitor: CodeBuildMonitor?
     private let peerID: () -> String
+    private let preparePhoneInstall: () async throws -> Void
+    private var checkingNetwork = false
     private let refreshInterval: TimeInterval
     private var macUpdate: [String: Any] = [:]
     private var startingMacUpdate = false
@@ -24,8 +27,8 @@ import OrbitUI
     convenience init(connection: OrbitPhoneConnection, monitor: CodeBuildMonitor) {
         self.init(rpc: { method, params in try await connection.rpc(method, params) }, monitor: monitor, peerID: { connection.peerID })
     }
-    init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }, refreshInterval: TimeInterval = 3) {
-        self.refreshInterval = refreshInterval; self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
+    init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }, refreshInterval: TimeInterval = 3, preparePhoneInstall: @escaping () async throws -> Void = { try await OrbitInstallNetwork.requireWiFi() }) {
+        self.preparePhoneInstall = preparePhoneInstall; self.refreshInterval = refreshInterval; self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
     }
     required init?(coder: NSCoder) { fatalError() }
     deinit { poll?.invalidate(); searchTask?.cancel() }
@@ -102,15 +105,21 @@ import OrbitUI
         tableView.beginUpdates(); tableView.endUpdates()
     }
     private func build(_ row: [String: Any]) {
-        guard let monitor, let id = row["id"] as? String else { return }
+        guard !checkingNetwork, let monitor, let id = row["id"] as? String else { return }
         let origin = peerID()
         OrbitDiagnostics.shared.record("action", "build_pressed", ["target": id])
-        do { try monitor.begin(title: "Build & Install · " + (row["name"] as? String ?? "App")) }
-        catch { show(error.localizedDescription); return }
-        starting = id; buildChanged()
+        checkingNetwork = true
         Task {
-            defer { if origin == peerID() { starting = nil; monitor.endStarting(peer: origin); buildChanged() } }
+            var began = false
+            defer {
+                checkingNetwork = false
+                if began, origin == peerID() { starting = nil; monitor.endStarting(peer: origin); buildChanged() }
+            }
             do {
+                try await preparePhoneInstall()
+                guard origin == peerID(), UIApplication.shared.applicationState == .active else { return }
+                try monitor.begin(title: "Build & Install · " + (row["name"] as? String ?? "App"))
+                began = true; starting = id; buildChanged()
                 let result = try await rpc("build", ["id": id, "monitorBundleID": Bundle.main.bundleIdentifier ?? ""])
                 let job = try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: result))
                 OrbitDiagnostics.shared.record("build", "accepted", ["target": id, "job": job.id])
@@ -118,7 +127,12 @@ import OrbitUI
                 if let index = apps.firstIndex(where: { $0["id"] as? String == id }) { apps[index]["jobID"] = job.id }
                 jobs[job.id] = job; monitor.accept(job)
                 monitor.show(job, from: self)
-            } catch { if origin == peerID() { show(error.localizedDescription) } }
+            } catch {
+                if origin == peerID() {
+                    let alert = UIAlertController(title: error is OrbitInstallNetwork.WiFiRequired ? "Wi-Fi Needed" : "Apps", message: error.localizedDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true)
+                }
+            }
         }
     }
     func updateSearchResults(for searchController: UISearchController) {

@@ -2,6 +2,7 @@
 import UIKit
 import OrbitCore
 import OrbitUI
+import OrbitTransport
 
 /// Exercises the production Apps controller and monitor without a Mac or phone.
 @MainActor enum OrbitTargetBuildPreview {
@@ -33,6 +34,7 @@ import OrbitUI
                 if ProcessInfo.processInfo.arguments.contains("--target-list-empty") { return [[String: Any]]() }
                 var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": false]
                 if await fixture.started { row["jobID"] = "fixture-job" }
+                if ProcessInfo.processInfo.arguments.contains("--target-no-wifi") { row["failure"] = "Build requests: \(await fixture.buildRequests)" }
                 return [row]
             case "build":
                 guard params["monitorBundleID"] as? String == Bundle.main.bundleIdentifier else { throw CodeFailure("Missing self-update monitor identity") }
@@ -41,7 +43,9 @@ import OrbitUI
             case "job": return try JSONSerialization.jsonObject(with: JSONEncoder().encode(try await fixture.loadStatus()))
             default: throw CodeFailure("Unexpected preview request")
             }
-        }, monitor: environment.builds, peerID: { "fixture-mac" }, refreshInterval: ProcessInfo.processInfo.arguments.contains("--target-list-retry") ? 60 : 3)
+        }, monitor: environment.builds, peerID: { "fixture-mac" }, refreshInterval: ProcessInfo.processInfo.arguments.contains("--target-list-retry") ? 60 : 3, preparePhoneInstall: {
+            if ProcessInfo.processInfo.arguments.contains("--target-no-wifi"), await fixture.wifiUnavailable() { throw OrbitInstallNetwork.WiFiRequired() }
+        })
         return UINavigationController(rootViewController: controller)
     }
     actor Fixture {
@@ -59,11 +63,14 @@ import OrbitUI
                     "stage": done ? (failed ? "Fixture Mac signing failed." : "Orbit Mac is up to date.") : "Building committed source…",
                     "log": "Fixture Mac build output\n"]
         }
+        private var networkChecks = 0
+        private(set) var buildRequests = 0
+        func wifiUnavailable() -> Bool { networkChecks += 1; return networkChecks <= 2 }
         var started = false
         private var listFailed = false
         func failList() -> Bool { if listFailed { return false }; listFailed = true; return true }
         private var start = Date()
-        func begin() { started = true; start = Date() }
+        func begin() { buildRequests += 1; started = true; start = Date() }
         func loadStatus() throws -> CodeJob {
             let elapsed = Date().timeIntervalSince(start)
             if ProcessInfo.processInfo.arguments.contains("--target-build-disconnect"), elapsed > 3, elapsed < 7 {

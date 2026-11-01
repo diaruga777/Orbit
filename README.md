@@ -129,7 +129,9 @@ See [app debugging](docs/app-debugging.md) for integration and connection limits
 
 The iPhone Apps list loads independently of job-console reads, shows errors with
 Retry, and explains how to add apps when the catalog is empty. Tap the play
-button beside an app to build and install it in one press. Row menus still hold
+button beside an app to build and install it in one press. Connect the phone to
+Wi-Fi first; Orbit checks before requesting a build and explains how to retry
+when the phone is on cellular alone. Row menus still hold
 schedules, cancellation and console actions. An interrupted build reply asks you
 to check Apps before retrying, since the Mac may already be building.
 

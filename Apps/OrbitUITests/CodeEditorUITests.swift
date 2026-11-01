@@ -38,6 +38,34 @@ final class CodeEditorUITests: XCTestCase {
         waitForExpectations(timeout: 5)
     }
 
+    func testAppsBuildRequiresWiFiBeforeRequestAndCanRetry() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-no-wifi"]
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        for attempt in 0..<2 {
+            if attempt == 0 { app.buttons["OrbitTargetPlay:fixture"].tap() }
+            else { row.tap(); app.buttons["Build and Install"].tap() }
+            let alert = app.alerts["Wi-Fi Needed"]
+            XCTAssertTrue(alert.waitForExistence(timeout: 5))
+            XCTAssertTrue(alert.staticTexts["Connect this phone to Wi-Fi, then try again. Remote app installation can’t use cellular alone."].exists)
+            XCTAssertFalse(app.progressIndicators["CodeBuildProgress"].exists)
+            attach("Wi-Fi needed before remote build", app)
+            alert.buttons["OK"].tap()
+            XCTAssertTrue(app.buttons["OrbitTargetPlay:fixture"].isEnabled)
+            XCTAssertFalse(app.progressIndicators["OrbitTargetProgress:fixture"].exists)
+            // Let the production catalog poll expose any mistakenly sent build RPC.
+            let noRequests = row.staticTexts["Manual builds\nBuild requests: 0"]
+            XCTAssertTrue(noRequests.waitForExistence(timeout: 5))
+        }
+        // The next probe models joining Wi-Fi; the same play button now starts work.
+        app.buttons["OrbitTargetPlay:fixture"].tap()
+        XCTAssertTrue(app.progressIndicators["CodeBuildProgress"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Compile Feature.swift"].exists)
+    }
+
     func testAppsBuildShowsLiveProgressConsoleAndCompletion() {
         continueAfterFailure = false
         let app = XCUIApplication()

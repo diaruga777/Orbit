@@ -34,6 +34,7 @@ import OrbitCore
     private var poll: Timer?
     private var polling = false
     private var loading = false
+    private var checkingNetwork = false
     private var starting: String?
     private var peer = ""
     private var message: String?
@@ -282,15 +283,22 @@ import OrbitCore
         update(&rows[index]); catalog.save(rows, peer: environment.peerID()); reload()
     }
     private func build(_ app: CodeBuildApp) {
-        guard starting == nil else { return }
+        guard starting == nil, !checkingNetwork else { return }
         let title = (app.launchAfterInstall == true ? "Build & Run · " : "Build & Install · ") + app.project.scheme
-        do { try environment.builds.begin(title: title) }
-        catch { showError(error); return }
-        starting = app.key; reload()
+        checkingNetwork = true
         let peer = environment.peerID()
         Task {
-            defer { environment.builds.endStarting(peer: peer); if peer == environment.peerID() { starting = nil; reload() } }
+            var began = false
+            defer {
+                checkingNetwork = false
+                if began { environment.builds.endStarting(peer: peer) }
+                if peer == environment.peerID() { starting = nil; reload() }
+            }
             do {
+                try await environment.preparePhoneInstall()
+                guard peer == environment.peerID(), UIApplication.shared.applicationState == .active else { return }
+                try environment.builds.begin(title: title)
+                began = true; starting = app.key; reload()
                 guard let phones = try await environment.client.call(CodeRequest(.devices)).devices else { throw CodeFailure("Update Orbit Mac to use phone builds.") }
                 guard peer == environment.peerID() else { return }
                 devices = phones

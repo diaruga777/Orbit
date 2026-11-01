@@ -785,3 +785,19 @@ The Mac was locked, so interactive Xcode Run/debugger and Mac button click-throu
 remain unverified; the Xcode build/install path and same Host update handler were
 exercised. No Apple sign-in, physical phone access/installation/renewal, physical
 phone UI acceptance, public notarization or marketplace listing was performed.
+
+
+## Phone build Wi-Fi preflight
+
+`CodeEditorUITests.testAppsBuildRequiresWiFiBeforeRequestAndCanRetry` drives the
+production Apps play button and row menu with an injected unavailable Wi-Fi
+probe. It checks the guidance, absence of progress and build requests, enabled
+retry, then a successful start after the probe reports Wi-Fi. The fixture does
+not change the host network or contact a Mac, Apple account or physical phone.
+The existing progress/completion check covers the allowed build flow.
+
+Physical acceptance separately checks cellular-only (including an active remote
+pipe/VPN), offline, ordinary Wi-Fi and Wi-Fi hotspots, plus joining Wi-Fi and
+retrying without relaunching. Wi-Fi association is a prerequisite, not proof of
+Apple-service reachability or installation. No synthetic check establishes
+physical installation, provisioning renewal or marketplace readiness.
