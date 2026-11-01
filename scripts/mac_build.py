@@ -286,6 +286,17 @@ def running_apps_for_xcode():
     return copies
 
 
+def mac_environment():
+    env = os.environ.copy()
+    for key in ['SDKROOT', 'SWIFT_EXEC', 'TOOLCHAINS']:
+        env.pop(key, None)
+    env['DEVELOPER_DIR'] = select_xcode()
+    env['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + env.get('PATH', '/usr/bin:/bin')
+    env['SDKROOT'] = run(['/usr/bin/xcrun', '--sdk', 'macosx', '--show-sdk-path'], env=env)
+    env['SWIFT_EXEC'] = run(['/usr/bin/xcrun', '--find', 'swiftc'], env=env)
+    return env
+
+
 def build(source, mode, installation=None, job=None):
     revision = run(['/usr/bin/git', 'rev-parse', 'HEAD^{commit}'], cwd=source)
     if installation and running_apps(installation['bundleID']):
@@ -303,10 +314,7 @@ def build(source, mode, installation=None, job=None):
         run(['/usr/bin/git', 'worktree', 'remove', '--force', folder], cwd=source)
     try:
         checkout(source, revision, folder)
-        env = os.environ.copy()
-        # No Xcode parent build settings may leak into the SwiftPM packager.
-        env['PATH'] = '/opt/homebrew/bin:/usr/local/bin:' + env.get('PATH', '/usr/bin:/bin')
-        env['DEVELOPER_DIR'] = select_xcode()
+        env = mac_environment()
         if installation:
             env.update(ORBIT_MAC_SIGNING_IDENTITY=installation['certificate'], ORBIT_CANONICAL_BUILD='1',
                        ORBIT_SOURCE_ROOT=installation['sourceRoot'], ORBIT_STATE_ROOT=installation['stateRoot'])

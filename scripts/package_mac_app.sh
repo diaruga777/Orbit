@@ -4,6 +4,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MODE=--build-only
 [[ "$(git rev-parse --abbrev-ref HEAD)" == HEAD && -z "$(git status --porcelain --untracked-files=no)" ]] || { echo "Package only committed source in a detached worktree." >&2; exit 1; }
 cd "$ROOT"
+# GUI-launched Python and Xcode can pass a different SDK/compiler in their
+# environment. Resolve both from the same selected full Xcode every time.
+unset TOOLCHAINS SWIFT_EXEC SDKROOT
+export SDKROOT="$(/usr/bin/xcrun --sdk macosx --show-sdk-path)"
+export SWIFT_EXEC="$(/usr/bin/xcrun --find swiftc)"
+SWIFT="$(/usr/bin/xcrun --find swift)"
 [[ -d Vendor/OrbitNet.xcframework ]] || ./scripts/build_transport.sh
 # Both app paths use the user's ignored identity; never build sample identifiers.
 PREFIX="$(python3 scripts/local_identity.py --field prefix)"
@@ -12,8 +18,8 @@ IDENTITY="${ORBIT_MAC_SIGNING_IDENTITY:-}"
 BUNDLE="$ROOT/dist/Orbit Mac.app"
 # Build-only output is a separate review artifact; it never overwrites an installed client.
 if [[ "$MODE" == --build-only ]]; then BUNDLE="$ROOT/dist/Orbit Mac.app"; fi
-swift build --scratch-path "${ORBIT_MAC_BUILD_CACHE:-$ROOT/.build}" --build-system native --product OrbitMacApp -Xswiftc -debug-prefix-map -Xswiftc "$ROOT=${ORBIT_SOURCE_ROOT:-$ROOT}"
-BUILD="$(swift build --scratch-path "${ORBIT_MAC_BUILD_CACHE:-$ROOT/.build}" --build-system native --show-bin-path)"
+"$SWIFT" build --scratch-path "${ORBIT_MAC_BUILD_CACHE:-$ROOT/.build}" --build-system native --product OrbitMacApp -Xswiftc -debug-prefix-map -Xswiftc "$ROOT=${ORBIT_SOURCE_ROOT:-$ROOT}"
+BUILD="$("$SWIFT" build --scratch-path "${ORBIT_MAC_BUILD_CACHE:-$ROOT/.build}" --build-system native --show-bin-path)"
 "$ROOT/scripts/build_apple_adapter.sh" "$BUILD/orbit-apple-adapter" "$BUILD/apple-adapter-notices"
 STAGE="$(mktemp -d /tmp/orbit-app.XXXXXX)"; trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/Orbit Mac.app"

@@ -119,7 +119,7 @@ class MacBuildTests(unittest.TestCase):
                 if str(args[0]) == '/usr/bin/ditto':
                     shutil.copytree(args[1],args[2]); return ''
                 return original_run(args, **kwargs)
-            with patch.object(mac,'REGISTRY',registry), patch.object(mac,'select_xcode',return_value='/fixture/Xcode'), patch.object(mac,'run',side_effect=command):
+            with patch.object(mac,'REGISTRY',registry), patch.object(mac,'mac_environment',return_value=dict(os.environ)), patch.object(mac,'run',side_effect=command):
                 mac.build(source,'--build-only')
                 first = (source/'dist/Orbit Mac.app/source-path').read_text()
                 self.assertFalse((registry.parent/'MacBuildSource').exists())
@@ -131,6 +131,16 @@ class MacBuildTests(unittest.TestCase):
                 with self.assertRaises(ValueError): mac.build(source,'--build-only')
                 self.assertTrue((registry.parent/'MacBuildSource/scripts/package_mac_app.sh').exists())
                 git('worktree','remove','--force',str(registry.parent/'MacBuildSource'))
+
+    def test_gui_environment_cannot_mix_command_line_sdk_with_full_xcode(self):
+        def command(args, **kwargs):
+            self.assertEqual(kwargs['env']['DEVELOPER_DIR'], '/full/Xcode/Contents/Developer')
+            self.assertNotIn('TOOLCHAINS', kwargs['env'])
+            return '/full/MacOSX.sdk' if '--show-sdk-path' in args else '/full/swiftc'
+        with patch.dict(os.environ, {'SDKROOT':'/stale/CLT.sdk','SWIFT_EXEC':'/stale/swiftc','TOOLCHAINS':'stale'}), patch.object(mac,'select_xcode',return_value='/full/Xcode/Contents/Developer'), patch.object(mac,'run',side_effect=command):
+            environment = mac.mac_environment()
+            self.assertEqual(environment['SDKROOT'], '/full/MacOSX.sdk')
+            self.assertEqual(environment['SWIFT_EXEC'], '/full/swiftc')
 
     def test_durable_job_and_exclusive_lock(self):
         with tempfile.TemporaryDirectory() as temporary, patch.object(mac, 'REGISTRY', Path(temporary)/'registry.json'):
