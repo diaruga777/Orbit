@@ -30,6 +30,19 @@ class MCPTests(unittest.TestCase):
         with patch.object(orbit, 'rpc', return_value={}) as rpc, patch('sys.argv', ['orbit','mac-update-status']):
             orbit.main(); rpc.assert_called_once_with('mac_update_status', {})
 
+    def test_mac_target_registration_has_no_phone_requirement(self):
+        arguments = dict(platform='macOS', project='/repo/Package.swift', scheme='Companion', trust=True,
+                         installPath='/Applications/Companion.app', bundleID='test.fixture.mac', configuration='Release')
+        with patch.object(orbit, 'rpc', return_value={'id':'mac-target'}) as rpc:
+            reply = orbit.handle_mcp({'jsonrpc':'2.0','id':1,'method':'tools/call','params':{'name':'orbit_add_target','arguments':arguments}})
+            rpc.assert_called_once_with('target_add', arguments)
+            self.assertFalse(reply['result']['isError'])
+        with patch.object(orbit, 'rpc', return_value={}) as rpc, patch('sys.argv', ['orbit','add','--platform','macOS','--project','/repo/Package.swift','--scheme','Companion','--trust']):
+            orbit.main()
+            self.assertEqual(rpc.call_args.args, ('target_add', dict(platform='macOS', project='/repo/Package.swift', scheme='Companion', trust=True)))
+        with patch.object(orbit, 'rpc', return_value={}) as rpc, patch('sys.argv', ['orbit','build','mac-target','--no-launch']):
+            orbit.main(); rpc.assert_called_once_with('build', dict(id='mac-target', launch=False))
+
     def test_initialize_and_tool_inventory(self):
         value = orbit.handle_mcp({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05'}})
         self.assertEqual(value['result']['protocolVersion'],'2024-11-05')

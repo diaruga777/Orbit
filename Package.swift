@@ -28,7 +28,7 @@ let package = Package(
         .binaryTarget(name: "COrbitNet", path: "Vendor/OrbitNet.xcframework"),
         .target(name: "OrbitWire"),
         .target(name: "OrbitTransport", dependencies: ["OrbitWire", "OrbitCore", "COrbitNet", .product(name: "IrohLib", package: "iroh-ffi")], linkerSettings: [.linkedFramework("Security"), .linkedLibrary("resolv")]),
-        .target(name: "OrbitHost", dependencies: ["OrbitWidgets", "OrbitCore", "OrbitMac", "OrbitTransport", "OrbitWire"], resources: [.copy("Resources/AppletHost")]),
+        .target(name: "OrbitHost", dependencies: ["OrbitWidgets", "OrbitCore", "OrbitMac", "OrbitTransport", "OrbitWire"], resources: [.copy("Resources/AppletHost"), .copy("Resources/MacTargets")]),
         .executableTarget(name: "OrbitMacApp", dependencies: ["OrbitHost", "OrbitCore"]),
         .target(name: "OrbitDiagnosticsKit", path: "Sources/OrbitHost/Resources/AppletHost/Diagnostics"),
         .target(name: "OrbitWidgets", dependencies: ["OrbitDiagnosticsKit"], path: "Sources/OrbitHost/Resources/AppletHost/Runtime"),

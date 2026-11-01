@@ -88,6 +88,38 @@ final class OrbitHostTests: XCTestCase {
         let trusted = await host.isTrusted("phone"); XCTAssertFalse(trusted)
         do { try await host.trust("new-phone"); XCTFail("Forgetting must close pairing") } catch { }
     }
+    func testMacTargetsRetainDeploymentAndJobsAcrossRestart() async throws {
+        let root = temporary(); defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        var target = OrbitTarget(name: "Companion", project: CodeProject(path: "/repo/Package.swift", scheme: "Companion"), deviceID: "host-mac")
+        target.mac = OrbitMacDeployment(installPath: "/Applications/Companion.app", bundleID: "test.fixture.mac", certificate: String(repeating: "A", count: 40), settings: Data("{}".utf8))
+        target.jobID = UUID().uuidString; target.lastJobID = target.jobID; target.jobKind = "mac"
+        try JSONEncoder().encode([target]).write(to: root.appendingPathComponent("targets.json"))
+        let host = try OrbitHost(root: root)
+        await host.populateMissingTargetIcons { _ in XCTFail("Mac apps must not invoke iOS discovery"); return [] }
+        let response = await host.handle(Data(#"{"method":"targets"}"#.utf8))
+        let value = try XCTUnwrap((JSONSerialization.jsonObject(with: response) as? [String: Any])?["result"] as? [[String: Any]])
+        XCTAssertEqual((value[0]["mac"] as? [String: Any])?["installPath"] as? String, "/Applications/Companion.app")
+        // An accepted catalog entry without dispatch must fail safely after restart.
+        await host.tick()
+        let restored = try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: root.appendingPathComponent("targets.json")))
+        XCTAssertNil(restored[0].jobID)
+        XCTAssertNil(restored[0].lastSuccess)
+        XCTAssertNotNil(restored[0].failure)
+        XCTAssertEqual(restored[0].mac?.certificate, target.mac?.certificate)
+    }
+    func testMacRegistrationRequiresTrustBeforeReadingSource() async throws {
+        let root = temporary(); defer { try? FileManager.default.removeItem(at: root) }
+        let host = try OrbitHost(root: root)
+        let data = await host.handle(Data(#"{"method":"target_add","params":{"platform":"macOS","project":"/missing/Package.swift","scheme":"Companion"}}"#.utf8))
+        let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertTrue((value?["error"] as? String)?.contains("trust=true") == true)
+    }
+    func testMacUncertainInstallationRemainsInProgress() throws {
+        let job = try CodeJob.targetStatus(Data(#"{"id":"job","platform":"macOS","state":"unknownCompletion","failureMessage":"Check the installed app."}"#.utf8))
+        XCTAssertEqual(job.state, .running)
+        XCTAssertEqual(job.failureMessage, "Check the installed app.")
+    }
     func testAddRequiresTrustBeforeInvokingXcode() async throws {
         let root = temporary(); defer { try? FileManager.default.removeItem(at: root) }
         let host = try OrbitHost(root: root)

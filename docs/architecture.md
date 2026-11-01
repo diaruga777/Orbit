@@ -470,3 +470,45 @@ runtime dependency. Existing arbitrary binaries still need a source update.
 See [app debugging](app-debugging.md) for APIs, privacy and availability limits.
 
 The Mac app’s About menu reads its bundle ID from the running app bundle, so independently installed copies can be identified during setup or normal use.
+
+
+## Registered Mac applications
+
+`OrbitTarget.mac` optionally retains an `OrbitMacDeployment`; old catalogs remain
+iOS targets. Mac targets use `host-mac` as their destination, no provisioning
+lifetime policy and the same catalog, build/job/cancel RPCs, schedule cadence and
+GitHub-only source fetch rules. The Mac Add App view accepts Xcode app schemes
+and SwiftPM executable products. Paired phones monitor these jobs through
+`CodeJob.targetStatus` without running phone-network or refresh-cache workflows.
+
+`OrbitMacTargets` coordinates a bundled standard-library Python worker under
+Host resources. Registration requires the existing explicit source-trust flag
+before Xcode/Swift package inspection. The worker resolves a running or installed
+app, pins its canonical destination, bundle ID, leaf certificate SHA-1 and
+designated requirement, and refuses ambiguous copies/certificates. New apps use
+user-owned identifiers and `~/Applications`. Orbit self-updates stay on the
+existing dedicated worker so ignored local configuration and installed revision
+handshake cannot be bypassed by generic target registration.
+
+Before dispatch, the Host persists a job ID in the catalog, then private config
+and status journals in `MacTargets/<job-id>/`. The detached worker survives Host
+restart and takes a cross-process Mac-target build lock. It builds only the
+configured committed revision in a detached worktree, with a separate stable
+per-project/product cache. Xcode uses the native Mac destination and signing
+settings; SwiftPM static executable apps receive a native .app wrapper, resource
+bundles, retained Info.plist/entitlements and certificate signing. The source
+checkout, index, user preferences, app support storage and Keychain are untouched.
+
+Before stopping the installed app, the worker verifies deep/strict signatures,
+bundle ID, exact certificate and the original designated requirement on the
+replacement and current installation. A same-volume transaction keeps a complete
+rollback bundle; installed executable SHA-256 readback and (when requested) a
+running process at the exact destination are required before success. Failed
+launch restores/reopens the previous bundle. Installation/launch phases reject
+cancellation. Build cancellation signals only the isolated worker group.
+
+A dead worker before replacement becomes a durable failure; during replacement,
+status reconciles only a matching installed executable and requested running
+path. Unconfirmed installation remains `unknownCompletion`, retaining transaction
+files and blocking schedule success or automatic retry. Later status reads retry
+that verification. Mac jobs never create phone installation/profile evidence.

@@ -841,3 +841,24 @@ delete unexpected files, clean semantics and product-based Run/Profile schemes.
 The Mac was locked, so interactive Play/debugger attachment remains unverified.
 No physical-device access, Apple sign-in, phone acceptance, public notarization or
 marketplace listing was performed.
+
+
+## Registered Mac app builds
+
+`test_mac_targets.py` exercises certificate ambiguity and pin rejection, original
+designated-requirement checks, unchanged installed bundles on verification
+failure, installed executable readback, rollback after launch failure, interrupted
+installation reconciliation, cancellation boundaries and private journals.
+Inspection fixtures check adoption of a running Swift package app’s path,
+identity and privacy metadata. MCP/CLI tests register a Mac target without a
+phone and preserve explicit install-only requests. Host tests retain Mac settings
+across catalog restart, reject untrusted registration before execution, skip iOS
+icon discovery and fail an accepted-but-undispatched build safely.
+
+For live Mac acceptance, register an already paired development-signed companion,
+record its path, certificate, requirement and non-secret hashes of its pairing
+preferences/transport identity, build through Orbit, and verify the new process
+at the same path plus unchanged identity/preferences. Run an independent committed
+Xcode Mac fixture too. This is desktop acceptance; it does not establish physical
+phone installation, live reconnection while the phone is asleep, Apple account
+sign-in, public notarization or marketplace readiness.

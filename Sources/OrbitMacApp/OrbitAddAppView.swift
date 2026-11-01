@@ -15,14 +15,27 @@ struct OrbitAddAppView: View {
                     Text("Add an app").font(.largeTitle.bold())
                     Text("Pick a project. Make it yours.").foregroundStyle(.secondary)
                 }
+                Picker("Build for", selection: $model.addPlatform) {
+                    Text("iPhone").tag("iOS")
+                    Text("This Mac").tag("macOS")
+                }.pickerStyle(.segmented).frame(maxWidth: 320)
+                    .onChange(of: model.addPlatform) { _, _ in model.project = ""; model.scheme = ""; model.addError = "" }
                 Picker("Source", selection: Binding(get: { model.addSource }, set: { model.changeSource($0) })) {
                     Text("On This Mac").tag("local")
                     Text("GitHub").tag("github")
                 }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 320).disabled(model.downloading || model.inspectingRepository)
 
                 if model.addSource == "local" { localProjects } else { githubProjects }
-                if !model.project.isEmpty { appSelection }
-                phoneSelection
+                if model.addPlatform == "macOS" {
+                    VStack(alignment: .leading, spacing: 12) {
+                        TextField("Project or Package.swift path", text: $model.project)
+                        TextField("Xcode scheme or executable product", text: $model.scheme)
+                        Text("Builds and opens on this Mac. Existing apps keep their location and signing identity.").font(.callout).foregroundStyle(.secondary)
+                    }
+                } else {
+                    if !model.project.isEmpty { appSelection }
+                    phoneSelection
+                }
                 DisclosureGroup("Advanced", isExpanded: $advanced) {
                     VStack(alignment: .leading, spacing: 14) {
                         if model.schemeVariants.count > 1 {
@@ -38,11 +51,19 @@ struct OrbitAddAppView: View {
                                 Text("Setup account").tag(model.team)
                             }
                         }
-                        Toggle("Free Personal Team", isOn: $model.personal)
+                        if model.addPlatform == "macOS" {
+                            TextField("Install path (automatic)", text: $model.macInstallPath)
+                            TextField("Bundle ID (use existing app or project)", text: $model.macBundleID)
+                            TextField("Signing identity (use existing certificate)", text: $model.macSigningIdentity)
+                            TextField("Info.plist path (new Swift package apps)", text: $model.macInfoPlist)
+                            Picker("Configuration", selection: $model.macConfiguration) {
+                                Text("Debug").tag("Debug"); Text("Release").tag("Release")
+                            }
+                        } else { Toggle("Free Personal Team", isOn: $model.personal) }
                         Toggle("Refresh automatically", isOn: $model.scheduled)
                         if model.scheduled {
                             TextField("Hours between refreshes", text: $model.hours)
-                            Text("Free accounts refresh every 6 days or sooner.").font(.caption).foregroundStyle(.secondary)
+                            if model.addPlatform == "iOS" { Text("Free accounts refresh every 6 days or sooner.").font(.caption).foregroundStyle(.secondary) }
                         }
                     }.padding(.top, 12)
                 }
@@ -62,7 +83,7 @@ struct OrbitAddAppView: View {
         }
         .task {
             if model.team.isEmpty { model.team = setup.state.teamID }
-            await model.loadPhones(preferred: setup.state.deviceID)
+            if model.addPlatform == "iOS" { await model.loadPhones(preferred: setup.state.deviceID) }
         }
     }
 

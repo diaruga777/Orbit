@@ -20,6 +20,7 @@ public actor OrbitHost {
         configuration.peerAliases?[peer] ?? peer
     }
     private var startingMacUpdate = false
+    private let macTargets: OrbitMacTargets
     private let macUpdate: OrbitMacUpdate
     private let stateLock: OrbitStateLock
     public let root: URL
@@ -37,6 +38,7 @@ public actor OrbitHost {
     public private(set) var pairingUntil = Date.distantPast
     public init(root: URL = OrbitPaths.root) throws {
         self.root = root
+        macTargets = OrbitMacTargets(root: root)
         macUpdate = OrbitMacUpdate(root: root)
         appDiagnostics = try OrbitAppDiagnosticCollector(root: root.appendingPathComponent("Logs/Apps"))
         diagnostics = OrbitDiagnostics.store(directory: root.appendingPathComponent("Logs"))
@@ -289,10 +291,13 @@ public actor OrbitHost {
             try saveTargets(); return try object(targets[index])
         case "build":
             let index = try index(p)
-            return try await start(index, launch: p["launch"] as? Bool ?? false, monitorBundleID: p["monitorBundleID"] as? String)
+            return try await start(index, launch: p["launch"] as? Bool, monitorBundleID: p["monitorBundleID"] as? String)
         case "job": return try await job(required(p, "id"))
         case "cancel":
             let id = try required(p, "id")
+            if targets.contains(where: { ($0.jobID == id || $0.lastJobID == id) && $0.jobKind == "mac" }) {
+                return try await macTargets.job(id, cancel: true)
+            }
             let retained = targets.contains { ($0.jobID == id || $0.lastJobID == id) && $0.jobKind == "retained" }
             var request = CodeRequest(retained ? .overnightCancel : .cancel); request.jobID = id
             return try JSONSerialization.jsonObject(with: await service.handle(JSONEncoder().encode(request)))
@@ -379,6 +384,8 @@ public actor OrbitHost {
     }
     private func add(_ p: [String: Any]) async throws -> Any {
         guard p["trust"] as? Bool == true else { throw CodeFailure("Review this source, then add with trust=true. Xcode builds can execute repository scripts on your Mac.") }
+        if p["platform"] as? String == "macOS" { return try await addMac(p) }
+        guard p["platform"] == nil || p["platform"] as? String == "iOS" else { throw CodeFailure("Choose iOS or macOS.") }
         let path = try required(p, "project"), scheme = try required(p, "scheme"), device = try required(p, "deviceID")
         let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
         guard path.hasPrefix("/"), ["xcodeproj", "xcworkspace"].contains(url.pathExtension), FileManager.default.fileExists(atPath: url.path) else { throw CodeFailure("Choose an existing Xcode project or workspace.") }
@@ -409,11 +416,30 @@ public actor OrbitHost {
         target.repository = p["repository"] as? String
         targets.append(target); try saveTargets(); return try object(target)
     }
+    private func addMac(_ p: [String: Any]) async throws -> Any {
+        let deployment = try await macTargets.inspect(p)
+        let settings = try JSONSerialization.jsonObject(with: deployment.settings) as? [String: Any] ?? [:]
+        guard let path = settings["project"] as? String, let scheme = settings["scheme"] as? String,
+              let branch = settings["branch"] as? String else { throw CodeFailure("Couldn’t read this Mac project.") }
+        if let existing = targets.first(where: { $0.mac?.installPath == deployment.installPath }) {
+            guard existing.project.path == path, existing.project.scheme == scheme else { throw CodeFailure("Another target already owns this installation path.") }
+            return try object(existing)
+        }
+        let hours = p["intervalHours"] as? Int ?? 144
+        guard (1...8760).contains(hours) else { throw CodeFailure("Choose an interval from 1 to 8760 hours.") }
+        var target = OrbitTarget(name: p["name"] as? String ?? URL(fileURLWithPath: deployment.installPath).deletingPathExtension().lastPathComponent,
+            project: CodeProject(path: path, scheme: scheme), deviceID: "host-mac", branch: branch,
+            intervalHours: hours, enabled: p["enabled"] as? Bool ?? false)
+        target.mac = deployment
+        target.repository = p["repository"] as? String
+        targets.append(target); try saveTargets()
+        return try object(target)
+    }
     /// Backfill catalogs from before icons were retained. Failed/missing icons
     /// never hide targets or invoke a build, and polling does not hammer Xcode.
     func populateMissingTargetIcons(discover: (CodeProject) async throws -> [CodeBuildApp]) async {
         var changed = false
-        for target in targets where target.iconPNG == nil {
+        for target in targets where target.iconPNG == nil && target.mac == nil {
             let key = target.project.path + "\u{0}" + target.project.scheme
             guard Date().timeIntervalSince(iconLookups[key] ?? .distantPast) >= 300 else { continue }
             iconLookups[key] = Date()
@@ -432,6 +458,9 @@ public actor OrbitHost {
         if let error = response.error { throw CodeFailure(error) }; return response
     }
     private func job(_ id: String) async throws -> Any {
+        if targets.contains(where: { ($0.jobID == id || $0.lastJobID == id) && $0.jobKind == "mac" }) {
+            return try await macTargets.job(id)
+        }
         if let target = targets.first(where: { $0.jobID == id || $0.lastJobID == id }), target.jobKind == "retained" {
             let response = try await decoded(CodeRequest(.overnightStatus))
             guard let job = response.overnightJobs?.first(where: { $0.id == id }) else { throw CodeFailure("Build job not found.") }
@@ -447,21 +476,34 @@ public actor OrbitHost {
         var poll = CodeRequest(.job); poll.jobID = id
         return try object(await decoded(poll).job)
     }
-    private func start(_ index: Int, launch: Bool = false, monitorBundleID: String? = nil) async throws -> Any {
+    private func start(_ index: Int, launch: Bool? = nil, monitorBundleID: String? = nil) async throws -> Any {
         let target = targets[index], id = target.id
         if let jobID = target.jobID { return try await job(jobID) }
         guard startingTargets.insert(id).inserted else { throw CodeFailure("This build is already starting. Check Apps in a moment.") }
         defer { startingTargets.remove(id) }
-        diagnostics.record("build", "starting", ["target": id, "launch": String(launch)])
+        diagnostics.record("build", "starting", ["target": id, "launch": String(launch ?? (target.mac != nil))])
         var branch = target.branch
         if target.repository != nil {
             _ = try await OrbitCommand.run("/usr/bin/git", ["check-ref-format", "--branch", branch])
             _ = try await OrbitCommand.run("/usr/bin/git", ["fetch", "--no-tags", "origin", "refs/heads/" + branch + ":refs/remotes/origin/" + branch], directory: URL(fileURLWithPath: target.project.root))
             branch = "refs/remotes/origin/" + branch
         }
+        if target.mac != nil {
+            guard let current = targets.firstIndex(where: { $0.id == id }) else { throw CodeFailure("Target was removed.") }
+            targets[current].jobID = UUID().uuidString; targets[current].lastJobID = targets[current].jobID
+            targets[current].jobKind = "mac"; targets[current].lastAttempt = Date(); targets[current].failure = nil
+            try saveTargets()
+            do { return try await macTargets.start(targets[current], branch: branch, launch: launch ?? true) }
+            catch {
+                if let current = targets.firstIndex(where: { $0.id == id }) {
+                    targets[current].jobID = nil; targets[current].failure = error.localizedDescription; try? saveTargets()
+                }
+                throw error
+            }
+        }
         var request: CodeRequest
         if let pending = target.pendingRequest { request = pending }
-        else if launch {
+        else if launch == true {
             request = CodeRequest(.runOnDevice); request.project = target.project
             request.deviceBuild = CodeDeviceBuild(branch: branch, deviceID: target.deviceID, monitorBundleID: monitorBundleID)
         } else {

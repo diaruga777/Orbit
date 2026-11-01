@@ -116,9 +116,9 @@ import OrbitTransport
                 if began, origin == peerID() { starting = nil; monitor.endStarting(peer: origin); buildChanged() }
             }
             do {
-                try await preparePhoneInstall()
+                if row["mac"] == nil { try await preparePhoneInstall() }
                 guard origin == peerID(), UIApplication.shared.applicationState == .active else { return }
-                try monitor.begin(title: "Build & Install · " + (row["name"] as? String ?? "App"))
+                try monitor.begin(title: (row["mac"] == nil ? "Build & Install · " : "Build on Mac · ") + (row["name"] as? String ?? "App"))
                 began = true; starting = id; buildChanged()
                 let result = try await rpc("build", ["id": id, "monitorBundleID": Bundle.main.bundleIdentifier ?? ""])
                 let job = try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: result))
@@ -207,7 +207,7 @@ import OrbitTransport
         guard let cell = cell as? OrbitTargetCell else { return }
         cell.name.text = row["name"] as? String
         cell.play.accessibilityIdentifier = "OrbitTargetPlay:" + id
-        cell.play.accessibilityLabel = "Build and install " + (row["name"] as? String ?? "app")
+        cell.play.accessibilityLabel = (row["mac"] == nil ? "Build and install " : "Build and open on Mac ") + (row["name"] as? String ?? "app")
         cell.play.isEnabled = monitor != nil && !busy && monitor?.isStarting != true && monitor?.job?.state != .running
         cell.play.removeAction(identifiedBy: UIAction.Identifier("play"), for: .touchUpInside)
         cell.play.addAction(UIAction(identifier: UIAction.Identifier("play")) { [weak self] _ in self?.build(row) }, for: .touchUpInside)
@@ -217,7 +217,7 @@ import OrbitTransport
         else if let job {
             status = job.state == .running
                 ? "\(Int(fraction * 100))% estimated · " + job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
-                : job.state == .succeeded ? "Installed on your phone" : job.failureMessage ?? "Build " + job.state.rawValue
+                : job.state == .succeeded ? (row["mac"] == nil ? "Installed on your phone" : "Installed on your Mac") : job.failureMessage ?? "Build " + job.state.rawValue
         } else { status = row["failure"] as? String }
         cell.detail.text = [schedule, status].compactMap { $0 }.joined(separator: "\n")
         cell.icon.image = (row["iconPNG"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
@@ -247,7 +247,7 @@ import OrbitTransport
         } else {
             let app = apps[indexPath.row], id = app["id"] as? String ?? ""
             let alert = UIAlertController(title: app["name"] as? String, message: nil, preferredStyle: .actionSheet)
-            alert.addAction(UIAlertAction(title: "Build and Install", style: .default) { _ in self.build(app) })
+            alert.addAction(UIAlertAction(title: app["mac"] == nil ? "Build and Install" : "Build and Open on Mac", style: .default) { _ in self.build(app) })
             if let jobID = app["jobID"] as? String, jobs[jobID]?.state == .running {
                 alert.addAction(UIAlertAction(title: "Cancel Build", style: .destructive) { _ in Task {
                     do {
@@ -260,7 +260,7 @@ import OrbitTransport
             let enabled = app["enabled"] as? Bool == true
             alert.addAction(UIAlertAction(title: enabled ? "Pause Refreshes" : "Refresh Every Six Days", style: .default) { _ in Task { do { _ = try await self.rpc("schedule", ["id": id, "enabled": !enabled, "intervalHours": 144]); self.refresh() } catch { self.show(error.localizedDescription) } } })
             if let jobID = (app["jobID"] ?? app["lastJobID"]) as? String { alert.addAction(UIAlertAction(title: "View Build Log", style: .default) { _ in Task { do { let job = try await self.fetchJob(jobID); if let monitor = self.monitor { monitor.show(job, from: self) } else { self.show(job.log) } } catch { self.show(error.localizedDescription) } } }) }
-            if let jobID = (app["lastJobID"] ?? app["jobID"]) as? String {
+            if app["mac"] == nil, let jobID = (app["lastJobID"] ?? app["jobID"]) as? String {
                 alert.addAction(UIAlertAction(title: "Cache for Mac-Free Refresh", style: .default) { _ in Task {
                     do {
                         try await CodeRefreshEngine.shared.cacheFromMac { offset in

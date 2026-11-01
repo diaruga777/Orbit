@@ -2,6 +2,14 @@ import Foundation
 import OrbitCore
 import OrbitWire
 
+public struct OrbitMacDeployment: Codable, Sendable {
+    public var installPath: String
+    public var bundleID: String
+    public var certificate: String
+    /// Private catalog settings include the retained Info.plist and signing requirement.
+    public var settings: Data
+}
+
 public struct OrbitTarget: Codable, Identifiable, Sendable {
     public var id: String
     public var name: String
@@ -9,6 +17,7 @@ public struct OrbitTarget: Codable, Identifiable, Sendable {
     public var iconPNG: Data?
     public var project: CodeProject
     public var deviceID: String
+    public var mac: OrbitMacDeployment?
     public var branch: String
     public var repository: String?
     public var intervalHours: Int

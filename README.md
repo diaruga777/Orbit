@@ -1,8 +1,8 @@
 # Orbit
 
-**Build an iOS app. Keep it on your phone.**
+**Build apps for your phone and Mac.**
 
-Orbit is an open source iPhone/iPad source editor and Mac build companion. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices. Orbit also hosts single-file JavaScript applets and Home Screen / Lock Screen widgets.
+Orbit is an open source iPhone/iPad source editor and Mac build companion for iOS and macOS apps. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices. Orbit also hosts single-file JavaScript applets and Home Screen / Lock Screen widgets.
 
 Both apps share a white iPhone-and-MacBook silhouette icon on black. Artwork and export details
 are in [app icons](docs/design/app-icons.md).
@@ -250,6 +250,54 @@ CLI configuration remains available for automation in [Pipes](docs/pipes.md).
 For native USB/Wi-Fi deployment, you can use only the Mac client and CLI/MCP and skip installing the Orbit iOS client, leaving all three free-account app slots available for your own apps. The iOS client adds source editing, remote control and phone-side forwarding.
 
 You can build/install through Xcode's native USB or Wi-Fi connection without an iPhone control app being awake. Remote-control reachability and Apple installation reachability are different: putting both devices on a tailnet alone does not make CoreDevice discover the phone. Orbit includes a separate bounded forwarding path for remote installations; see [remote installation limits](docs/architecture.md#remote-installation).
+
+## Build apps on this Mac
+
+In **Add App → This Mac**, choose an Xcode project/workspace or a Swift package’s
+`Package.swift`, then enter its shared Mac app scheme or executable product.
+Only add source you trust. **Build and Open** builds the selected committed branch
+in a detached worktree, replaces the installed app and opens it on the host Mac.
+The paired phone’s Apps list and CLI/MCP can start and monitor the same targets.
+
+Orbit finds an existing running copy first, then installed copies with the same
+bundle ID. It keeps that app’s exact path, bundle ID, certificate and signing
+requirement. Swift package apps also retain the existing Info.plist and
+entitlements. Your preferences, Application Support files and Keychain stay in
+place, including phone pairing. New apps default to `~/Applications/<name>.app`
+and need a unique bundle ID and one available Apple Development certificate.
+Multiple matching certificates/copies require an explicit choice.
+
+Advanced settings let you choose the installation path, bundle ID, exact signing
+certificate (name or SHA-1), Debug/Release configuration, branch and schedule.
+A new Swift package app can use an Info.plist file for its app name, permission
+copy and other metadata. Existing installations reject identity/location changes
+while running; use their current settings for updates. Orbit itself keeps its
+separate **Rebuild Orbit Mac** action and ignored local identity configuration.
+
+```sh
+bin/orbit add --platform macOS --project /path/to/Package.swift \
+  --scheme MyMacApp --branch main --trust
+# For a new app, add --bundle-id com.yourname.myapp.mac.
+# Optional: --install-path '/Applications/My App.app'
+#           --signing-identity 'EXACT CERTIFICATE NAME OR SHA-1'
+#           --configuration Release --info-plist /path/to/Info.plist
+bin/orbit build TARGET_ID
+bin/orbit job JOB_ID
+# Install without opening:
+bin/orbit build TARGET_ID --no-launch
+```
+
+`orbit_add_target` accepts the same `platform: "macOS"` and settings through MCP;
+`orbit_build`, `orbit_job`, `orbit_cancel` and `orbit_schedule` share the Host
+catalog. Mac schedules are optional and default to 144 hours when enabled.
+Local sources never fetch automatically. Jobs survive Orbit restarting; build
+cancellation stops the worker’s command group. Replacement waits for signature
+checks before closing the app, retains a rollback bundle until requested launch
+is verified, and reads the installed executable back before recording success.
+An uncertain interrupted installation retains recovery files and blocks automatic
+retry until it can be verified. Generic Swift package packaging supports static
+executables and SwiftPM resource bundles; projects needing custom embedded
+frameworks/helpers or extensions should provide an Xcode app target.
 
 ## 4. Add an app
 

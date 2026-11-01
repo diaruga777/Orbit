@@ -23,6 +23,12 @@ import UniformTypeIdentifiers
     @Published var detectedProjects: [String] = []
     @Published var previews: [String: [CodeBuildApp]] = [:]
     @Published var selectedTab = "applets"
+    @Published var addPlatform = "iOS"
+    @Published var macInstallPath = ""
+    @Published var macBundleID = ""
+    @Published var macSigningIdentity = ""
+    @Published var macConfiguration = "Debug"
+    @Published var macInfoPlist = ""
     @Published var addSource = "local"
     @Published var adding = false
     @Published var addError = ""
@@ -50,8 +56,8 @@ import UniformTypeIdentifiers
     }
     var selectedApp: CodeBuildApp? { selectedApps.first { $0.project.scheme == scheme } }
     var canAdd: Bool {
-        !adding && !readingSchemes && selectedApp != nil && !project.isEmpty && !phone.isEmpty &&
-        (Int(hours).map { (1...(personal ? 144 : 8760)).contains($0) } ?? false) && !branch.trimmingCharacters(in: .whitespaces).isEmpty
+        !adding && !readingSchemes && (addPlatform == "macOS" ? !scheme.isEmpty : selectedApp != nil && !phone.isEmpty) && !project.isEmpty &&
+        (Int(hours).map { (1...((personal && addPlatform == "iOS") ? 144 : 8760)).contains($0) } ?? false) && !branch.trimmingCharacters(in: .whitespaces).isEmpty
     }
     @Published var detecting = false
     @Published var readingSchemes = false
@@ -195,10 +201,10 @@ import UniformTypeIdentifiers
     func chooseProject() {
         OrbitDiagnostics.shared.record("action", "chooseProject")
         let panel = NSOpenPanel()
-        panel.title = "Choose an Xcode project or workspace"
+        panel.title = addPlatform == "macOS" ? "Choose a Mac project or Package.swift" : "Choose an Xcode project or workspace"
         panel.canChooseFiles = true; panel.canChooseDirectories = false
         panel.treatsFilePackagesAsDirectories = false
-        panel.allowedContentTypes = [UTType(filenameExtension: "xcodeproj"), UTType(filenameExtension: "xcworkspace")].compactMap { $0 }
+        panel.allowedContentTypes = ([UTType(filenameExtension: "xcodeproj"), UTType(filenameExtension: "xcworkspace")] + (addPlatform == "macOS" ? [UTType.swiftSource] : [])).compactMap { $0 }
         guard panel.runModal() == .OK, let url = panel.url else { return }
         inspectProject(url.path)
     }
@@ -207,6 +213,10 @@ import UniformTypeIdentifiers
         inspectionRevision += 1
         let revision = inspectionRevision
         project = path; addError = ""; addedName = ""
+        if addPlatform == "macOS" {
+            scheme = ""; branch = "main"; readingSchemes = false
+            return
+        }
         let cached = previews[path] ?? []
         scheme = CodeBuildApp.registrationChoices(cached).first?.project.scheme ?? ""
         branch = cached.first?.branch ?? "main"
@@ -301,10 +311,15 @@ import UniformTypeIdentifiers
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         // Capture this submission; subsequent UI changes cannot retarget it.
         var params: [String: Any] = ["project": project, "scheme": scheme, "deviceID": phone, "branch": branch, "teamID": team, "enabled": scheduled, "intervalHours": Int(hours) ?? 144, "trust": true, "account": personal ? "free" : "paid"]
+        if addPlatform == "macOS" {
+            params["platform"] = "macOS"; params["configuration"] = macConfiguration
+            for (key, value) in [("installPath", macInstallPath), ("bundleID", macBundleID), ("signingIdentity", macSigningIdentity), ("infoPlist", macInfoPlist)] where !value.isEmpty { params[key] = value }
+            params.removeValue(forKey: "deviceID"); params.removeValue(forKey: "account")
+        }
         if let repository { params["repository"] = repository }
         else if addSource == "github", let preparedRepository { params["repository"] = preparedRepository }
         adding = true; addError = ""; addedName = ""
-        let submittedPhone = phone
+        let submittedPhone = addPlatform == "iOS" ? phone : nil
         Task {
             defer { adding = false }
             do {
@@ -314,7 +329,7 @@ import UniformTypeIdentifiers
                 targetRevision += 1
                 if let index = targets.firstIndex(where: { $0["id"] as? String == id }) { targets[index] = target }
                 else { targets.append(target) }
-                UserDefaults.standard.set(submittedPhone, forKey: "Orbit.lastAppPhone")
+                if let submittedPhone { UserDefaults.standard.set(submittedPhone, forKey: "Orbit.lastAppPhone") }
                 addedName = target["name"] as? String ?? "App"
                 selectedTab = "apps"
                 await refresh()

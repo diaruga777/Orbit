@@ -6,6 +6,12 @@ extension CodeJob {
     public static func targetStatus(_ data: Data) throws -> CodeJob {
         let decoder = JSONDecoder()
         if let direct = try? decoder.decode(CodeJob.self, from: data) { return direct }
+        struct MacStatus: Decodable { var platform: String?; var id: String; var state: String; var title: String?; var log: String?; var failureMessage: String?; var progress: CodeJobProgress? }
+        if let mac = try? decoder.decode(MacStatus.self, from: data), mac.platform == "macOS", mac.state == "unknownCompletion" {
+            var job = CodeJob(id: mac.id, title: mac.title ?? "Mac build", log: mac.log ?? "")
+            job.failureMessage = mac.failureMessage; job.progress = mac.progress
+            return job
+        }
         let retained = try decoder.decode(CodeOvernightJob.self, from: data)
         struct Details: Decodable { var log: String?; var compilation: CodeJob? }
         let details = try decoder.decode(Details.self, from: data)
