@@ -52,10 +52,19 @@ struct OrbitMacView: View {
                                 if app["mac"] != nil { Label("This Mac", systemImage: "desktopcomputer").font(.caption).foregroundStyle(.secondary) }
                             }
                             Text(app["failure"] as? String ?? ((app["enabled"] as? Bool == true) ? "Refresh every \(app["intervalHours"] ?? 144) hours" : "Manual refreshes")).font(.callout)
-                            HStack {
-                                if let deployment = app["mac"] as? [String: Any] {
-                                    Text(deployment["installPath"] as? String ?? "").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                            if let deployment = app["mac"] as? [String: Any] {
+                                Text(deployment["installPath"] as? String ?? "").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                                if let job = model.targetJobs[app["id"] as? String ?? ""] {
+                                    HStack {
+                                        if job["state"] as? String == "running" { ProgressView().controlSize(.small) }
+                                        Text(job["stage"] as? String ?? "").font(.callout)
+                                        if job["state"] as? String == "running", let id = job["id"] as? String {
+                                            Button("Cancel") { Task { do { _ = try await model.rpc("cancel", ["id": id]); await model.refresh() } catch { model.status = error.localizedDescription } } }
+                                        }
+                                    }
                                 }
+                            }
+                            HStack {
                                 Button(app["mac"] != nil ? "Build and Open" : "Build and Install") { Task { do { _ = try await model.rpc("build", ["id": app["id"] ?? ""]); await model.refresh() } catch { model.status = error.localizedDescription } } }
                                 Button(app["enabled"] as? Bool == true ? "Pause" : "Enable Refreshes") { Task { do { _ = try await model.rpc("schedule", ["id": app["id"] ?? "", "enabled": !(app["enabled"] as? Bool ?? false)]); await model.refresh() } catch { model.status = error.localizedDescription } } }
                                 if let job = (app["jobID"] ?? app["lastJobID"]) as? String {

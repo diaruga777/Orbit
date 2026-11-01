@@ -17,6 +17,7 @@ import UniformTypeIdentifiers
     @Published var status = "Starting…"
     @Published var pairing = ""
     @Published var targets: [[String: Any]] = []
+    @Published var targetJobs: [String: [String: Any]] = [:]
     @Published var query = ""
     @Published var results: [[String: Any]] = []
     @Published var inspection: [String: Any]?
@@ -108,6 +109,12 @@ import UniformTypeIdentifiers
         do {
             let rows = try await rpc("targets") as? [[String: Any]] ?? []
             if revision == targetRevision { targets = rows }
+            for target in rows where target["mac"] != nil {
+                guard let id = target["id"] as? String, let job = (target["jobID"] ?? target["lastJobID"]) as? String else { continue }
+                if targetJobs[id]?["id"] as? String == job,
+                   ["succeeded", "failed", "cancelled"].contains(targetJobs[id]?["state"] as? String ?? "") { continue }
+                targetJobs[id] = try await rpc("job", ["id": job]) as? [String: Any]
+            }
         } catch { OrbitDiagnostics.shared.error("mac", "failed", error); status = error.localizedDescription }
         do { macUpdate = try await rpc("mac_update_status") as? [String: Any] ?? [:] }
         catch { macUpdate["failure"] = error.localizedDescription }

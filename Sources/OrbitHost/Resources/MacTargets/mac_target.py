@@ -233,7 +233,10 @@ def install(staged, config, job, launch):
     run(['/usr/bin/ditto', staged, prepared])
     verify(prepared, config)
     fingerprint = digest(prepared)
-    update(job, stage='Installing on this Mac…', phase='installing', transaction=str(transaction), executableDigest=fingerprint)
+    previous_digest = digest(target) if target.exists() else None
+    previous_running = any(app.resolve() == target.resolve() for _, app, _ in processes())
+    update(job, stage='Installing on this Mac…', phase='installing', transaction=str(transaction), executableDigest=fingerprint,
+           previousDigest=previous_digest, previousRunning=previous_running)
     replaced = False
     try:
         stop(config)
@@ -316,14 +319,22 @@ def build(config, job, launch):
             subprocess.run(['/usr/bin/git', 'worktree', 'remove', '--force', directory], cwd=repository, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def worker_alive(pid, job):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # A recycled PID must never authorize signalling another process group.
+    result = subprocess.run(['/bin/ps', '-p', str(pid), '-o', 'command='], capture_output=True, text=True)
+    return result.returncode == 0 and result.stdout.strip().endswith('mac_target.py worker ' + str(job))
+
+
 def status(job):
     value = read(job)
     if value['state'] == 'running' and not value.get('pid') and time.time() - value.get('createdAt', time.time()) > 30:
         value = update(job, state='failed', failureMessage='The Mac build did not start. Try again.')
     if value['state'] in ('running', 'unknownCompletion') and value.get('pid'):
-        try:
-            os.kill(value['pid'], 0)
-        except ProcessLookupError:
+        if not worker_alive(value['pid'], job):
             if value.get('phase') in ('installing', 'launching'):
                 # A killed worker is not proof of completion. Keep recovery material.
                 config = read(Path(job).parent / 'config.json')
@@ -336,7 +347,32 @@ def status(job):
                         raise ValueError('App launch was not confirmed.')
                     value = update(job, state='succeeded', stage='Installation verified after interruption.', installedPath=str(target), launched=value.get('launch', False))
                 except (OSError, ValueError, subprocess.CalledProcessError):
-                    value = update(job, state='unknownCompletion', stage='The update was interrupted. Check the installed app before rebuilding.', failureMessage='Installation could not be confirmed. Recovery files were retained.')
+                    # A crash between the two renames can leave only the rollback bundle.
+                    transaction = Path(value.get('transaction', str(Path(job).parent / 'NoTransaction')))
+                    backup = transaction / 'Previous.app'
+                    restored = False
+                    if target.exists() and value.get('previousDigest'):
+                        try:
+                            verify(target, config)
+                            restored = digest(target) == value['previousDigest']
+                            if restored and value.get('previousRunning') and not any(app.resolve() == target.resolve() for _, app, _ in processes()):
+                                subprocess.run(['/usr/bin/open', str(target)])
+                        except (OSError, ValueError, subprocess.CalledProcessError):
+                            pass
+                    if not target.exists() and backup.exists() and value.get('previousDigest'):
+                        try:
+                            verify(backup, config)
+                            if digest(backup) == value['previousDigest']:
+                                backup.rename(target)
+                                restored = True
+                                if value.get('previousRunning'):
+                                    subprocess.run(['/usr/bin/open', str(target)])
+                        except (OSError, ValueError, subprocess.CalledProcessError):
+                            pass
+                    if restored:
+                        value = update(job, state='failed', stage='The previous app was restored.', failureMessage='Installation was interrupted. The previous app was restored; try building again.')
+                    else:
+                        value = update(job, state='unknownCompletion', stage='The update was interrupted. Check the installed app before rebuilding.', failureMessage='Installation could not be confirmed. Recovery files were retained.')
             else:
                 value = update(job, state='failed', failureMessage='The Mac build was interrupted. Try again.')
     log = Path(job).parent / 'build.log'

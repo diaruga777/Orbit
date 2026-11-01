@@ -107,6 +107,36 @@ class MacTargetsTests(unittest.TestCase):
             with patch.object(mac.os, 'kill', side_effect=ProcessLookupError), patch.object(mac, 'verify'), patch.object(mac, 'processes', return_value=[(7, app, mac.info(app))]):
                 self.assertEqual(mac.status(job)['state'], 'succeeded')
 
+    def test_interruption_between_bundle_renames_restores_previous_app(self):
+        with tempfile.TemporaryDirectory() as folder:
+            app, staged, job, _ = self.fixture(folder)
+            transaction = Path(folder) / '.orbit-install-123'
+            transaction.mkdir()
+            previous = mac.digest(app)
+            app.rename(transaction / 'Previous.app')
+            mac.update(job, pid=12345, phase='installing', transaction=str(transaction), previousDigest=previous,
+                       previousRunning=True, executableDigest=mac.digest(staged))
+            with patch.object(mac.os, 'kill', side_effect=ProcessLookupError), patch.object(mac, 'verify'), patch.object(mac.subprocess, 'run') as reopen:
+                self.assertEqual(mac.status(job)['state'], 'failed')
+                reopen.assert_called_once()
+            self.assertEqual(mac.digest(app), previous)
+
+    def test_recycled_worker_pid_is_not_cancelled(self):
+        with tempfile.TemporaryDirectory() as folder:
+            _, _, job, _ = self.fixture(folder)
+            mac.update(job, pid=12345)
+            with patch.object(mac, 'worker_alive', return_value=False), patch.object(mac.os, 'killpg') as kill:
+                self.assertEqual(mac.cancel(job)['state'], 'failed')
+                kill.assert_not_called()
+
+    def test_multiple_running_copies_are_rejected_before_stopping_any(self):
+        with tempfile.TemporaryDirectory() as folder:
+            app, other, _, config = self.fixture(folder)
+            with patch.object(mac, 'processes', return_value=[(1, app, mac.info(app)), (2, other, mac.info(other))]), patch.object(mac.os, 'kill') as kill:
+                with self.assertRaisesRegex(ValueError, 'Another copy'):
+                    mac.stop(config)
+                kill.assert_not_called()
+
     def test_cancel_is_blocked_during_replacement(self):
         with tempfile.TemporaryDirectory() as folder:
             _, _, job, _ = self.fixture(folder)
