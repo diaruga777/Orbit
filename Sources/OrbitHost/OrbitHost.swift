@@ -151,7 +151,8 @@ public actor OrbitHost {
             try await service.beginMacUpdate()
             return ["ready": true]
         case "mac_update":
-            if startingMacUpdate || (await macUpdate.isActive()) { return await macUpdate.status() }
+            let active = await macUpdate.isActive()
+            if startingMacUpdate || active { return await macUpdate.status() }
             startingMacUpdate = true
             defer { startingMacUpdate = false }
             try await service.beginMacUpdate()
@@ -485,7 +486,8 @@ public actor OrbitHost {
         return value
     }
     public func tick(at date: Date = Date()) async {
-        if startingMacUpdate || (await macUpdate.isActive()) { return }
+        let active = await macUpdate.isActive()
+        if startingMacUpdate || active { return }
         await service.endMacUpdate()
         for id in targets.map(\.id) {
             guard let i = targets.firstIndex(where: { $0.id == id }) else { continue }
