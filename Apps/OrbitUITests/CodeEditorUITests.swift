@@ -57,8 +57,12 @@ final class CodeEditorUITests: XCTestCase {
             XCTAssertTrue(app.buttons["OrbitTargetPlay:fixture"].isEnabled)
             XCTAssertFalse(app.progressIndicators["OrbitTargetProgress:fixture"].exists)
             // Let the production catalog poll expose any mistakenly sent build RPC.
-            let noRequests = row.staticTexts["Manual builds\nBuild requests: 0"]
-            XCTAssertTrue(noRequests.waitForExistence(timeout: 5))
+            let unexpectedRequest = expectation(for: NSPredicate { _, _ in
+                row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Build requests: 1")).count > 0
+            }, evaluatedWith: nil)
+            unexpectedRequest.isInverted = true
+            waitForExpectations(timeout: 4)
+            XCTAssertTrue(row.staticTexts["Manual builds\nBuild requests: 0"].exists)
         }
         // The next probe models joining Wi-Fi; the same play button now starts work.
         app.buttons["OrbitTargetPlay:fixture"].tap()
