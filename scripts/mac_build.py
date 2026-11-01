@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Canonical, certificate-pinned Mac updates from committed detached source."""
 import argparse
+import base64
 import fcntl
 import hashlib
 import json
@@ -70,14 +71,24 @@ def requirement(app):
 
 def identities():
     text = run(['/usr/bin/security', 'find-identity', '-v', '-p', 'codesigning'])
-    return re.findall(r'\b([A-Fa-f0-9]{40}) "([^"]+)"', text)
+    available = re.findall(r'\b([A-Fa-f0-9]{40}) "([^"]+)"', text)
+    public = run(['/usr/bin/security', 'find-certificate', '-a', '-p'])
+    teams = {}
+    for pem in re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', public, re.S):
+        der = base64.b64decode(''.join(pem.splitlines()[1:-1]))
+        sha = hashlib.sha1(der).hexdigest().upper()
+        if sha not in {value[0].upper() for value in available}: continue
+        subject = subprocess.run(['/usr/bin/openssl', 'x509', '-noout', '-subject', '-nameopt', 'RFC2253'], input=pem.encode(), capture_output=True, check=True).stdout.decode()
+        match = re.search(r'(?:^|,)OU=([A-Z0-9]{10})(?:,|$)', subject)
+        if match: teams[sha] = match[1]
+    return [(sha, name, teams.get(sha.upper(), '')) for sha, name in available]
 
 
 def choose_certificate(available, team, pinned=None, requested=None):
-    matches = [(sha.upper(), name) for sha, name in available
+    matches = [(sha.upper(), name) for sha, name, cert_team in available
                if (not requested or requested.upper() == sha.upper() or requested == name)
                and (not pinned or sha.upper() == pinned.upper())
-               and name.startswith('Apple Development: ') and name.endswith('(' + team + ')')]
+               and cert_team == team and (pinned or name.startswith('Apple Development: '))]
     if len(matches) != 1:
         raise ValueError('Unlock the original signing certificate in Keychain. Orbit will keep its existing certificate; it won’t switch identities.')
     return matches[0][0]

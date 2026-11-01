@@ -23,11 +23,12 @@ spec.loader.exec_module(mac)
 class MacBuildTests(unittest.TestCase):
     def test_certificate_pin_rejects_same_team_other_key_and_ambiguous_first_install(self):
         one, two = 'A' * 40, 'B' * 40
-        available = [(one, 'Apple Development: First (ABCDEFGHIJ)'), (two, 'Apple Development: Second (ABCDEFGHIJ)')]
+        available = [(one, 'Apple Development: First (KEYIDENT01)', 'ABCDEFGHIJ'), (two, 'Apple Development: Second (KEYIDENT02)', 'ABCDEFGHIJ')]
         self.assertEqual(mac.choose_certificate(available, 'ABCDEFGHIJ', one), one)
         with self.assertRaises(ValueError): mac.choose_certificate(available, 'ABCDEFGHIJ')
         with self.assertRaises(ValueError): mac.choose_certificate(available, 'ABCDEFGHIJ', one, two)
         with self.assertRaises(ValueError): mac.choose_certificate(available[1:], 'ABCDEFGHIJ', one)
+        with self.assertRaises(ValueError): mac.choose_certificate(available, 'OTHERTEAM1', one)
 
     def test_checkout_builds_committed_revision_preserves_index_and_working_edits(self):
         with tempfile.TemporaryDirectory() as temporary:
