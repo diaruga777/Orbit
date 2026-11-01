@@ -801,3 +801,17 @@ pipe/VPN), offline, ordinary Wi-Fi and Wi-Fi hotspots, plus joining Wi-Fi and
 retrying without relaunching. Wi-Fi association is a prerequisite, not proof of
 Apple-service reachability or installation. No synthetic check establishes
 physical installation, provisioning renewal or marketplace readiness.
+
+
+Wi-Fi-preflight verification (2026-11-01): bootstrap generated native dependencies
+in committed detached source. All 224 Swift tests passed (five optional fixtures
+skipped), along with 28 Python tests, both Go race suites and Apple-helper vet.
+The iOS Simulator client and complete Mac review bundle built with the ignored
+local identity configuration. The Mac bundle passed strict signature verification
+and six optional packaged helper/source extraction/resume checks. Both relevant
+Simulator UI checks passed: blocked play/menu requests and retry after Wi-Fi
+becomes available, plus existing build progress/console/completion. Reviewed the
+Wi-Fi guidance screenshot. The initial UI assertion expected a literal newline
+in an accessibility label; matching its request-count text fixed that test.
+No physical phone access, Apple sign-in, actual installation/renewal, public
+notarization or marketplace acceptance was performed.
