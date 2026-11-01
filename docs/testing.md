@@ -888,3 +888,17 @@ It verifies capability-first guidance, no inferred sign-out, explicit expired-se
 recovery, multiple missing capabilities, ignored warnings and private-detail exclusion.
 Fixtures use synthetic logs and never access credentials, profiles or devices.
 A signed build with the correct profile remains separate from these diagnostics tests.
+
+Signing-diagnostic verification (2026-11-02): bootstrap generated the transport
+in committed detached source. All 230 Swift tests passed (five optional fixtures
+skipped), all 48 Python checks passed, both Go race suites and helper vet passed.
+The iOS Simulator client, native arm64 Mac client and separate Mac review package
+built with the ignored local identity configuration. The Mac review package
+passed strict signature verification. Read-only local/Apple catalog inspection
+identified the failing LunaMusic Share extension's missing explicit App ID/profile;
+the selected wildcard profile lacks its required App Groups entitlement. The Mac
+was locked, so Xcode account UI inspection and automatic provisioning repair could
+not be completed. No entitlement was removed, credential changed, physical phone
+access/sign-in/install performed, or public notarization/marketplace readiness
+established. These checks verify the diagnostic correction, not a repaired signed
+LunaMusic build.
