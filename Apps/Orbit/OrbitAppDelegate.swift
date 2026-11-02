@@ -66,7 +66,7 @@ import OrbitWire
         guard let scene = scene as? UIWindowScene else { return }
         let window = OrbitDiagnosticWindow(windowScene: scene); self.window = window
         #if DEBUG && targetEnvironment(simulator)
-        inertPreview = ["--target-build-preview", "--target-icons-preview", "--refresh-sign-in-fixture", "--editor-preview"].contains(where: ProcessInfo.processInfo.arguments.contains)
+        inertPreview = ["--target-build-preview", "--target-icons-preview", "--refresh-sign-in-fixture", "--editor-preview", "--optional-setup-fixture"].contains(where: ProcessInfo.processInfo.arguments.contains)
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--refresh-sign-in-fixture"),
            ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
             window.rootViewController = CodeRefreshSignInPreview.make(scenario: ProcessInfo.processInfo.arguments[index + 1])
@@ -94,7 +94,6 @@ import OrbitWire
             UserDefaults.standard.set(true, forKey: "Orbit.dismissedExtraSetup")
             UserDefaults.standard.set(true, forKey: "Orbit.openRefreshSetup")
         }
-        if ProcessInfo.processInfo.arguments.contains("--reset-extra-setup") { UserDefaults.standard.removeObject(forKey: "Orbit.dismissedExtraSetup") }
         if ProcessInfo.processInfo.arguments.contains("--reset-connection") { connection.pairingCode = "" }
         if ProcessInfo.processInfo.arguments.contains("--editor-preview") {
             window.rootViewController = try? CodeEditorPreview.make(reset: ProcessInfo.processInfo.arguments.contains("--reset-preview"), workspace: ProcessInfo.processInfo.arguments.contains("--workspace-preview"))
@@ -121,12 +120,8 @@ import OrbitWire
             project.tabBarItem = UITabBarItem(title: "Project", image: UIImage(systemName: "curlybraces"), tag: 0)
             let apps = UINavigationController(rootViewController: OrbitTargetsController(connection: connection, monitor: environment.builds))
             apps.tabBarItem = UITabBarItem(title: "Apps", image: UIImage(systemName: "apps.iphone"), tag: 2)
-            let settings = UINavigationController(rootViewController: OrbitConnectionController(connection: connection))
-            settings.tabBarItem = UITabBarItem(title: "Mac", image: UIImage(systemName: "desktopcomputer"), tag: 3)
             let refreshController = CodeRefreshController()
             refreshController.readinessChanged = { readiness in Task { _ = try? await connection.rpc("phone_setup_status", readiness) } }
-            let refresh = UINavigationController(rootViewController: refreshController)
-            refresh.tabBarItem = UITabBarItem(title: "Refresh", image: UIImage(systemName: "arrow.clockwise"), tag: 4)
             let widgets = OrbitWidgetsController(deployments: {
                 let result = try await connection.rpc("widgets") as? [[String: Any]] ?? []
                 return result.compactMap { $0["source"] as? String }
@@ -143,12 +138,24 @@ import OrbitWire
             appletNavigation.tabBarItem = UITabBarItem(title: "Applets", image: UIImage(systemName: "curlybraces.square"), tag: 6)
             widgets.routeImport = { [weak self] file in self?.reviewFile(file) }
             applets.routeImport = { [weak self] file in self?.reviewFile(file) }
-            let tabs = OrbitSetupBannerController(destinations: [project, apps, appletNavigation, widgetNavigation, refresh, settings])
+            let menu = OrbitSettingsController(connection: connection, refreshController: refreshController)
+            #if DEBUG && targetEnvironment(simulator)
+            if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--optional-setup-fixture"),
+               ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
+                let fixture = ProcessInfo.processInfo.arguments[index + 1]
+                menu.setupStatus = { (fixture == "refresh" || fixture == "both", fixture == "remote" || fixture == "both") }
+            }
+            #endif
+            let more = UINavigationController(rootViewController: menu)
+            more.tabBarItem = UITabBarItem(title: "More", image: UIImage(systemName: "ellipsis.circle"), tag: 7)
+            let tabs = OrbitMainTabController(destinations: [project, apps, appletNavigation, widgetNavigation, more])
+            menu.badgeChanged = { [weak tabs] needed in tabs?.tabs.last?.badgeValue = needed ? "!" : nil }
+            menu.updateStatus()
             tabs.delegate = self
             widgets.pendingCountChanged = { [weak tabs] count in tabs?.tabs[3].badgeValue = count == 0 ? nil : String(count) }
             applets.pendingCountChanged = { [weak tabs] count in tabs?.tabs[2].badgeValue = count == 0 ? nil : String(count) }
             widgets.refreshInbox(); applets.refreshInbox()
-            tabs.destinationIndex = connection.pairingCode.isEmpty ? 5 : min(5, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
+            tabs.destinationIndex = connection.pairingCode.isEmpty ? 4 : min(4, max(0, UserDefaults.standard.integer(forKey: "Orbit.selectedTab")))
             window.rootViewController = tabs
         } catch {
             let controller = UIViewController(); controller.view.backgroundColor = .systemBackground
@@ -191,7 +198,7 @@ import OrbitWire
         }
     }
     private func reviewFile(_ file: OrbitJavaScriptFile) {
-        guard let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+        guard let root = window?.rootViewController as? OrbitMainTabController else { return }
         root.destinationIndex = file.kind == .applet ? 2 : 3
         (file.kind == .applet ? applets : widgets)?.review(file.script.source)
     }
@@ -202,14 +209,14 @@ import OrbitWire
     }
     func openRefreshSetupIfNeeded() {
         guard UserDefaults.standard.bool(forKey: "Orbit.openRefreshSetup"),
-              let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+              let root = window?.rootViewController as? OrbitMainTabController else { return }
         root.dismiss(animated: false)
         root.openRefreshSetup()
         UserDefaults.standard.removeObject(forKey: "Orbit.openRefreshSetup")
     }
     func openAppletIfNeeded() {
         guard let id = UserDefaults.standard.string(forKey: "Orbit.openApplet"),
-              let root = window?.rootViewController as? OrbitSetupBannerController else { return }
+              let root = window?.rootViewController as? OrbitMainTabController else { return }
         root.dismiss(animated: false)
         root.destinationIndex = 2
         applets?.openApplet(id)

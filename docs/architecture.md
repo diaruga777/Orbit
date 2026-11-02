@@ -77,8 +77,16 @@ The state, pairing identities and installation journals are never recreated.
 The active wizard has six steps: welcome, tools, folder access, Apple account,
 iPhone, ready. Legacy agent/install/connect/refresh step values migrate without
 changing existing source, signing identifiers or durable installation job IDs.
-Phone-only refresh is not required by the wizard. A dismissible banner in both
-clients links to phone refresh and remote building after setup. Local Wi-Fi stays
+Phone-only refresh is not required by the wizard. The iPhone's explicit More tab holds separate Phone-only refresh and Remote
+builds rows, plus Mac connection settings. Each setup row has its own badge;
+More is badged when either is incomplete. Phone refresh reads the refresh
+engine's durable setup check, including a previously verified connection, while
+remote setup reads the authenticated saved route snapshot (falling back to an
+original remote pairing for older clients). A saved local-only snapshot clears
+remote completion even if the original pairing was remote. Offline/VPN state
+does not reset completed setup. Refresh-state, route/pairing and foreground
+changes update the badges. Notification deep links open Refresh inside More.
+The Mac retains its dismissible optional-setup banner. Local Wi-Fi stays
 the default; the Mac’s Phone & Remote Setup sheet explicitly enables the existing
 iroh transport immediately and shows startup errors and phone sync progress.
 Connection options also configures local Wi-Fi, Tailscale and explicit Syncthing

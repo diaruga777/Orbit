@@ -110,6 +110,29 @@ final class OrbitConnectionTests: XCTestCase {
         } catch { }
         let retained = await disconnected.saved; XCTAssertNil(retained)
     }
+    func testRemoteSetupUsesSavedRoutesWithoutRequiringLiveConnection() throws {
+        let mac = try identity(9), phone = try identity(8)
+        let local = OrbitPairingCode(deviceID: mac, addresses: [.tcp(host: "192.168.1.2", port: 49210)]).text
+        let remote = OrbitPairingCode(deviceID: mac, addresses: [.dumbpipe(endpoint: mac.bytes.map { String(format: "%02x", $0) }.joined())]).text
+        XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: "", savedRoutes: nil))
+        XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: local, savedRoutes: nil))
+        XCTAssertTrue(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: remote, savedRoutes: nil))
+        let relay = OrbitPairingCode(deviceID: mac, addresses: [.relay(url: URL(string: "relay://relay.invalid:22067")!)]).text
+        XCTAssertTrue(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: relay, savedRoutes: nil))
+        for provider in ["dumbpipe", "tailscale", "syncthing"] {
+            let routes = OrbitConnectionRoutes(provider: provider, pairingCodes: [provider == "dumbpipe" ? remote : local], accountPeerID: phone.description)
+            let restored = try JSONDecoder().decode(OrbitConnectionRoutes.self, from: JSONEncoder().encode(routes))
+            // The original LAN pairing remains unchanged after authenticated route sync.
+            XCTAssertTrue(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: local, savedRoutes: restored))
+            XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: "", savedRoutes: restored))
+        }
+        let disabled = OrbitConnectionRoutes(provider: "local", pairingCodes: [local], accountPeerID: phone.description)
+        XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: remote, savedRoutes: disabled))
+        let empty = OrbitConnectionRoutes(provider: "dumbpipe", pairingCodes: [], accountPeerID: phone.description)
+        XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: local, savedRoutes: empty))
+        let invalid = OrbitConnectionRoutes(provider: "dumbpipe", pairingCodes: ["invalid"], accountPeerID: phone.description)
+        XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: remote, savedRoutes: invalid))
+    }
     func testRouteUpdateRejectsMismatchedRemotePinAndIsBackwardCompatible() throws {
         let mac = try identity(9), other = try identity(10)
         let bad = OrbitPairingCode(deviceID: mac, addresses: [.dumbpipe(endpoint: other.bytes.map { String(format: "%02x", $0) }.joined())])

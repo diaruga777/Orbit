@@ -195,9 +195,13 @@ merging, duplicate precedence, Personal Teams and exclusion of unrelated account
 data. These fixtures do not sign in to Apple or access a phone. Python MCP tests run
 the real loopback HTTP adapter with a synthetic Host RPC and check initialization,
 notifications, tools, token/Origin/Host rejection and payload limits.
-`OrbitSetupBannerUITests` checks both optional setup destinations and persistent
-dismissal in Simulator. The banners do not initiate remote configuration or Apple
-sign-in merely by appearing.
+`OrbitOptionalSetupUITests` checks all four combinations of independent refresh
+and remote setup completion, row badges, More's combined badge, navigation,
+relaunch and expiry-notification deep links in Simulator. `OrbitConnectionTests`
+checks remote completion from saved routes after a LAN pairing, all three remote
+providers, persistence, legacy remote pairings, explicit return to LAN, empty or
+invalid routes and forgetting the Mac. These checks never configure remote
+networking, sign in to Apple or access a physical phone.
 
 `scripts/test_setup_installer.sh` drives a synthetic `/dev/tty` challenge through
 the production terminal adapter, checking secure reply forwarding and redaction

@@ -8,6 +8,18 @@ public struct OrbitConnectionRoutes: Codable, Equatable, Sendable {
     public init(provider: String, pairingCodes: [String], accountPeerID: String) {
         self.provider = provider; self.pairingCodes = pairingCodes; self.accountPeerID = accountPeerID
     }
+    /// Saved configuration is authoritative, including an explicit return to LAN.
+    /// This says nothing about reachability, authorization or Apple installation.
+    public static func hasRemoteConnection(pairingCode: String, savedRoutes: Self?) -> Bool {
+        guard let original = try? OrbitPairingCode(string: pairingCode) else { return false }
+        if let savedRoutes {
+            guard savedRoutes.provider != "local", let codes = try? savedRoutes.validated() else { return false }
+            return !codes.isEmpty
+        }
+        return original.addresses.contains {
+            switch $0 { case .dumbpipe, .relay, .tailscale: return true; case .tcp: return false }
+        }
+    }
     public func validated() throws -> [OrbitPairingCode] {
         guard ["local", "tailscale", "syncthing", "dumbpipe"].contains(provider), pairingCodes.count <= 8 else {
             throw OrbitTransportError.internalError("Invalid connection update.")
