@@ -441,3 +441,6 @@ fictional data and inert actions. See [mock screenshots](docs/testing.md#mock-ma
 Orbit was extracted from Luna Code. It has independent app identities and storage; it does not read Luna's App Group or migrate Luna's Apple credentials. MIT licensed; third-party components retain their own licenses.
 
 Refresh setup on iOS presents the next incomplete step with numbered progress. Setup details keeps certificate import and account maintenance available. Phone authorization probes native Apple challenge delivery and accepts only proof signed by the running client’s installation identity; no phone picker is shown.
+
+The iPhone Apps page shows its last successful list immediately, then refreshes
+on opening. Offline refreshes keep the saved list for the same paired Mac.

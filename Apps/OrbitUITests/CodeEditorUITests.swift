@@ -1,6 +1,14 @@
 import XCTest
 
 final class CodeEditorUITests: XCTestCase {
+    func testAppsShowsCachedListBeforeRefreshingOnPageLoad() {
+        let app = XCUIApplication(); app.launchArguments = ["--target-build-preview", "--target-cache-delayed"]; app.launch()
+        XCTAssertTrue(app.cells["OrbitTarget:cached"].waitForExistence(timeout: 4))
+        XCTAssertFalse(app.cells["OrbitTarget:fixture"].exists)
+        XCTAssertTrue(app.cells["OrbitTarget:fixture"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.cells["OrbitTarget:cached"].exists)
+    }
+
     func testMacUpdateHasSeparateSectionAndReconnects() {
         let app = XCUIApplication(); app.launchArguments = ["--target-build-preview"]; app.launch()
         let rebuild = app.buttons["OrbitMacRebuild"]

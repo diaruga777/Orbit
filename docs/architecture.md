@@ -513,3 +513,11 @@ path. If a crash leaves only a verified rollback bundle, it restores/reopens
 the original and records failure so a new build can be requested. Unconfirmed installation remains `unknownCompletion`, retaining transaction
 files and blocking schedule success or automatic retry. Later status reads retry
 that verification. Mac jobs never create phone installation/profile evidence.
+
+## Last-known phone page state
+
+Apps restores private UserDefaults snapshots of the target catalog and Mac update
+status synchronously on appearance, then refreshes both reads concurrently. Only
+successful replies replace snapshots, including empty catalogs. Snapshots are
+scoped to the paired Mac ID; a different or removed peer never displays them.
+Job/installation evidence still comes from live durable-job reads.

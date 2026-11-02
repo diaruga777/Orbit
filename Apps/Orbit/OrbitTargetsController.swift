@@ -18,6 +18,8 @@ import OrbitTransport
     private var poll: Timer?
     private var refreshing = false
     private var listMessage: String? = "Loading apps…"
+    private let appsCache: OrbitPageCache
+    private let macCache: OrbitPageCache
     private var loaded = false
     private var peer = ""
     private var apps: [[String: Any]] = []
@@ -27,7 +29,9 @@ import OrbitTransport
     convenience init(connection: OrbitPhoneConnection, monitor: CodeBuildMonitor) {
         self.init(rpc: { method, params in try await connection.rpc(method, params) }, monitor: monitor, peerID: { connection.peerID })
     }
-    init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }, refreshInterval: TimeInterval = 3, preparePhoneInstall: @escaping () async throws -> Void = { try await OrbitInstallNetwork.requireWiFi() }) {
+    init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }, refreshInterval: TimeInterval = 3, preparePhoneInstall: @escaping () async throws -> Void = { try await OrbitInstallNetwork.requireWiFi() }, defaults: UserDefaults = .standard) {
+        appsCache = OrbitPageCache(key: "Orbit.appsSnapshot", defaults: defaults)
+        macCache = OrbitPageCache(key: "Orbit.macSnapshot", defaults: defaults)
         self.preparePhoneInstall = preparePhoneInstall; self.refreshInterval = refreshInterval; self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -46,10 +50,25 @@ import OrbitTransport
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: UIAction { [weak self] _ in self?.detectProjects() })
         refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
     }
-    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); refresh() }
+    override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); restoreCachedState(); refresh() }
     @objc private func refresh() {
         OrbitDiagnostics.shared.record("action", "apps_refresh")
         Task { await refreshTargets(showError: true) }
+    }
+    private func restoreCachedState() {
+        let origin = peerID()
+        guard peer != origin else { return }
+        peer = origin; jobs = [:]; apps = []; macUpdate = [:]
+        startingMacUpdate = false; starting = nil; loaded = false; listMessage = "Loading apps…"
+        if let data = appsCache.load(peer: origin),
+           let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+           rows.allSatisfy({ $0["id"] is String && $0["name"] is String }) {
+            apps = rows; loaded = true; listMessage = nil
+        }
+        if let data = macCache.load(peer: origin), let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            macUpdate = value
+        }
+        tableView.reloadData()
     }
     private func updateListMessage() {
         // Empty/error messaging belongs to Apps; keep the Mac section visible.
@@ -57,22 +76,18 @@ import OrbitTransport
     }
 
     private func refreshTargets(showError: Bool) async {
+        restoreCachedState()
         guard !refreshing else { return }
         refreshing = true
         if !loaded { listMessage = "Loading apps…" }
         updateListMessage()
-        defer { refreshing = false; refreshControl?.endRefreshing(); updateListMessage() }
+        defer { refreshing = false; refreshControl?.endRefreshing(); updateListMessage(); tableView.reloadData() }
         let origin = peerID()
-        if peer != origin { peer = origin; jobs = [:]; apps = []; macUpdate = [:]; startingMacUpdate = false; starting = nil; loaded = false; tableView.reloadData() }
-        do {
-            let value = try await rpc("mac_update_status", [:]) as? [String: Any] ?? [:]
-            if origin == peerID() { macUpdate = value; tableView.reloadData() }
-        } catch {
-            if origin == peerID(), macBusy { macUpdate["stage"] = "Reconnecting to Orbit Mac…" }
-        }
+        async let macStatus: Void = refreshMacStatus(origin: origin)
         do {
             guard let rows = try await rpc("targets", [:]) as? [[String: Any]], rows.allSatisfy({ $0["id"] is String && $0["name"] is String }) else { throw CodeFailure("Your Mac sent an invalid app list. Update Orbit Mac and retry.") }
             guard origin == peerID() else { return }
+            appsCache.save(try JSONSerialization.data(withJSONObject: rows), peer: origin)
             apps = rows; loaded = true; listMessage = nil; tableView.reloadData(); updateListMessage()
             OrbitDiagnostics.shared.record("apps", "loaded", ["count": String(rows.count)])
             for row in rows {
@@ -90,6 +105,19 @@ import OrbitTransport
             listMessage = error.localizedDescription
             OrbitDiagnostics.shared.error("apps", "load_failed", error)
             if showError, !apps.isEmpty, presentedViewController == nil { show(error.localizedDescription) }
+        }
+        await macStatus
+    }
+    private func refreshMacStatus(origin: String) async {
+        do {
+            let value = try await rpc("mac_update_status", [:]) as? [String: Any] ?? [:]
+            if origin == peerID() {
+                macUpdate = value
+                if let data = try? JSONSerialization.data(withJSONObject: value) { macCache.save(data, peer: origin) }
+                tableView.reloadData()
+            }
+        } catch {
+            if origin == peerID(), macBusy { macUpdate["stage"] = "Reconnecting to Orbit Mac…" }
         }
     }
     private func fetchJob(_ id: String) async throws -> CodeJob {

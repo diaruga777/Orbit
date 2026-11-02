@@ -902,3 +902,10 @@ not be completed. No entitlement was removed, credential changed, physical phone
 access/sign-in/install performed, or public notarization/marketplace readiness
 established. These checks verify the diagnostic correction, not a repaired signed
 LunaMusic build.
+
+## Last-known Apps state
+
+`OrbitPageCacheTests` covers persistence, empty catalogs, corrupt records and peer
+isolation. `CodeEditorUITests.testAppsShowsCachedListBeforeRefreshingOnPageLoad`
+seeds a private fixture snapshot and delays the live response to verify the saved
+row appears first and is replaced. Fixtures never contact a Mac or phone.

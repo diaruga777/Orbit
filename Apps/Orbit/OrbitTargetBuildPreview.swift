@@ -9,6 +9,10 @@ import OrbitTransport
     static func make() throws -> UIViewController {
         let defaults = UserDefaults(suiteName: "Orbit.target-build-preview")!
         defaults.removePersistentDomain(forName: "Orbit.target-build-preview")
+        if ProcessInfo.processInfo.arguments.contains("--target-cache-delayed") {
+            let data = try JSONSerialization.data(withJSONObject: [["id": "cached", "name": "Cached App"]])
+            OrbitPageCache(key: "Orbit.appsSnapshot", defaults: defaults).save(data, peer: "fixture-mac")
+        }
         let fixture = Fixture()
         let client = CodeClient { data in
             _ = try JSONDecoder().decode(CodeRequest.self, from: data)
@@ -30,6 +34,7 @@ import OrbitTransport
                 if await fixture.macDisconnected() { throw CodeFailure("Fixture Mac is restarting") }
                 return await fixture.macStatus()
             case "targets":
+                if ProcessInfo.processInfo.arguments.contains("--target-cache-delayed") { try await Task.sleep(for: .seconds(8)) }
                 if ProcessInfo.processInfo.arguments.contains("--target-list-retry"), await fixture.failList() { throw CodeFailure("Fixture Mac unavailable. Retry to load apps.") }
                 if ProcessInfo.processInfo.arguments.contains("--target-list-empty") { return [[String: Any]]() }
                 var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": false]
@@ -45,7 +50,7 @@ import OrbitTransport
             }
         }, monitor: environment.builds, peerID: { "fixture-mac" }, refreshInterval: ProcessInfo.processInfo.arguments.contains("--target-list-retry") ? 60 : 3, preparePhoneInstall: {
             if ProcessInfo.processInfo.arguments.contains("--target-no-wifi"), await fixture.wifiUnavailable() { throw OrbitInstallNetwork.WiFiRequired() }
-        })
+        }, defaults: defaults)
         return UINavigationController(rootViewController: controller)
     }
     actor Fixture {
