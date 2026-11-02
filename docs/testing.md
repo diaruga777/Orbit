@@ -955,3 +955,22 @@ screenshots were reviewed. An initial UI assertion raced two successive polling
 snapshots; checking each snapshot's semantics fixed it. No physical phone access,
 Apple sign-in, installation/renewal, physical system activity delivery, public
 notarization or marketplace acceptance was performed.
+
+## Optional setup in More (2026-11-03)
+
+The iPhone banner is replaced by separate Phone-only refresh and Remote builds
+rows in More. Simulator checks passed for all four completion combinations,
+independent row badges, the rendered More badge, navigation/back, relaunch and
+both cold-launch and delivered expiry notifications. Captures were reviewed in
+light and dark appearance. The Refresh screen supplements its existing setup
+control with the navigation back button.
+
+Bootstrap generated source-built native dependencies in committed detached
+source. All 233 Swift checks completed with zero failures (six optional fixtures
+skipped), all 48 Python checks passed, and both Go race suites plus Apple-helper
+vet passed. The iOS Simulator client/test runner and complete Mac review bundle
+built with the ignored local identity configuration. Strict Mac signature and
+packaged phone-source extraction/resume checks passed. Final UI checks used a
+separate Simulator after another test run interrupted the shared device.
+No physical phone access, Apple sign-in, actual installation/renewal, public
+notarization or marketplace acceptance was performed.
