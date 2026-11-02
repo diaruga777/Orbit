@@ -83,8 +83,8 @@ import OrbitWire
                     .draw(in: CGRect(x: 32, y: 32, width: 68, height: 68))
             }.pngData()!.base64EncodedString()
             let controller = OrbitTargetsController(rpc: { _, _ in
-                [["id": "preview", "name": "Luna", "iconPNG": icon],
-                 ["id": "missing", "name": "No Icon"],
+                [["id": "preview", "name": "Luna", "iconPNG": icon, "lastSuccess": Date().addingTimeInterval(-14 * 3600).timeIntervalSinceReferenceDate],
+                 ["id": "missing", "name": "No Icon", "lastSuccess": Date().addingTimeInterval(-2 * 86400).timeIntervalSinceReferenceDate],
                  ["id": "invalid", "name": "Invalid Icon", "iconPNG": "invalid"]]
             })
             window.rootViewController = UINavigationController(rootViewController: controller)

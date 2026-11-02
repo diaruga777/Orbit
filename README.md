@@ -129,6 +129,11 @@ exports include the app helper. Existing native apps need source instrumentation
 and a rebuild. No logging switch, manual export or hosted service is involved.
 See [app debugging](docs/app-debugging.md) for integration and connection limits.
 
+The iPhone Apps page shows two columns of tiles with large app icons. Below each
+icon, a history clock and a short last-built age (like **14hr** or **2d**) sit to
+the left of Play. A dash means the app has not been built yet. Tap a tile for
+its build log, refresh schedule and other actions.
+
 The iPhone Apps list loads independently of job-console reads, shows errors with
 Retry, and explains how to add apps when the catalog is empty. Tap the play
 button beside an app to build and install it in one press. Connect the phone to
@@ -337,7 +342,7 @@ If a build reports **No Accounts**, check the selected team for the app and its 
 
 **Commit the source you want to install.** Orbit builds a detached Git worktree from the selected branch; unsaved/uncommitted edits in the source editor or an agent's working tree are not part of that revision. Local targets use that local branch as-is. Targets cloned by Orbit fetch the chosen GitHub branch before each fresh build without changing the checkout's active branch.
 
-In iOS **Apps**, **Build and Install** opens live progress with the current operation, live completed/running task counts and a console. Xcode does not provide a reliable total task count, so running builds show an activity indicator instead of an estimated percentage. Close it to keep watching progress in the app row or Project tab. The system build Live Activity continues monitoring while iOS permits background processing; reconnect status appears if the Mac goes away. Self-updates finish that activity before replacing Orbit, and installation is complete only after the Mac verifies it.
+In iOS **Apps**, **Build and Install** opens live progress with the current operation, live completed/running task counts and a console. Xcode does not provide a reliable total task count, so running builds show an activity indicator instead of an estimated percentage. Close it to keep watching progress in the app tile or Project tab. The system build Live Activity continues monitoring while iOS permits background processing; reconnect status appears if the Mac goes away. Self-updates finish that activity before replacing Orbit, and installation is complete only after the Mac verifies it.
 
 On iOS, Play defaults to **Build & Install**. Enable **Launch After Install** in a
 scheme's row menu to open the app too. Each scheme keeps its own preference,

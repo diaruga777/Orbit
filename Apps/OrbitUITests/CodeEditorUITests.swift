@@ -130,8 +130,53 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(app.cells["OrbitTarget:preview"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.cells["OrbitTarget:missing"].exists)
         XCTAssertTrue(app.cells["OrbitTarget:invalid"].exists)
-        attach("Target icons and fallbacks", app)
+        let first = app.cells["OrbitTarget:preview"]
+        let second = app.cells["OrbitTarget:missing"]
+        let third = app.cells["OrbitTarget:invalid"]
+        XCTAssertEqual(first.frame.minY, second.frame.minY, accuracy: 2)
+        XCTAssertGreaterThan(second.frame.minX, first.frame.maxX)
+        XCTAssertGreaterThanOrEqual(first.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(second.frame.maxX, app.frame.maxX)
+        XCTAssertTrue(first.isHittable)
+        XCTAssertTrue(second.isHittable)
+        XCTAssertEqual(first.frame.width, second.frame.width, accuracy: 2)
+        XCTAssertGreaterThan(third.frame.minY, first.frame.maxY)
+        XCTAssertEqual(first.frame.minX, third.frame.minX, accuracy: 2)
+        let age = first.descendants(matching: .any)["OrbitTargetLastBuilt:preview"]
+        XCTAssertEqual(age.value as? String, "14hr")
+        XCTAssertEqual(second.descendants(matching: .any)["OrbitTargetLastBuilt:missing"].value as? String, "2d")
+        XCTAssertEqual(third.descendants(matching: .any)["OrbitTargetLastBuilt:invalid"].label, "Not built yet")
+        let play = first.buttons["OrbitTargetPlay:preview"]
+        let icon = first.images["OrbitTargetIcon"]
+        XCTAssertGreaterThan(icon.frame.width, play.frame.width * 2)
+        XCTAssertLessThan(icon.frame.maxY, play.frame.minY)
+        XCTAssertLessThan(age.frame.maxX, play.frame.minX)
+        XCTAssertEqual(age.frame.midY, play.frame.midY, accuracy: 2)
+        attach("Two-column app tiles with build ages and icon fallbacks", app)
     }
+    func testTargetTilesKeepControlsWithLargestText() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-icons-preview", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        let grid = app.collectionViews["OrbitTargets"]
+        XCTAssertTrue(grid.waitForExistence(timeout: 10))
+        let first = app.cells["OrbitTarget:preview"]
+        let play = app.buttons["OrbitTargetPlay:preview"]
+        for _ in 0..<8 {
+            if play.exists && play.isHittable { break }
+            grid.swipeUp()
+        }
+        XCTAssertTrue(play.isHittable)
+        let age = first.descendants(matching: .any)["OrbitTargetLastBuilt:preview"]
+        XCTAssertLessThan(age.frame.maxX, play.frame.minX)
+        XCTAssertGreaterThanOrEqual(age.frame.minX, first.frame.minX)
+        XCTAssertLessThanOrEqual(play.frame.maxX, first.frame.maxX)
+        XCTAssertEqual(play.frame.width, 44, accuracy: 1)
+        XCTAssertEqual(age.value as? String, "14hr")
+        attach("App tile controls at largest text size", app)
+    }
+
     func testIPadRotationAndTargetMenu() throws {
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad layout check") }
         continueAfterFailure = false

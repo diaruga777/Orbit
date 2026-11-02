@@ -4,7 +4,7 @@ import OrbitRefresh
 import OrbitUI
 import OrbitTransport
 
-@MainActor final class OrbitTargetsController: UITableViewController, UISearchResultsUpdating {
+@MainActor final class OrbitTargetsController: UICollectionViewController, UISearchResultsUpdating {
     private let rpc: (String, [String: Any]) async throws -> Any
     private let monitor: CodeBuildMonitor?
     private let peerID: () -> String
@@ -32,14 +32,20 @@ import OrbitTransport
     init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }, refreshInterval: TimeInterval = 3, preparePhoneInstall: @escaping () async throws -> Void = { try await OrbitInstallNetwork.requireWiFi() }, defaults: UserDefaults = .standard) {
         appsCache = OrbitPageCache(key: "Orbit.appsSnapshot", defaults: defaults)
         macCache = OrbitPageCache(key: "Orbit.macSnapshot", defaults: defaults)
-        self.preparePhoneInstall = preparePhoneInstall; self.refreshInterval = refreshInterval; self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(style: .insetGrouped); title = "Apps"
+        self.preparePhoneInstall = preparePhoneInstall; self.refreshInterval = refreshInterval; self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(collectionViewLayout: UICollectionViewFlowLayout()); title = "Apps"
     }
     required init?(coder: NSCoder) { fatalError() }
     deinit { poll?.invalidate(); searchTask?.cancel() }
     override func viewDidLoad() {
-        super.viewDidLoad(); OrbitDiagnostics.shared.record("screen", "apps_loaded"); tableView.cellLayoutMarginsFollowReadableWidth = true; search.searchResultsUpdater = self; search.searchBar.placeholder = "Search GitHub"
+        super.viewDidLoad(); OrbitDiagnostics.shared.record("screen", "apps_loaded"); search.searchResultsUpdater = self; search.searchBar.placeholder = "Search GitHub"
         navigationItem.searchController = search
-        tableView.accessibilityIdentifier = "OrbitTargets"
+        collectionView.accessibilityIdentifier = "OrbitTargets"
+        collectionView.backgroundColor = .systemGroupedBackground
+        collectionView.register(OrbitTargetCell.self, forCellWithReuseIdentifier: "target")
+        collectionView.register(UICollectionViewListCell.self, forCellWithReuseIdentifier: "list")
+        collectionView.register(OrbitTargetsMessageCell.self, forCellWithReuseIdentifier: "message")
+        collectionView.register(OrbitTargetsHeader.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: "header")
+        collectionView.setCollectionViewLayout(makeLayout(), animated: false)
         if let monitor { NotificationCenter.default.addObserver(self, selector: #selector(buildChanged), name: CodeBuildMonitor.changed, object: monitor) }
         poll = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -48,7 +54,7 @@ import OrbitTransport
             }
         }
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: UIAction { [weak self] _ in self?.detectProjects() })
-        refreshControl = UIRefreshControl(); refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
+        collectionView.refreshControl = UIRefreshControl(); collectionView.refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); restoreCachedState(); refresh() }
     @objc private func refresh() {
@@ -68,11 +74,11 @@ import OrbitTransport
         if let data = macCache.load(peer: origin), let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             macUpdate = value
         }
-        tableView.reloadData()
+        collectionView.reloadData()
     }
     private func updateListMessage() {
         // Empty/error messaging belongs to Apps; keep the Mac section visible.
-        tableView.backgroundView = nil
+        collectionView.backgroundView = nil
     }
 
     private func refreshTargets(showError: Bool) async {
@@ -81,14 +87,14 @@ import OrbitTransport
         refreshing = true
         if !loaded { listMessage = "Loading apps…" }
         updateListMessage()
-        defer { refreshing = false; refreshControl?.endRefreshing(); updateListMessage(); tableView.reloadData() }
+        defer { refreshing = false; collectionView.refreshControl?.endRefreshing(); updateListMessage(); collectionView.reloadData() }
         let origin = peerID()
         async let macStatus: Void = refreshMacStatus(origin: origin)
         do {
             guard let rows = try await rpc("targets", [:]) as? [[String: Any]], rows.allSatisfy({ $0["id"] is String && $0["name"] is String }) else { throw CodeFailure("Your Mac sent an invalid app list. Update Orbit Mac and retry.") }
             guard origin == peerID() else { return }
             appsCache.save(try JSONSerialization.data(withJSONObject: rows), peer: origin)
-            apps = rows; loaded = true; listMessage = nil; tableView.reloadData(); updateListMessage()
+            apps = rows; loaded = true; listMessage = nil; collectionView.reloadData(); updateListMessage()
             OrbitDiagnostics.shared.record("apps", "loaded", ["count": String(rows.count)])
             for row in rows {
                 guard let id = (row["jobID"] ?? row["lastJobID"]) as? String else { continue }
@@ -99,7 +105,7 @@ import OrbitTransport
                     jobs[id] = value; monitor?.observe(value)
                 } catch { OrbitDiagnostics.shared.error("apps", "job_failed", error, ["job": id]) }
             }
-            tableView.reloadData()
+            collectionView.reloadData()
         } catch {
             guard origin == peerID() else { return }
             listMessage = error.localizedDescription
@@ -116,7 +122,7 @@ import OrbitTransport
             if origin == peerID() {
                 macUpdate = value
                 if let data = try? JSONSerialization.data(withJSONObject: value) { macCache.save(data, peer: origin) }
-                tableView.reloadData()
+                collectionView.reloadData()
             }
         } catch {
             if origin == peerID(), macBusy { macUpdate["stage"] = "Reconnecting to Orbit Mac…" }
@@ -128,11 +134,11 @@ import OrbitTransport
     @objc private func buildChanged() {
         if let job = monitor?.job { jobs[job.id] = job }
         guard !searching else { return }
-        for cell in tableView.visibleCells {
-            guard let index = tableView.indexPath(for: cell), index.section == 1, apps.indices.contains(index.row) else { continue }
+        for cell in collectionView.visibleCells {
+            guard let index = collectionView.indexPath(for: cell), index.section == 1, apps.indices.contains(index.row) else { continue }
             configure(cell, row: apps[index.row])
         }
-        tableView.beginUpdates(); tableView.endUpdates()
+        collectionView.collectionViewLayout.invalidateLayout()
     }
     private func build(_ row: [String: Any]) {
         guard !checkingNetwork, let monitor, let id = row["id"] as? String else { return }
@@ -169,58 +175,90 @@ import OrbitTransport
         searchTask?.cancel()
         let query = searchController.searchBar.text ?? ""
         updateListMessage()
-        guard !query.isEmpty else { repositories = []; tableView.reloadData(); return }
-        searchTask = Task { do { try await Task.sleep(for: .milliseconds(400)); let rows = try await rpc("repo_search", ["query": query]) as? [[String: Any]] ?? []; guard !Task.isCancelled else { return }; repositories = rows; tableView.reloadData() } catch is CancellationError { } catch { show(error.localizedDescription) } }
+        guard !query.isEmpty else { repositories = []; collectionView.reloadData(); return }
+        searchTask = Task { do { try await Task.sleep(for: .milliseconds(400)); let rows = try await rpc("repo_search", ["query": query]) as? [[String: Any]] ?? []; guard !Task.isCancelled else { return }; repositories = rows; collectionView.reloadData() } catch is CancellationError { } catch { show(error.localizedDescription) } }
     }
     private var searching: Bool { !(search.searchBar.text ?? "").isEmpty }
     private var macBusy: Bool { startingMacUpdate || ["accepted", "building", "installing", "restarting", "installed"].contains(macUpdate["state"] as? String ?? "") }
-    override func numberOfSections(in tableView: UITableView) -> Int { searching ? 1 : 2 }
-    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { searching ? nil : section == 0 ? "Orbit Mac" : "Apps" }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { searching ? repositories.count : section == 0 ? 1 : max(1, apps.count) }
-    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+    private func makeLayout() -> UICollectionViewLayout {
+        UICollectionViewCompositionalLayout { [weak self] sectionIndex, environment in
+            guard let self else { return nil }
+            let section: NSCollectionLayoutSection
+            if !self.searching, sectionIndex == 1, !self.apps.isEmpty {
+                let tileWidth = max(1, (environment.container.effectiveContentSize.width - 44) / 2)
+                let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(tileWidth), heightDimension: .estimated(260)))
+                let group = NSCollectionLayoutGroup.horizontal(
+                    layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .estimated(260)),
+                    repeatingSubitem: item, count: 2)
+                group.interItemSpacing = .fixed(12)
+                section = NSCollectionLayoutSection(group: group)
+                section.interGroupSpacing = 12
+                section.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 24, trailing: 16)
+            } else {
+                var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+                configuration.headerMode = .none
+                section = .list(using: configuration, layoutEnvironment: environment)
+            }
+            if !self.searching {
+                section.boundarySupplementaryItems = [NSCollectionLayoutBoundarySupplementaryItem(
+                    layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .estimated(44)),
+                    elementKind: UICollectionView.elementKindSectionHeader, alignment: .top)]
+            }
+            return section
+        }
+    }
+    override func numberOfSections(in collectionView: UICollectionView) -> Int { searching ? 1 : 2 }
+    override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int { searching ? repositories.count : section == 0 ? 1 : max(1, apps.count) }
+    override func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
+        let header = collectionView.dequeueReusableSupplementaryView(ofKind: kind, withReuseIdentifier: "header", for: indexPath) as! OrbitTargetsHeader
+        header.label.text = indexPath.section == 0 ? "Orbit Mac" : "Apps"
+        return header
+    }
+    override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        if !searching, indexPath.section == 1, !apps.isEmpty {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "target", for: indexPath) as! OrbitTargetCell
+            configure(cell, row: apps[indexPath.item])
+            return cell
+        }
+        if !searching, indexPath.section == 1 {
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "message", for: indexPath) as! OrbitTargetsMessageCell
+            cell.message.text = listMessage ?? "No apps yet. Tap + to add one from your Mac."
+            cell.retry.isHidden = listMessage == nil
+            cell.retry.removeAction(identifiedBy: UIAction.Identifier("retry"), for: .touchUpInside)
+            cell.retry.addAction(UIAction(identifier: UIAction.Identifier("retry")) { [weak self] _ in self?.refresh() }, for: .touchUpInside)
+            return cell
+        }
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "list", for: indexPath) as! UICollectionViewListCell
+        var content = UIListContentConfiguration.subtitleCell()
+        content.secondaryTextProperties.numberOfLines = 0
+        content.textProperties.numberOfLines = 0
+        cell.accessories = []; cell.accessibilityIdentifier = nil
         if !searching, indexPath.section == 0 {
-            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-            cell.textLabel?.text = macBusy ? "Updating Orbit Mac…" : "Rebuild Orbit Mac"
-            cell.detailTextLabel?.text = macUpdate["failure"] as? String ?? macUpdate["stage"] as? String ?? "Update Orbit Mac from Xcode once to enable this."
-            cell.detailTextLabel?.numberOfLines = 0
-            cell.imageView?.image = UIImage(systemName: "desktopcomputer")
+            content.text = macBusy ? "Updating Orbit Mac…" : "Rebuild Orbit Mac"
+            content.secondaryText = macUpdate["failure"] as? String ?? macUpdate["stage"] as? String ?? "Update Orbit Mac from Xcode once to enable this."
+            content.image = UIImage(systemName: "desktopcomputer")
             let button = UIButton(type: .system)
             button.configuration = .tinted(); button.setImage(UIImage(systemName: "arrow.triangle.2.circlepath"), for: .normal)
             button.configuration?.showsActivityIndicator = macBusy
             button.isEnabled = !macBusy && macUpdate["available"] as? Bool == true
             button.accessibilityLabel = "Rebuild Orbit Mac"; button.accessibilityIdentifier = "OrbitMacRebuild"
             button.addAction(UIAction { [weak self] _ in self?.rebuildMac() }, for: .touchUpInside)
-            button.sizeToFit(); cell.accessoryView = button
+            cell.accessories = [.customView(configuration: .init(customView: button, placement: .trailing()))]
             cell.accessibilityIdentifier = "OrbitMacUpdate"
-            return cell
-        }
-        if !searching, apps.isEmpty {
-            let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-            cell.textLabel?.text = listMessage ?? "No apps yet. Tap + to add one from your Mac."
-            cell.textLabel?.numberOfLines = 0
-            cell.textLabel?.accessibilityIdentifier = "OrbitTargetsMessage"
-            if listMessage != nil {
-                let retry = UIButton(type: .system); retry.setTitle("Retry", for: .normal)
-                retry.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .touchUpInside)
-                retry.sizeToFit(); cell.accessoryView = retry
-            }
-            return cell
-        }
-        let cell = searching ? UITableViewCell(style: .subtitle, reuseIdentifier: nil) : OrbitTargetCell()
-        let row = searching ? repositories[indexPath.row] : apps[indexPath.row]
-        if searching {
-            var content = cell.defaultContentConfiguration()
+        } else {
+            let row = repositories[indexPath.item]
             content.text = row["repository"] as? String; content.secondaryText = row["description"] as? String
-            cell.contentConfiguration = content
-        } else { configure(cell, row: row) }
-        cell.accessoryType = .disclosureIndicator; return cell
+            cell.accessories = [.disclosureIndicator()]
+        }
+        cell.contentConfiguration = content
+        return cell
     }
     private func rebuildMac() {
         guard !macBusy else { return }
         let origin = peerID()
-        startingMacUpdate = true; tableView.reloadData()
+        startingMacUpdate = true; collectionView.reloadData()
         Task {
-            defer { if origin == peerID() { startingMacUpdate = false; tableView.reloadData() } }
+            defer { if origin == peerID() { startingMacUpdate = false; collectionView.reloadData() } }
             do {
                 let result = try await rpc("mac_update", [:]) as? [String: Any] ?? [:]
                 if origin == peerID() { macUpdate = result }
@@ -229,7 +267,7 @@ import OrbitTransport
             }
         }
     }
-    private func configure(_ cell: UITableViewCell, row: [String: Any]) {
+    private func configure(_ cell: UICollectionViewCell, row: [String: Any]) {
         let id = row["id"] as? String ?? ""
         let job = ((row["jobID"] ?? row["lastJobID"]) as? String).flatMap { jobs[$0] }
         let busy = starting == id || job?.state == .running
@@ -248,14 +286,18 @@ import OrbitTransport
                 ? job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
                 : job.state == .succeeded ? (row["mac"] == nil ? "Installed on your phone" : "Installed on your Mac") : job.failureMessage ?? "Build " + job.state.rawValue
         } else { status = row["failure"] as? String }
-        cell.detail.text = [schedule, status].compactMap { $0 }.joined(separator: "\n")
+        cell.accessibilityHint = schedule + ". Tap for app options."
+        cell.detail.text = status
+        cell.detail.isHidden = status?.isEmpty != false
+        let built = (row["lastSuccess"] as? Double).flatMap { $0.isFinite && $0 >= Date.distantPast.timeIntervalSinceReferenceDate && $0 <= Date.distantFuture.timeIntervalSinceReferenceDate ? Date(timeIntervalSinceReferenceDate: $0) : nil }
+        cell.setLastBuilt(built, id: id)
         cell.icon.image = (row["iconPNG"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
         cell.accessibilityIdentifier = "OrbitTarget:" + id
         cell.progress.isHidden = !busy; cell.progress.update(job)
         cell.progress.accessibilityIdentifier = "OrbitTargetProgress:" + id
     }
-    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
+    override func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        collectionView.deselectItem(at: indexPath, animated: true)
         if !searching, indexPath.section == 0 {
             let alert = UIAlertController(title: "Orbit Mac Update", message: macUpdate["log"] as? String ?? macUpdate["stage"] as? String, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "Done", style: .cancel)); present(alert, animated: true)
@@ -270,7 +312,7 @@ import OrbitTransport
                 let projects = info["projects"] as? [String] ?? []
                 let alert = UIAlertController(title: repository, message: "Choose an Xcode project.", preferredStyle: .actionSheet)
                 for project in projects { alert.addAction(UIAlertAction(title: project, style: .default) { _ in self.add(repository: repository, project: project) }) }
-                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = tableView; alert.popoverPresentationController?.sourceRect = tableView.rectForRow(at: indexPath); present(alert, animated: true)
+                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = collectionView; alert.popoverPresentationController?.sourceRect = collectionView.layoutAttributesForItem(at: indexPath)?.frame ?? collectionView.bounds; present(alert, animated: true)
             } catch { show(error.localizedDescription) } }
         } else {
             let app = apps[indexPath.row], id = app["id"] as? String ?? ""
@@ -281,7 +323,7 @@ import OrbitTransport
                     do {
                         _ = try await self.rpc("cancel", ["id": jobID])
                         let job = try await self.fetchJob(jobID); self.jobs[jobID] = job
-                        self.monitor?.observe(job); self.tableView.reloadData()
+                        self.monitor?.observe(job); self.collectionView.reloadData()
                     } catch { self.show(error.localizedDescription) }
                 } })
             }
@@ -300,7 +342,7 @@ import OrbitTransport
                 } })
             }
             alert.addAction(UIAlertAction(title: "Remove App Target", style: .destructive) { _ in Task { do { _ = try await self.rpc("target_remove", ["id": id]); self.refresh() } catch { self.show(error.localizedDescription) } } })
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = tableView; alert.popoverPresentationController?.sourceRect = tableView.rectForRow(at: indexPath); present(alert, animated: true)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = collectionView; alert.popoverPresentationController?.sourceRect = collectionView.layoutAttributesForItem(at: indexPath)?.frame ?? collectionView.bounds; present(alert, animated: true)
         }
     }
     private func detectProjects() {
@@ -424,34 +466,119 @@ import OrbitTransport
     }
 }
 
-/// Keep progress in the layout as the row grows for stages and Dynamic Type.
-@MainActor private final class OrbitTargetCell: UITableViewCell {
+/// Two-column tiles keep the icon dominant and the last build beside Play.
+@MainActor private final class OrbitTargetCell: UICollectionViewCell {
     let icon = UIImageView()
     let name = UILabel()
     let detail = UILabel()
     let progress = CodeBuildProgressView()
     let play = UIButton(type: .system)
-    init() {
-        super.init(style: .default, reuseIdentifier: nil)
-        name.font = .preferredFont(forTextStyle: .body); name.numberOfLines = 2
-        detail.font = .preferredFont(forTextStyle: .subheadline); detail.textColor = .secondaryLabel; detail.numberOfLines = 0
-        name.adjustsFontForContentSizeCategory = true; detail.adjustsFontForContentSizeCategory = true
-        icon.contentMode = .scaleAspectFit; icon.tintColor = .secondaryLabel
-        icon.layer.cornerRadius = 10; icon.clipsToBounds = true
+    private let lastBuilt = UILabel()
+    private let history = UIStackView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentView.backgroundColor = .secondarySystemGroupedBackground
+        contentView.layer.cornerRadius = 20; contentView.layer.cornerCurve = .continuous
+        contentView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 12, bottom: 12, trailing: 12)
+        name.font = .preferredFont(forTextStyle: .headline); name.numberOfLines = 2; name.textAlignment = .center
+        detail.font = .preferredFont(forTextStyle: .caption1); detail.textColor = .secondaryLabel; detail.numberOfLines = 0
+        for label in [name, detail, lastBuilt] { label.adjustsFontForContentSizeCategory = true }
+        icon.contentMode = .scaleAspectFit; icon.tintColor = .tertiaryLabel
+        icon.layer.cornerRadius = 24; icon.layer.cornerCurve = .continuous; icon.clipsToBounds = true
+        icon.accessibilityIdentifier = "OrbitTargetIcon"
+        let artwork = UIView(); artwork.addSubview(icon); icon.translatesAutoresizingMaskIntoConstraints = false
+        let preferredWidth = icon.widthAnchor.constraint(equalTo: artwork.widthAnchor)
+        preferredWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            preferredWidth, icon.widthAnchor.constraint(lessThanOrEqualToConstant: 180),
+            icon.widthAnchor.constraint(lessThanOrEqualTo: artwork.widthAnchor),
+            icon.heightAnchor.constraint(equalTo: icon.widthAnchor),
+            icon.centerXAnchor.constraint(equalTo: artwork.centerXAnchor),
+            icon.topAnchor.constraint(equalTo: artwork.topAnchor), icon.bottomAnchor.constraint(equalTo: artwork.bottomAnchor)
+        ])
+        lastBuilt.font = .preferredFont(forTextStyle: .caption1); lastBuilt.textColor = .secondaryLabel
+        lastBuilt.adjustsFontSizeToFitWidth = true; lastBuilt.minimumScaleFactor = 0.5
+        lastBuilt.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        let clock = UIImageView(image: UIImage(systemName: "clock.arrow.circlepath"))
+        clock.tintColor = .secondaryLabel; clock.contentMode = .scaleAspectFit
+        clock.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
+        clock.isAccessibilityElement = false
+        history.addArrangedSubview(clock); history.addArrangedSubview(lastBuilt)
+        history.spacing = 4; history.alignment = .center; history.isAccessibilityElement = true
+        clock.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        clock.heightAnchor.constraint(equalToConstant: 16).isActive = true
         progress.isAccessibilityElement = true; progress.accessibilityLabel = "Build progress"; progress.isHidden = true
-        let body = UIStackView(arrangedSubviews: [name, detail, progress]); body.axis = .vertical; body.spacing = 6
+        play.configuration = .tinted(); play.configuration?.cornerStyle = .capsule
         play.setImage(UIImage(systemName: "play.fill"), for: .normal)
-        play.configuration = .tinted()
         play.widthAnchor.constraint(equalToConstant: 44).isActive = true
         play.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        let row = UIStackView(arrangedSubviews: [icon, body, play]); row.spacing = 14; row.alignment = .center
-        row.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(row)
+        let actions = UIStackView(arrangedSubviews: [history, UIView(), play]); actions.spacing = 4; actions.alignment = .center
+        let body = UIStackView(arrangedSubviews: [artwork, name, actions, progress, detail])
+        body.axis = .vertical; body.spacing = 8
+        body.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(body)
         NSLayoutConstraint.activate([
-            icon.widthAnchor.constraint(equalToConstant: 44), icon.heightAnchor.constraint(equalToConstant: 44),
-            row.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
-            row.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
-            row.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
-            row.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor)
+            body.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+            body.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
+            body.bottomAnchor.constraint(lessThanOrEqualTo: contentView.layoutMarginsGuide.bottomAnchor)
+        ])
+        let preferredBottom = body.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor)
+        preferredBottom.priority = .defaultHigh; preferredBottom.isActive = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:)") }
+
+    func setLastBuilt(_ date: Date?, id: String) {
+        history.accessibilityIdentifier = "OrbitTargetLastBuilt:" + id
+        guard let date else {
+            lastBuilt.text = "—"; history.accessibilityLabel = "Not built yet"; history.accessibilityValue = "—"
+            return
+        }
+        let seconds = max(0, Date().timeIntervalSince(date))
+        if seconds < 60 { lastBuilt.text = "now" }
+        else if seconds < 3600 { lastBuilt.text = "\(Int(seconds / 60))m" }
+        else if seconds < 86400 { lastBuilt.text = "\(Int(seconds / 3600))hr" }
+        else { lastBuilt.text = "\(Int(seconds / 86400))d" }
+        history.accessibilityValue = lastBuilt.text
+        history.accessibilityLabel = "Last built " + min(date, Date()).formatted(.relative(presentation: .named))
+    }
+}
+
+@MainActor private final class OrbitTargetsHeader: UICollectionReusableView {
+    let label = UILabel()
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        label.font = .preferredFont(forTextStyle: .footnote); label.textColor = .secondaryLabel
+        label.adjustsFontForContentSizeCategory = true; label.accessibilityTraits = .header
+        label.translatesAutoresizingMaskIntoConstraints = false; addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:)") }
+}
+
+@MainActor private final class OrbitTargetsMessageCell: UICollectionViewListCell {
+    let message = UILabel()
+    let retry = UIButton(type: .system)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        message.font = .preferredFont(forTextStyle: .body); message.adjustsFontForContentSizeCategory = true
+        message.numberOfLines = 0; message.accessibilityIdentifier = "OrbitTargetsMessage"
+        retry.setTitle("Retry", for: .normal)
+        retry.setContentCompressionResistancePriority(.required, for: .horizontal)
+        retry.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        retry.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        let body = UIStackView(arrangedSubviews: [message, retry]); body.spacing = 12; body.alignment = .center
+        body.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(body)
+        NSLayoutConstraint.activate([
+            body.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
+            body.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
+            body.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor, constant: 8),
+            body.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor, constant: -8)
         ])
     }
     required init?(coder: NSCoder) { fatalError("init(coder:)") }

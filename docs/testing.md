@@ -974,3 +974,30 @@ packaged phone-source extraction/resume checks passed. Final UI checks used a
 separate Simulator after another test run interrupted the shared device.
 No physical phone access, Apple sign-in, actual installation/renewal, public
 notarization or marketplace acceptance was performed.
+
+## Apps tile grid
+
+`testTargetListDisplaysIconsAndMissingImageFallbacks` checks equal-width columns,
+viewport containment, the next row, prominent icons, 14hr/2d ages, the never-built
+fallback and the history label to the left of Play. `testTargetTilesKeepControlsWithLargestText`
+scrolls to the tiles and checks both footer controls remain inside their tile
+at the largest accessibility text size. Existing Apps fixtures cover tile actions,
+Wi-Fi rejection, live progress/completion, failure/reconnect, cached replacement,
+empty/retry messaging and the separate Mac update section. Run the iPad rotation
+check too to verify the grid and anchored action menu in wide windows. Fixtures
+use inert Mac replies; they never install on or access a physical phone.
+
+Tile-grid verification (2026-11-03): bootstrap generated native dependencies in
+committed detached source. After integrating the latest main, all 233 Swift
+checks completed without failures (six optional fixtures skipped), all 48 Python
+checks passed, and both Go race suites plus helper vet passed. Both clients built
+with the ignored local identity; the complete Mac review bundle passed strict
+signature verification. Apps checks passed on iPhone and iPad Simulator for
+layout, ages, actions, progress/completion, reconnect/failure, Wi-Fi rejection,
+cache replacement, retry/empty state and Mac updates. The integrated revision
+also passed small-screen grid/large-text/cache checks and iPad rotation/menu
+checks. Screenshots were reviewed in light/dark appearance and at the largest
+accessibility text size. Visual review caught an initial offscreen second column;
+viewport assertions now cover it. An interrupted shared-Simulator run was rerun.
+No physical phone access, Apple sign-in, installation/renewal, public notarization
+or marketplace acceptance was performed.

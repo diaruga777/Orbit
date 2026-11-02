@@ -196,7 +196,7 @@ starts for one target are serialized across suspension points. Installation stre
 
 The Mac checks its schedule every minute. Success means a confirmed installation, not just compilation. Submission IDs and pending requests are persisted before dispatch; jobs, logs, artifacts and install evidence survive restart. Builds use a detached checkout of the configured committed branch. GitHub-managed targets fetch their configured branch; local targets never pull or rewrite the user's checkout.
 
-App targets retain the configured Xcode app-icon thumbnail discovered at registration and send it to both clients' Apps lists. Older catalogs fill missing icons on listing without building or installing an app. Unavailable projects and missing icons keep their rows with a placeholder; failed icon lookups retry after five minutes rather than on every poll.
+App targets retain the configured Xcode app-icon thumbnail discovered at registration and send it to both clients' Apps lists. Older catalogs fill missing icons on listing without building or installing an app. Unavailable projects and missing icons keep their entries with a placeholder; failed icon lookups retry after five minutes rather than on every poll.
 
 The iOS Builds tab stores `launchAfterInstall` per paired Mac, project path and
 scheme; missing preferences default to false. Discovery preserves it alongside
@@ -539,3 +539,12 @@ status synchronously on appearance, then refreshes both reads concurrently. Only
 successful replies replace snapshots, including empty catalogs. Snapshots are
 scoped to the paired Mac ID; a different or removed peer never displays them.
 Job/installation evidence still comes from live durable-job reads.
+
+The iOS Apps controller uses a compositional collection layout: full-width Mac
+update/search/message rows and a fixed two-column app grid. Self-sizing tiles
+show a large icon, name and a history-clock/compact-age footer beside Play.
+The age uses the Host's `lastSuccess` (JSONEncoder reference-date seconds), so
+failed or pending installs cannot replace the last confirmed success. Missing
+dates show a dash; future clock skew clamps to now. VoiceOver reads the relative
+last-build time and each Play action names its app. Progress/failure text stays
+inside each tile; tile selection opens the existing anchored app actions.
