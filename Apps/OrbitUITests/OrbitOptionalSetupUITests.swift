@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class OrbitOptionalSetupUITests: XCTestCase {
     func testDeliveredExpiryNotificationOpensSetupAfterTermination() {
@@ -22,6 +23,7 @@ final class OrbitOptionalSetupUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.navigationBars["Refresh"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Apple Account"].exists)
+        app.navigationBars.buttons["Setup details"].tap()
         XCTAssertTrue(app.staticTexts["Cache Orbit"].exists)
         XCTAssertFalse(app.staticTexts["Take Orbit with you"].exists)
     }
@@ -37,12 +39,26 @@ final class OrbitOptionalSetupUITests: XCTestCase {
             XCTAssertEqual(refreshRow.value as? String, refresh ? "Ready" : "Setup needed")
             XCTAssertEqual(remoteRow.value as? String, remote ? "Ready" : "Setup needed")
             let more = app.tabBars.buttons["More"]
-            XCTAssertEqual(more.value as? String, (!refresh || !remote) ? "!" : nil)
+            // UIKit draws this badge but exposes an empty accessibility value.
+            // Check the rendered tab item, including the badge, in all four states.
+            XCTAssertEqual(hasRedBadge(more.screenshot().image), !refresh || !remote)
             XCTAssertFalse(app.buttons["Dismiss setup banner"].exists)
             let screenshot = XCTAttachment(screenshot: app.screenshot())
             screenshot.name = "More setup - \(fixture)"; screenshot.lifetime = .keepAlways; add(screenshot)
             app.terminate()
         }
+    }
+    private func hasRedBadge(_ image: UIImage) -> Bool {
+        guard let image = image.cgImage else { return false }
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        guard let context = CGContext(data: &pixels, width: image.width, height: image.height,
+            bitsPerComponent: 8, bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let redPixels = stride(from: 0, to: pixels.count, by: 4).filter {
+            pixels[$0] > 180 && pixels[$0 + 1] < 125 && pixels[$0 + 2] < 150 && pixels[$0 + 3] > 200
+        }.count
+        return redPixels > 20
     }
     func testSetupRowsRemainAvailableAndRouteToExistingFlowsAfterRelaunch() {
         let app = XCUIApplication()

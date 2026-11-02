@@ -29,6 +29,7 @@ import OrbitCore
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Refresh All", style: .plain, target: self, action: #selector(refreshAll))
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 76
+        navigationItem.leftItemsSupplementBackButton = true
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Setup details", style: .plain, target: self, action: #selector(toggleSetup))
         reload()
     }
