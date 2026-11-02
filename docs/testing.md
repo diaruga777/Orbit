@@ -909,3 +909,14 @@ LunaMusic build.
 isolation. `CodeEditorUITests.testAppsShowsCachedListBeforeRefreshingOnPageLoad`
 seeds a private fixture snapshot and delays the live response to verify the saved
 row appears first and is replaced. Fixtures never contact a Mac or phone.
+
+Cached-page verification (2026-11-02): bootstrap generated native dependencies in
+committed detached source. All 231 Swift checks completed with zero failures
+(five optional fixtures skipped), all 48 Python checks passed, and both Go race
+suites plus helper vet passed. The iOS Simulator client/test runner and complete
+Mac review package built with the ignored local identity configuration; the Mac
+package passed strict signature verification. Three Simulator UI checks passed:
+cached Apps before a delayed live reply, list failure/retry/empty state, and Mac
+update/reconnection. The cached Apps screenshot was inspected. No physical phone
+access, Apple sign-in, installation/renewal, public notarization or marketplace
+acceptance was performed.
