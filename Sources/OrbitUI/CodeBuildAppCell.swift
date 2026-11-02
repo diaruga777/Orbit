@@ -4,10 +4,10 @@ import OrbitCore
 
 /// Xcode supplies completed/running task counts without a total. Use an activity
 /// indicator while running, and a full bar only after confirmed success.
-@MainActor final class CodeBuildProgressView: UIView {
+@MainActor public final class CodeBuildProgressView: UIView {
     private let bar = UIProgressView(progressViewStyle: .default)
     private let activity = UIActivityIndicatorView(style: .medium)
-    override init(frame: CGRect) {
+    public override init(frame: CGRect) {
         super.init(frame: frame)
         for child in [bar, activity] {
             child.translatesAutoresizingMaskIntoConstraints = false
@@ -24,9 +24,9 @@ import OrbitCore
         accessibilityTraits = [.updatesFrequently]
         update(nil)
     }
-    convenience init() { self.init(frame: .zero) }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func update(_ job: CodeJob?) {
+    public convenience init() { self.init(frame: .zero) }
+    public required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    public func update(_ job: CodeJob?) {
         let succeeded = job?.state == .succeeded
         bar.isHidden = !succeeded; bar.progress = succeeded ? 1 : 0
         if job == nil || job?.state == .running { activity.startAnimating() }

@@ -64,7 +64,7 @@ final class CodeEditorUITests: XCTestCase {
             attach("Wi-Fi needed before remote build", app)
             alert.buttons["OK"].tap()
             XCTAssertTrue(app.buttons["OrbitTargetPlay:fixture"].isEnabled)
-            XCTAssertFalse(app.progressIndicators["OrbitTargetProgress:fixture"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["OrbitTargetProgress:fixture"].exists)
             // Let the production catalog poll expose any mistakenly sent build RPC.
             let unexpectedRequest = expectation(for: NSPredicate { _, _ in
                 row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Build requests: 1")).count > 0
@@ -98,7 +98,9 @@ final class CodeEditorUITests: XCTestCase {
         waitForExpectations(timeout: 6)
         attach("Apps live build progress", app)
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.progressIndicators["OrbitTargetProgress:fixture"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["OrbitTargetProgress:fixture"].exists)
+        XCTAssertFalse(row.label.lowercased().contains("estimated"))
+        XCTAssertFalse((app.descendants(matching: .any)["OrbitTargetProgress:fixture"].value as? String ?? "").contains("%"))
         expectation(for: NSPredicate { _, _ in row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Installed on your phone")).count > 0 }, evaluatedWith: nil)
         waitForExpectations(timeout: 20)
         attach("Apps confirmed completion", app)
@@ -514,7 +516,7 @@ final class CodeEditorUITests: XCTestCase {
         let initial = work.label
         let progress = app.descendants(matching: .any)["CodeBuildProgress"]
         let initialProgress = progress.value as? String
-        XCTAssertEqual(initialProgress, work.label)
+        XCTAssertTrue(initialProgress?.contains("build tasks completed") == true)
         XCTAssertFalse(initialProgress?.contains("%") == true)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "estimated")).firstMatch.exists)
         expectation(for: NSPredicate { _, _ in work.label != initial && progress.value as? String != initialProgress }, evaluatedWith: work)

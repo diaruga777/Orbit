@@ -233,7 +233,6 @@ import OrbitTransport
         let id = row["id"] as? String ?? ""
         let job = ((row["jobID"] ?? row["lastJobID"]) as? String).flatMap { jobs[$0] }
         let busy = starting == id || job?.state == .running
-        let fraction = starting == id ? monitor?.fraction ?? 0 : job.map { monitor?.fraction(for: $0) ?? $0.progressFraction() } ?? 0
         guard let cell = cell as? OrbitTargetCell else { return }
         cell.name.text = row["name"] as? String
         cell.play.accessibilityIdentifier = "OrbitTargetPlay:" + id
@@ -246,15 +245,14 @@ import OrbitTransport
         if starting == id { status = "Starting on your Mac…" }
         else if let job {
             status = job.state == .running
-                ? "\(Int(fraction * 100))% estimated · " + job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
+                ? job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
                 : job.state == .succeeded ? (row["mac"] == nil ? "Installed on your phone" : "Installed on your Mac") : job.failureMessage ?? "Build " + job.state.rawValue
         } else { status = row["failure"] as? String }
         cell.detail.text = [schedule, status].compactMap { $0 }.joined(separator: "\n")
         cell.icon.image = (row["iconPNG"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
         cell.accessibilityIdentifier = "OrbitTarget:" + id
-        cell.progress.isHidden = !busy; cell.progress.progress = Float(fraction)
+        cell.progress.isHidden = !busy; cell.progress.update(job)
         cell.progress.accessibilityIdentifier = "OrbitTargetProgress:" + id
-        cell.progress.accessibilityValue = "\(Int(fraction * 100)) percent estimated"
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
@@ -431,7 +429,7 @@ import OrbitTransport
     let icon = UIImageView()
     let name = UILabel()
     let detail = UILabel()
-    let progress = UIProgressView(progressViewStyle: .default)
+    let progress = CodeBuildProgressView()
     let play = UIButton(type: .system)
     init() {
         super.init(style: .default, reuseIdentifier: nil)

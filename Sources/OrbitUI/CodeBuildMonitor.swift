@@ -18,7 +18,6 @@ import OrbitCore
     private var lease: UIBackgroundTaskIdentifier = .invalid
     private var continued: BGContinuedProcessingTask?
     private var requested = false
-    private var startingAt: Date?
     private var title = "Build"
     private var disconnected = false
     private var reportedFraction = 0.0
@@ -76,7 +75,7 @@ import OrbitCore
 
     public func begin(title: String) throws {
         guard !isStarting, job?.state != .running else { throw CodeFailure("A build is already running. Wait for it or cancel it first.") }
-        self.title = title; peer = peerID(); job = nil; reportedFraction = 0; isStarting = true; startingAt = Date()
+        self.title = title; peer = peerID(); job = nil; reportedFraction = 0; isStarting = true
         monitoringStopped = false; disconnected = false
         defaults.removeObject(forKey: handoffKey)
         lease = UIApplication.shared.beginBackgroundTask(withName: "Start remote build") { [weak self] in
