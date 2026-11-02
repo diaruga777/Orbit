@@ -1,5 +1,39 @@
 #if os(iOS)
 import UIKit
+import OrbitCore
+
+/// Xcode supplies completed/running task counts without a total. Use an activity
+/// indicator while running, and a full bar only after confirmed success.
+@MainActor final class CodeBuildProgressView: UIView {
+    private let bar = UIProgressView(progressViewStyle: .default)
+    private let activity = UIActivityIndicatorView(style: .medium)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        for child in [bar, activity] {
+            child.translatesAutoresizingMaskIntoConstraints = false
+            child.isAccessibilityElement = false
+            addSubview(child)
+        }
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 20),
+            bar.leadingAnchor.constraint(equalTo: leadingAnchor), bar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bar.centerYAnchor.constraint(equalTo: centerYAnchor),
+            activity.centerXAnchor.constraint(equalTo: centerXAnchor), activity.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+        isAccessibilityElement = true
+        accessibilityTraits = [.updatesFrequently]
+        update(nil)
+    }
+    convenience init() { self.init(frame: .zero) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func update(_ job: CodeJob?) {
+        let succeeded = job?.state == .succeeded
+        bar.isHidden = !succeeded; bar.progress = succeeded ? 1 : 0
+        if job == nil || job?.state == .running { activity.startAnimating() }
+        else { activity.stopAnimating() }
+        accessibilityValue = job?.progressSummary ?? "Starting on your Mac…"
+    }
+}
 
 /// All content participates in Auto Layout, including the switch and progress.
 @MainActor final class CodeBuildAppCell: UITableViewCell {
@@ -9,7 +43,7 @@ import UIKit
     let play = UIButton(type: .system)
     let more = UIButton(type: .system)
     let nightly = UISwitch()
-    let progress = UIProgressView(progressViewStyle: .default)
+    let progress = CodeBuildProgressView()
     private let footer = UIStackView()
     private var iconData: Data?
 

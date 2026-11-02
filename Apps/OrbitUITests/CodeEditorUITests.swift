@@ -60,7 +60,7 @@ final class CodeEditorUITests: XCTestCase {
             let alert = app.alerts["Wi-Fi Needed"]
             XCTAssertTrue(alert.waitForExistence(timeout: 5))
             XCTAssertTrue(alert.staticTexts["Connect this phone to Wi-Fi, then try again. Remote app installation can’t use cellular alone."].exists)
-            XCTAssertFalse(app.progressIndicators["CodeBuildProgress"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["CodeBuildProgress"].exists)
             attach("Wi-Fi needed before remote build", app)
             alert.buttons["OK"].tap()
             XCTAssertTrue(app.buttons["OrbitTargetPlay:fixture"].isEnabled)
@@ -75,7 +75,7 @@ final class CodeEditorUITests: XCTestCase {
         }
         // The next probe models joining Wi-Fi; the same play button now starts work.
         app.buttons["OrbitTargetPlay:fixture"].tap()
-        XCTAssertTrue(app.progressIndicators["CodeBuildProgress"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["CodeBuildProgress"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["Compile Feature.swift"].exists)
     }
 
@@ -87,7 +87,7 @@ final class CodeEditorUITests: XCTestCase {
         let row = app.cells["OrbitTarget:fixture"]
         XCTAssertTrue(row.waitForExistence(timeout: 15))
         app.buttons["OrbitTargetPlay:fixture"].tap()
-        let progress = app.progressIndicators["CodeBuildProgress"]
+        let progress = app.descendants(matching: .any)["CodeBuildProgress"]
         XCTAssertTrue(progress.waitForExistence(timeout: 8))
         let first = progress.value as? String
         XCTAssertTrue(app.staticTexts["Compile Feature.swift"].exists)
@@ -111,7 +111,7 @@ final class CodeEditorUITests: XCTestCase {
         let row = app.cells["OrbitTarget:fixture"]
         XCTAssertTrue(row.waitForExistence(timeout: 15)); row.tap()
         app.buttons["Build and Install"].tap()
-        XCTAssertTrue(app.progressIndicators["CodeBuildProgress"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.descendants(matching: .any)["CodeBuildProgress"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["CodeBuildStatus"].waitForExistence(timeout: 3))
         expectation(for: NSPredicate { _, _ in app.staticTexts["CodeBuildStatus"].label.contains("Reconnecting") }, evaluatedWith: nil)
         waitForExpectations(timeout: 7)
@@ -475,7 +475,7 @@ final class CodeEditorUITests: XCTestCase {
         attach("Background build completed", app)
     }
 
-    func testBuildWithoutStageMetadataAdvancesBeforeCompletion() {
+    func testBuildWithoutStageMetadataWaitsForRealUpdates() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--editor-preview", "--workspace-preview", "--reset-preview", "--build-no-progress"]
@@ -487,17 +487,14 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(run.waitForExistence(timeout: 15)); run.tap()
         let progress = app.descendants(matching: .any)["CodeBuildProgress"]
         XCTAssertTrue(progress.waitForExistence(timeout: 10))
-        func percentage() -> Int { Int((progress.value as? String ?? "").split(separator: " ").first ?? "0") ?? 0 }
-        let first = percentage()
-        expectation(for: NSPredicate { _, _ in percentage() > first && percentage() < 100 }, evaluatedWith: progress)
-        waitForExpectations(timeout: 6)
-        let second = percentage()
-        expectation(for: NSPredicate { _, _ in percentage() > second && percentage() < 100 }, evaluatedWith: progress)
-        waitForExpectations(timeout: 6)
+        XCTAssertEqual(progress.value as? String, "Waiting for build updates…")
+        Thread.sleep(forTimeInterval: 3)
+        XCTAssertEqual(progress.value as? String, "Waiting for build updates…")
         XCTAssertFalse(app.staticTexts["Build Completed"].exists)
-        attach("Incremental estimate without Mac stage metadata", app)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "estimated")).firstMatch.exists)
+        attach("Waiting without a fabricated percentage", app)
         XCTAssertTrue(app.staticTexts["Build Completed"].waitForExistence(timeout: 30))
-        XCTAssertEqual(percentage(), 100)
+        XCTAssertEqual(progress.value as? String, "100%")
     }
 
     func testActualBuildTaskDetailsAndProgressUpdateTogether() {
@@ -517,6 +514,9 @@ final class CodeEditorUITests: XCTestCase {
         let initial = work.label
         let progress = app.descendants(matching: .any)["CodeBuildProgress"]
         let initialProgress = progress.value as? String
+        XCTAssertEqual(initialProgress, work.label)
+        XCTAssertFalse(initialProgress?.contains("%") == true)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "estimated")).firstMatch.exists)
         expectation(for: NSPredicate { _, _ in work.label != initial && progress.value as? String != initialProgress }, evaluatedWith: work)
         waitForExpectations(timeout: 6)
         attach("Real task count and current operation", app)

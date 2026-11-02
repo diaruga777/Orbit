@@ -46,7 +46,7 @@ extension CodeJobs {
             guard try await runBuildCommand(arguments: buildProject.xcodeArguments + ["-configuration", "Debug", "-destination", destination,
                 "-derivedDataPath", derived.path, "-resultBundlePath", root.appendingPathComponent(job.id + ".xcresult").path,
                 "-allowProvisioningUpdates", "CONFIGURATION_BUILD_DIR=" + products.path] + signing + artifactFlags + ["build"], directory: checkout.directory.path, process: process, log: log, id: job.id,
-                workloadKey: project.path + "|" + project.scheme + "|device", from: 0.25, to: 0.80) == 0 else {
+                from: 0.25, to: 0.80) == 0 else {
                 throw CodeFailure(CodeBuildFailure.message(log: log))
             }
             recordCompilation(job.id, revision: checkout.revision)

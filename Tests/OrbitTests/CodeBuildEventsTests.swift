@@ -20,9 +20,7 @@ final class CodeBuildEventsTests: XCTestCase {
         XCTAssertEqual(parser.snapshot.operation, "Compile Feature.swift")
         parser.append(try event("logSectionClosed", index: 2)); parser.append(try event("logSectionClosed", index: 2))
         XCTAssertEqual(parser.snapshot.active, 0); XCTAssertEqual(parser.snapshot.completed, 1)
-        let initial = CodeBuildEventSnapshot().fraction(expectedTasks: nil)
-        XCTAssertGreaterThan(parser.snapshot.fraction(expectedTasks: nil), initial)
-        XCTAssertLessThan(parser.snapshot.fraction(expectedTasks: 1), 1)
+        XCTAssertFalse(parser.snapshot.buildSucceeded)
     }
     func testArbitraryByteFragmentsAndMalformedOrOversizedLinesRecover() throws {
         var parser = CodeBuildEventParser()
@@ -42,7 +40,20 @@ final class CodeBuildEventsTests: XCTestCase {
         parser.append(try event("actionFinished", extra: ["tail": ["buildResult": ["status": value("failed")]]]))
         XCTAssertFalse(parser.snapshot.buildSucceeded)
         parser.append(try event("actionFinished", extra: ["tail": ["buildResult": ["status": value("succeeded")]]]))
-        XCTAssertTrue(parser.snapshot.buildSucceeded); XCTAssertEqual(parser.snapshot.fraction(expectedTasks: 200), 1)
+        XCTAssertTrue(parser.snapshot.buildSucceeded)
+    }
+    func testResultStreamReplay() throws {
+        // Optional local integration fixture: replay a real Simulator build stream.
+        guard let path = ProcessInfo.processInfo.environment["ORBIT_TEST_BUILD_EVENTS"] else {
+            throw XCTSkip("Set ORBIT_TEST_BUILD_EVENTS to a Simulator result stream.")
+        }
+        var parser = CodeBuildEventParser()
+        let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+        defer { try? handle.close() }
+        while let data = try handle.read(upToCount: 7777), !data.isEmpty { parser.append(data) }
+        XCTAssertGreaterThan(parser.snapshot.completed, 0)
+        XCTAssertEqual(parser.snapshot.active, 0)
+        XCTAssertTrue(parser.snapshot.buildSucceeded)
     }
     func testEventProgressDoesNotMoveWhenOnlyTimePasses() {
         var progress = CodeJobProgress(stage: "Compile Feature.swift", start: 0.25, end: 0.8, estimatedSeconds: 1, reportedFraction: 0.4)
@@ -50,6 +61,8 @@ final class CodeBuildEventsTests: XCTestCase {
         XCTAssertEqual(progress.fraction(), progress.fraction(at: Date().addingTimeInterval(500)))
         var job = CodeJob(id: "job", title: "Build"); job.progress = progress
         XCTAssertEqual(job.progressDetail, "42 build tasks completed")
+        XCTAssertEqual(job.progressSummary, "42 build tasks completed")
+        XCTAssertFalse(job.progressSummary.contains("%"))
         XCTAssertEqual(job.estimatingProgress().progress?.reportedFraction, 0.4)
     }
 }

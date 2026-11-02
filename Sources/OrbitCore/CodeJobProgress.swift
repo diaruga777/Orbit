@@ -1,6 +1,7 @@
 import Foundation
 
-/// Stage boundaries are measured; movement within a stage is a bounded estimate.
+/// Stage markers and live work counts. Legacy timing fields remain wire-compatible;
+/// elapsed time is never evidence of completed work.
 /// Optional on CodeJob so jobs from older companions and persisted logs still decode.
 public struct CodeJobProgress: Codable, Equatable, Sendable {
     public var stage: String
@@ -20,15 +21,13 @@ public struct CodeJobProgress: Codable, Equatable, Sendable {
     }
     public func fraction(at date: Date = Date()) -> Double {
         if let reportedFraction { return min(0.99, max(0, reportedFraction)) }
-        let elapsed = max(0, (stoppedAt ?? date).timeIntervalSince(startedAt))
-        let movement = 0.9 * (1 - exp(-elapsed / max(1, estimatedSeconds)))
-        return min(0.99, max(0, start + (end - start) * movement))
+        return min(0.99, max(0, start))
     }
 }
 
 extension CodeJob {
-    /// Attach an elapsed-time estimate once, retaining its clock and terminal value
-    /// across status replies from companions that don't send stage metadata.
+    /// Retain the last received snapshot when an older companion omits metadata.
+    /// Kept under its original name for source compatibility; it does not estimate.
     public func estimatingProgress(from previous: CodeJob? = nil, at date: Date = Date()) -> CodeJob {
         var value = self
         if value.progress == nil {
@@ -50,6 +49,12 @@ extension CodeJob {
         guard let count = progress?.completedTasks else { return nil }
         let active = progress?.activeTasks ?? 0
         return "\(count) build tasks completed" + (active > 0 ? " · \(active) running" : "")
+    }
+    /// A running build has no reliable overall denominator in Xcode's result stream.
+    /// Show work counts/stages instead of presenting stage weights as a percentage.
+    public var progressSummary: String {
+        if state == .succeeded { return "100%" }
+        return progressDetail ?? (state == .running ? "Waiting for build updates…" : state.rawValue.capitalized)
     }
     public var progressStage: String { progress?.stage ?? "Building on your Mac…" }
 }

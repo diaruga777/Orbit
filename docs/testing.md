@@ -920,3 +920,21 @@ cached Apps before a delayed live reply, list failure/retry/empty state, and Mac
 update/reconnection. The cached Apps screenshot was inspected. No physical phone
 access, Apple sign-in, installation/renewal, public notarization or marketplace
 acceptance was performed.
+
+
+## Live build work
+
+`CodeBuildEventsTests` checks real command-section counting, duplicate/container
+exclusion, fragmented and bounded reads, reused action IDs and confirmed build
+success. `CodeJobProgressTests` verifies that time, missing metadata and clock
+skew cannot manufacture completed work. `testActualBuildTaskDetailsAndProgressUpdateTogether`
+checks live counts and the current operation without an estimated percentage;
+`testBuildWithoutStageMetadataWaitsForRealUpdates` checks the honest waiting state
+and confirmed completion on Simulator. Both use inert jobs, never a phone.
+
+Replay a real Simulator build stream with
+`ORBIT_TEST_BUILD_EVENTS=/absolute/path/events.jsonl swift test --filter CodeBuildEventsTests.testResultStreamReplay`.
+Create the stream file before building and pass both `-resultStreamPath` and
+`-resultBundlePath` to `xcodebuild`. Real task counts measure work, not remaining
+time. Physical installation, provisioning renewal, background activity delivery,
+notarization and marketplace acceptance remain separate checks.

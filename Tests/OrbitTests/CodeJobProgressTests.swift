@@ -3,12 +3,12 @@ import XCTest
 @testable import OrbitMac
 
 final class CodeJobProgressTests: XCTestCase {
-    func testEstimateAdvancesWithinStageAndNeverCompletesIt() {
+    func testElapsedTimeDoesNotAdvanceUnmeasuredWork() {
         let start = Date(timeIntervalSince1970: 100)
         let progress = CodeJobProgress(stage: "Compile", start: 0.25, end: 0.80, estimatedSeconds: 240, startedAt: start)
         XCTAssertEqual(progress.fraction(at: start), 0.25)
-        XCTAssertGreaterThan(progress.fraction(at: start.addingTimeInterval(120)), 0.25)
-        XCTAssertLessThan(progress.fraction(at: start.addingTimeInterval(1_000_000)), 0.80)
+        XCTAssertEqual(progress.fraction(at: start.addingTimeInterval(120)), 0.25)
+        XCTAssertEqual(progress.fraction(at: start.addingTimeInterval(1_000_000)), 0.25)
         XCTAssertEqual(progress.fraction(at: start.addingTimeInterval(-100)), 0.25)
     }
     func testOnlySuccessReachesOneHundredAndFailureFreezes() {
@@ -30,21 +30,20 @@ final class CodeJobProgressTests: XCTestCase {
         XCTAssertNil(job.progress)
         XCTAssertEqual(job.progressFraction(at: job.startedAt), 0.05)
         let fractions = [2.0, 10, 30, 60, 120, 600].map { job.progressFraction(at: job.startedAt.addingTimeInterval($0)) }
-        XCTAssertGreaterThan(fractions[0], 0.05)
-        for (before, after) in zip(fractions, fractions.dropFirst()) { XCTAssertGreaterThan(after, before) }
-        XCTAssertLessThan(fractions.last!, 0.95)
+        XCTAssertTrue(fractions.allSatisfy { $0 == 0.05 })
+        XCTAssertEqual(job.progressSummary, "Waiting for build updates…")
     }
-    func testMissingProgressRepliesPreserveEstimateAndFreezeOnFailure() {
+    func testMissingProgressRepliesRetainLastSnapshotWithoutInventingWork() {
         let start = Date(timeIntervalSince1970: 100)
         var reply = CodeJob(id: "legacy", title: "Build")
         reply.startedAt = start
         let initial = reply.estimatingProgress(at: start)
         let refreshed = reply.estimatingProgress(from: initial, at: start.addingTimeInterval(30))
         XCTAssertEqual(refreshed.progress, initial.progress)
-        XCTAssertGreaterThan(refreshed.progressFraction(at: start.addingTimeInterval(30)), initial.progressFraction(at: start))
+        XCTAssertEqual(refreshed.progressFraction(at: start.addingTimeInterval(30)), initial.progressFraction(at: start))
         reply.state = .failed
         let failed = reply.estimatingProgress(from: refreshed, at: start.addingTimeInterval(40))
-        XCTAssertGreaterThan(failed.progressFraction(), 0.05)
+        XCTAssertEqual(failed.progressFraction(), 0.05)
         XCTAssertEqual(failed.progressFraction(at: start.addingTimeInterval(50)), failed.progressFraction(at: start.addingTimeInterval(500)))
         reply.state = .cancelled
         let cancelled = reply.estimatingProgress(from: failed, at: start.addingTimeInterval(60))
@@ -52,13 +51,13 @@ final class CodeJobProgressTests: XCTestCase {
         reply.state = .succeeded
         XCTAssertEqual(reply.estimatingProgress(from: refreshed).progressFraction(), 1)
     }
-    func testEstimateUsesLocalReceiptClockWhenMacClockIsAhead() {
+    func testClockSkewDoesNotInventWork() {
         let received = Date(timeIntervalSince1970: 100)
         var reply = CodeJob(id: "legacy", title: "Build")
         reply.startedAt = received.addingTimeInterval(3600)
         let initial = reply.estimatingProgress(at: received)
         let refreshed = reply.estimatingProgress(from: initial, at: received.addingTimeInterval(10))
-        XCTAssertGreaterThan(refreshed.progressFraction(at: received.addingTimeInterval(10)), 0.05)
+        XCTAssertEqual(refreshed.progressFraction(at: received.addingTimeInterval(10)), 0.05)
         var other = reply; other.id = "another"
         XCTAssertEqual(other.estimatingProgress(from: initial, at: received.addingTimeInterval(10)).progress?.startedAt, received.addingTimeInterval(10))
     }

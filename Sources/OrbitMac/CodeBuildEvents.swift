@@ -5,13 +5,7 @@ struct CodeBuildEventSnapshot: Equatable, Sendable {
     var active: Int = 0
     var operation: String = "Preparing build…"
     var buildSucceeded = false
-    /// Xcode can discover additional work during a build. This is work-based,
-    /// not a claim that task count is a percentage of remaining wall-clock time.
-    func fraction(expectedTasks: Int?) -> Double {
-        if buildSucceeded { return 1 }
-        if let expectedTasks, expectedTasks > 0 { return min(0.98, Double(completed) / Double(expectedTasks)) }
-        return Double(completed) / Double(completed + 32)
-    }
+
 }
 
 /// Parses xcodebuild's supported result stream, counting command-invocation

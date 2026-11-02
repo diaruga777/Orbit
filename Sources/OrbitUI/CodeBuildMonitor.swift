@@ -167,11 +167,12 @@ import OrbitCore
     }
     private func publish() {
         if !disconnected {
-            let estimate = job?.progressFraction() ?? min(0.04, 0.01 + max(0, Date().timeIntervalSince(startingAt ?? Date())) / 2000)
-            reportedFraction = max(reportedFraction, estimate)
-            continued?.progress.completedUnitCount = Int64((fraction * 1000).rounded(.down))
+            reportedFraction = job?.progressFraction() ?? 0
+            // An unknown denominator is indeterminate, including in the system activity.
+            continued?.progress.totalUnitCount = job?.state == .succeeded ? 1 : -1
+            continued?.progress.completedUnitCount = job?.state == .succeeded ? 1 : Int64(job?.progress?.completedTasks ?? 0)
             let detail = job?.progressDetail.map { $0 + " · " } ?? ""
-            continued?.updateTitle(title, subtitle: String("\(Int(fraction * 100))% estimated · \(detail)\(stage)".prefix(180)))
+            continued?.updateTitle(title, subtitle: String("\(detail)\(stage)".prefix(180)))
         }
         NotificationCenter.default.post(name: Self.changed, object: self)
     }

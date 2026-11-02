@@ -223,15 +223,13 @@ import OrbitCore
         guard let cell = cell as? CodeBuildAppCell else { return }
         let job = app.jobID.flatMap { jobs[$0] }
         let busy = starting == app.key || job?.state == .running
-        let fraction = starting == app.key ? environment.builds.fraction : (job.map { environment.builds.fraction(for: $0) } ?? 0)
         cell.nameLabel.text = app.name
         cell.detailLabel.text = rowDetail(app)
         cell.setIcon(app.iconPNG)
         cell.icon.accessibilityIdentifier = "CodeAppIcon:" + app.project.scheme
         cell.nightly.isOn = app.nightlyEnabled == true
         cell.progress.isHidden = !busy
-        cell.progress.progress = Float(fraction)
-        cell.progress.accessibilityValue = "\(Int(fraction * 100)) percent estimated"
+        cell.progress.update(job)
         let play = cell.play
         play.accessibilityLabel = (app.launchAfterInstall == true ? "Build and Run " : "Build and Install ") + app.name
         if play.configuration == nil {
@@ -243,9 +241,8 @@ import OrbitCore
     }
     private func rowDetail(_ app: CodeBuildApp) -> String {
         let job = app.jobID.flatMap { jobs[$0] }
-        let fraction = starting == app.key ? environment.builds.fraction : (job.map { environment.builds.fraction(for: $0) } ?? 0)
         let status = starting == app.key ? "Starting… · Keep Orbit open" : job.map {
-            $0.state == .running ? "\(Int(fraction * 100))% estimated · " + $0.progressStage + ($0.progressDetail.map { "\n" + $0 } ?? "") : $0.state.rawValue.capitalized
+            $0.state == .running ? $0.progressStage + ($0.progressDetail.map { "\n" + $0 } ?? "") : $0.state.rawValue.capitalized
         }
         let history = app.lastBuiltAt.map { "Built " + $0.formatted(date: .abbreviated, time: .shortened) } ?? "Not built yet"
         let revision = app.commitHash.map { String($0.prefix(8)) }

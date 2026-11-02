@@ -28,7 +28,7 @@ import OrbitCore
     private let status = UIButton(type: .system)
     private let positionLabel = UILabel()
     private let footer = UIStackView()
-    private let buildProgress = UIProgressView(progressViewStyle: .default)
+    private let buildProgress = CodeBuildProgressView()
     private let buildStatus = UILabel()
     private let buildSummary = UIStackView()
     private let empty = UIContentUnavailableView(configuration: .empty())
@@ -144,9 +144,8 @@ import OrbitCore
         if monitor.job?.installHandoff != nil { persistAll() }
         if let value = monitor.job, value.id == job?.id { job = value; buildButton.menu = buildMenu() }
         buildSummary.isHidden = !monitor.isStarting && monitor.job?.state != .running
-        buildStatus.text = "\(Int(monitor.fraction * 100))% estimated · \(monitor.stage)\n" + (monitor.job?.progressDetail.map { $0 + "\n" } ?? "") + monitor.backgroundMessage
-        buildProgress.progress = Float(monitor.fraction)
-        buildProgress.accessibilityValue = "\(Int(monitor.fraction * 100)) percent estimated"
+        buildStatus.text = monitor.stage + "\n" + (monitor.job?.progressDetail.map { $0 + "\n" } ?? "") + monitor.backgroundMessage
+        buildProgress.update(monitor.job)
     }
     @objc private func files() { openFiles?() }
     @objc private func background() { persistAll(); poll?.invalidate(); poll = nil; analysis?.cancel(); hideCompletions() }
@@ -662,7 +661,7 @@ import OrbitCore
 }
 @MainActor final class CodeLogController: UIViewController {
     private let text = UITextView()
-    private let progress = UIProgressView(progressViewStyle: .default)
+    private let progress = CodeBuildProgressView()
     private let percent = UILabel()
     private let work = UILabel()
     private weak var monitor: CodeBuildMonitor?
@@ -723,11 +722,10 @@ import OrbitCore
         text.isHidden = !showConsole; summary.isHidden = showConsole
         text.text = value.log.isEmpty ? "Starting on your Mac…" : value.log
         console.setTitle(showConsole ? "Hide Console" : "Show Console", for: .normal)
-        let fraction = monitor?.fraction(for: value) ?? value.progressFraction()
-        progress.progress = Float(fraction)
+        progress.update(value)
         work.text = value.progressDetail; work.isHidden = value.progressDetail == nil
-        progress.accessibilityValue = "\(Int(fraction * 100)) percent estimated"
-        percent.text = value.state == .running ? "\(Int(fraction * 100))% · Estimated" : (value.state == .succeeded ? "100%" : nil)
+        percent.text = value.state == .succeeded ? "100%" : (value.state == .running && value.progressDetail == nil ? "Waiting for build updates…" : nil)
+        percent.isHidden = percent.text == nil
         progress.isHidden = value.state == .failed || value.state == .cancelled
         detail.isHidden = value.state == .succeeded || value.state == .cancelled
         switch value.state {

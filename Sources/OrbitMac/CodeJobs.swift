@@ -9,11 +9,9 @@ public actor CodeJobs {
     private var processes: [String: CodeProcess] = [:]
     private var waiting: [(CodeRequest, CodeProject, CodeJob, CodeProcess)] = []
     private let installGate = CodeInstallHandoffGate()
-    private var workloads: [String: Int] = [:]
     private var requests: [String: String] = [:]
     public init(root: URL, phoneBundleID: String? = nil) throws {
         self.root = root; self.phoneBundleID = phoneBundleID
-        workloads = (try? JSONDecoder().decode([String: Int].self, from: Data(contentsOf: root.appendingPathComponent("BuildWorkloads.json")))) ?? [:]
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         CodeProfileRefresh.recover(root: root)
         for url in (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [] where url.pathExtension == "json" {
@@ -139,34 +137,30 @@ public actor CodeJobs {
         try await installGate.wait(id)
         guard jobs[id]?.state == .running else { throw CancellationError() }
     }
-    /// The percentage is a work estimate: counts come from real task completion,
-    /// with the preceding successful workload as the denominator when available.
+    /// Track this invocation’s actual commands. Xcode’s result stream has no
+    /// total task count, so never turn these counts into a guessed percentage.
     func runBuildCommand(_ executable: String = "/usr/bin/xcodebuild", arguments: [String], directory: String,
-                         process: CodeProcess, log: URL, id: String, workloadKey: String,
+                         process: CodeProcess, log: URL, id: String,
                          from start: Double, to end: Double, archive: Bool = false) async throws -> Int32 {
         let events = root.appendingPathComponent(id + "-build-events.jsonl")
         let reader = try CodeBuildEventReader(url: events)
-        let expected = workloads[workloadKey]
         let streamFlags = archive ? ["--archive-xcodebuild-flag=-resultStreamPath", "--archive-xcodebuild-flag=" + events.path,
             "--archive-xcodebuild-flag=-resultBundlePath", "--archive-xcodebuild-flag=" + root.appendingPathComponent(id + "-archive.xcresult").path]
                                   : ["-resultStreamPath", events.path]
         let exit = try await process.run(executable, arguments + streamFlags, directory: directory, log: log,
                                         timeout: archive ? 7200 : 3600, onTick: { [weak self] in
             if let snapshot = await reader.read() {
-                await self?.recordBuildEvents(snapshot, id: id, expected: expected, from: start, to: end, archive: archive)
+                await self?.recordBuildEvents(snapshot, id: id, from: start, to: end, archive: archive)
             }
         })
         let snapshot = await reader.drain()
-        recordBuildEvents(snapshot, id: id, expected: expected, from: start, to: end, archive: archive)
-        if exit == 0, snapshot.completed > 0 {
-            workloads[workloadKey] = snapshot.completed
-            try? JSONEncoder().encode(workloads).write(to: root.appendingPathComponent("BuildWorkloads.json"), options: .atomic)
-        }
+        recordBuildEvents(snapshot, id: id, from: start, to: end, archive: archive)
         return exit
     }
-    private func recordBuildEvents(_ snapshot: CodeBuildEventSnapshot, id: String, expected: Int?, from start: Double, to end: Double, archive: Bool) {
+    private func recordBuildEvents(_ snapshot: CodeBuildEventSnapshot, id: String, from start: Double, to end: Double, archive: Bool) {
         guard var job = jobs[id], job.state == .running else { return }
-        let value = max(job.progress?.fraction() ?? start, start + (end - start) * snapshot.fraction(expectedTasks: expected))
+        // Only confirmed stage completion advances the internal stage marker.
+        let value = snapshot.buildSucceeded ? end : start
         let operation = snapshot.buildSucceeded && archive ? "Archive complete · Exporting, uploading and processing TestFlight build…" : snapshot.operation
         job.progress = CodeJobProgress(stage: operation, start: value, end: value, estimatedSeconds: 1, reportedFraction: value)
         job.progress?.completedTasks = snapshot.completed; job.progress?.activeTasks = snapshot.active
@@ -215,13 +209,13 @@ public actor CodeJobs {
                     "--export-options", export.path,
                     "--archive-xcodebuild-flag=-allowProvisioningUpdates", "--export-xcodebuild-flag=-allowProvisioningUpdates"],
                     directory: project.root, process: process, log: log, id: job.id,
-                    workloadKey: project.path + "|" + project.scheme + "|archive", from: 0.15, to: 0.75, archive: true)
+                    from: 0.15, to: 0.75, archive: true)
             } else {
                 stage(job.id, "Compiling on your Mac…", from: 0.10, to: 0.99, seconds: 240)
                 exit = try await runBuildCommand(arguments: project.xcodeArguments + ["-configuration", "Debug",
                     "-destination", "generic/platform=iOS Simulator", "-derivedDataPath", derivedData(project).path, "-resultBundlePath", root.appendingPathComponent(job.id + ".xcresult").path, "build"],
                     directory: project.root, process: process, log: log, id: job.id,
-                    workloadKey: project.path + "|" + project.scheme + "|simulator", from: 0.10, to: 0.99)
+                    from: 0.10, to: 0.99)
             }
             if exit == 0, request.operation != .runOnDevice { recordCompilation(job.id, revision: revision) }
             completed.state = exit == 0 ? .succeeded : .failed

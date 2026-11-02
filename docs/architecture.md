@@ -389,6 +389,16 @@ Scheduled retained jobs expose their compilation snapshot alongside their durabl
 installation state, translated by `CodeJob.targetStatus` for the same UI.
 Retained artifacts remain available for phone refresh, retries and reconciliation.
 
+Build work comes from bounded, incremental `xcodebuild -resultStreamPath` events:
+command sections open/close to update running/completed counts and the operation.
+The stream does not supply a reliable total task count. Orbit therefore shows
+live work counts with an indeterminate indicator during builds; it does not divide
+by a previous build's workload or advance progress based on elapsed time. Apps,
+Project, the console summary and the system activity share this behavior. Legacy
+companions without events show the last stage and wait for updates. Internal
+stage markers advance only at confirmed boundaries, and only job success shows
+100%; a successful build action still does not confirm phone installation.
+
 Orbit's detached checkout resolves its bundle prefix, exact phone bundle ID and
 team from the original ignored `Config/Local.xcconfig`, overriding stale catalog
 values. Only those validated settings enter a private ignored checkout config;

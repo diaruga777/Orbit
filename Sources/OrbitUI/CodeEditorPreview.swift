@@ -142,7 +142,7 @@ private actor PreviewFiles {
                 if flags.contains("--build-events") {
                     let completed = Int(Date().timeIntervalSince(buildStartedAt ?? Date())) * 3
                     response.job?.progress = CodeJobProgress(stage: "Compile Feature.swift (arm64)", start: 0.25, end: 0.80,
-                        estimatedSeconds: 1, reportedFraction: min(0.79, 0.25 + Double(completed) / 100))
+                        estimatedSeconds: 1, reportedFraction: 0.25)
                     response.job?.progress?.completedTasks = completed; response.job?.progress?.activeTasks = 2
                 }
                 if flags.contains("--build-self-update") {
