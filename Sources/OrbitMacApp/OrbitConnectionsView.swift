@@ -55,7 +55,7 @@ struct OrbitConnectionsView: View {
                 if saving { ProgressView("Setting up connections…").controlSize(.small) }
                 if !error.isEmpty { Text(error).foregroundStyle(.red).textSelection(.enabled) }
                 if !message.isEmpty { Text(message).textSelection(.enabled) }
-                Text("Keep your Mac awake with Orbit running. For installs, authorize this phone in its Mac tab while connected by cable first.")
+                Text("Keep your Mac awake with Orbit running. For installs, authorize this phone in More → Mac while connected by cable first.")
                     .font(.callout).foregroundStyle(.secondary)
             }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
         }

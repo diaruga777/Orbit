@@ -295,7 +295,7 @@ import OrbitTransport
                             let result = try await self.rpc("artifact", ["jobID": jobID, "offset": offset])
                             return try JSONDecoder().decode(CodeRefreshArchiveChunk.self, from: JSONSerialization.data(withJSONObject: result))
                         }
-                        self.show("Build cached. Open Refresh to renew it on this phone.")
+                        self.show("Build cached. Open More → Phone-only refresh to renew it on this phone.")
                     } catch { self.show(error.localizedDescription) }
                 } })
             }

@@ -181,7 +181,7 @@ import OrbitCore
             self.message = "Exporting your iPhone’s pairing file…"
             let file = try await OrbitPairingExport.export(deviceID: self.state.deviceID, root: OrbitPaths.root)
             NSWorkspace.shared.activateFileViewerSelecting([file])
-            self.message = "Pairing file ready. AirDrop it to your iPhone, then open Orbit → Refresh → Pairing File to import it. Keep it private and delete the exported copy afterward."
+            self.message = "Pairing file ready. AirDrop it to your iPhone, then open Orbit → More → Phone-only refresh → Pairing File to import it. Keep it private and delete the exported copy afterward."
         }
     }
     func checkConnection(_ model: OrbitMacModel) {

@@ -100,7 +100,7 @@ struct OrbitSetupView: View {
                     Text("If Developer Mode is missing, open Xcode → Window → Devices and Simulators. If asked to trust your developer account, use Settings → General → VPN & Device Management on iPhone.").font(.callout).foregroundStyle(.secondary)
                 } else {
                     Label("Orbit is installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                    Text("Open Orbit on your iPhone. In Mac → Connect a Mac, paste this code. Compare the phone ID before approving here.")
+                    Text("Open Orbit on your iPhone. In More → Mac → Connect a Mac, paste this code. Compare the phone ID before approving here.")
                     HStack {
                         Button(model.pairing.isEmpty ? "Create Connection Code" : "New Code", action: model.pair)
                         Button("Copy Code") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(model.pairing, forType: .string) }.disabled(model.pairing.isEmpty)
@@ -108,7 +108,7 @@ struct OrbitSetupView: View {
                     }
                     if !model.pairing.isEmpty { Text(model.pairing).font(.caption.monospaced()).textSelection(.enabled) }
                     if setup.paired { Label("Your iPhone is connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
-                    Text("You can also connect later from Orbit’s Mac tab.").font(.callout).foregroundStyle(.secondary)
+                    Text("You can also connect later from More → Mac in Orbit.").font(.callout).foregroundStyle(.secondary)
 
                 }
                 if !setup.log.isEmpty { DisclosureGroup("Installation Log") { ScrollView { Text(setup.log).font(.caption.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 150) } }
@@ -116,7 +116,7 @@ struct OrbitSetupView: View {
                 EmptyView() // Migrated to the current steps when loading saved setup.
             case .complete:
                 Text("Orbit is ready.").font(.title2)
-                Text("Your Mac is ready to build apps. You can set up phone-only refresh later in Orbit’s Refresh tab.")
+                Text("Your Mac is ready to build apps. You can set up phone-only refresh later in More → Phone-only refresh in Orbit.")
                 Text("Add a JavaScript file in Widgets, or copy the prompt there to make one with your favorite AI app.").foregroundStyle(.secondary)
             }
         }
