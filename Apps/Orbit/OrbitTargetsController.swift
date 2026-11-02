@@ -110,7 +110,9 @@ import OrbitTransport
     }
     private func refreshMacStatus(origin: String) async {
         do {
-            let value = try await rpc("mac_update_status", [:]) as? [String: Any] ?? [:]
+            guard let value = try await rpc("mac_update_status", [:]) as? [String: Any] else {
+                throw CodeFailure("Your Mac sent an invalid update status. Update Orbit Mac and retry.")
+            }
             if origin == peerID() {
                 macUpdate = value
                 if let data = try? JSONSerialization.data(withJSONObject: value) { macCache.save(data, peer: origin) }

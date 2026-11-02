@@ -5,6 +5,7 @@ final class CodeEditorUITests: XCTestCase {
         let app = XCUIApplication(); app.launchArguments = ["--target-build-preview", "--target-cache-delayed"]; app.launch()
         XCTAssertTrue(app.cells["OrbitTarget:cached"].waitForExistence(timeout: 4))
         XCTAssertFalse(app.cells["OrbitTarget:fixture"].exists)
+        attach("Cached apps while refreshing", app)
         XCTAssertTrue(app.cells["OrbitTarget:fixture"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.cells["OrbitTarget:cached"].exists)
     }
