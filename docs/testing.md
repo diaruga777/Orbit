@@ -938,3 +938,16 @@ Create the stream file before building and pass both `-resultStreamPath` and
 `-resultBundlePath` to `xcodebuild`. Real task counts measure work, not remaining
 time. Physical installation, provisioning renewal, background activity delivery,
 notarization and marketplace acceptance remain separate checks.
+
+Live-work verification (2026-11-02): bootstrap generated native dependencies in
+committed detached source. All 232 Swift checks passed (six optional fixtures
+skipped), all 48 Python checks passed, and both Go race suites plus helper vet
+passed. A real iOS Simulator build's result stream passed the optional replay
+check separately. Both client builds passed with the ignored local identity;
+the complete Mac review bundle passed strict signature verification. Four final
+Simulator UI checks passed: live task counts/current operation, missing-metadata
+waiting, Apps progress/completion and reconnect/failure. Live-count and waiting
+screenshots were reviewed. An initial UI assertion raced two successive polling
+snapshots; checking each snapshot's semantics fixed it. No physical phone access,
+Apple sign-in, installation/renewal, physical system activity delivery, public
+notarization or marketplace acceptance was performed.
