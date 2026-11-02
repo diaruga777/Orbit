@@ -9,7 +9,7 @@ are in [app icons](docs/design/app-icons.md).
 
 You need a Mac, an iPhone, and either a coding agent subscription/credits or enough development experience to configure the tools yourself. Orbit includes an MCP and setup/deploy skills, so an agent can follow this README end to end. Orbit does not require an AI provider, subscription, hosted backend or paid Apple membership.
 
-> Free Apple accounts are supported. Apple limits Personal Teams to three installed development apps per device, three registered devices and ten App IDs; profiles expire after seven days. Orbit itself uses one app slot. Orbit defaults to **every six days**, leaving a day for recovery. This works for compatible apps within Apple's limits—not every app or entitlement. A new build needs an awake, logged-in Mac and a reachable, trusted phone. Once cached on iPhone, the same installed build can be renewed without the Mac through the phone’s More → Phone-only refresh. [Apple account limits](https://developer.apple.com/help/account/basics/about-your-developer-account)
+> Free Apple accounts are supported. Apple limits Personal Teams to three installed development apps per device, three registered devices and ten App IDs; profiles expire after seven days. Orbit itself uses one app slot. Orbit defaults to **every six days**, leaving a day for recovery. This works for compatible apps within Apple's limits—not every app or entitlement. A new build needs an awake, logged-in Mac and a reachable, trusted phone. Once cached on iPhone, the same installed build can be renewed without the Mac through **More → Phone-only refresh**. [Apple account limits](https://developer.apple.com/help/account/basics/about-your-developer-account)
 
 ## Website
 
@@ -43,11 +43,11 @@ without changing your Mac’s system selection.
 
 Phone selection, Developer Mode guidance, build/install and connection code share
 one page. Installation is complete only after installed-revision readback;
-pairing can also be finished later. On iPhone, **More → Phone-only refresh** and **More → Remote builds** hold the
-optional setup. Each row is badged until its own setup is complete; More is
+pairing can also be finished later. On iPhone, **More → Phone-only refresh**
+and **More → Remote builds** hold the optional setup. Each row is badged until its own setup is complete; More is
 badged while either needs setup. Remote setup uses the saved connection, so a
-disconnected Mac does not reset it. Orbit Mac keeps its **Take Orbit with you** banner. Local Wi-Fi is
-the default; enabling remote connections is an explicit later choice.
+disconnected Mac does not reset it. Orbit Mac keeps its **Take Orbit with you**
+banner. Local Wi-Fi is the default; enabling remote connections is an explicit later choice.
 
 The DMG contains the committed phone project, native archives and local agent
 launcher. End users do not need to clone this repository or install Go/XcodeGen.
@@ -90,7 +90,7 @@ still needs a Mac build. See [phone refresh](docs/local-refresh.md).
 
 While phone-only refresh setup is unfinished, Orbit asks to allow notifications
 and keeps one reminder for 24 hours before the earliest known installed app
-expires. Tapping it opens Refresh setup, through More → Phone-only refresh.
+expires. Tapping it opens **More → Phone-only refresh**.
 Orbit uses the signed app/extension profiles’ actual expiry (including paid-team
 builds); without that metadata it assumes seven days after confirmed installation.
 Open Orbit after Mac installs so it can sync the latest dates. The scheduled

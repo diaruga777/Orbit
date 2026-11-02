@@ -30,7 +30,7 @@ Every install has a durable target/job ID. An interrupted wizard resumes the job
 only installation/readback success completes the phone-install portion of setup.
 Pairing is on that same page, requires explicit phone approval, and can be finished
 later. Phone-only refresh and remote building are optional after the wizard; their
-banner and setup destinations do not prove a successful renewal or remote install.
+setup badges and destinations do not prove a successful renewal or remote install.
 Use the intended account/phone to perform physical acceptance before releasing.
 
 The explicit pairing-file export uses the selected native phone’s existing Apple

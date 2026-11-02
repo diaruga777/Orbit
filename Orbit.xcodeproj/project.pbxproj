@@ -118,7 +118,7 @@
 		AA0E97AE18D6AF113D5ECCC8 /* Orbit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Orbit.entitlements; sourceTree = "<group>"; };
 		ACC37FFD45B58CD19037BAD0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		AD9F1F445E318683CBE8B089 /* OrbitMCPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitMCPService.swift; sourceTree = "<group>"; };
-		AEAA779E1C97088F37F3331F /* Orbit-settings-setup */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Orbit-settings-setup"; path = .; sourceTree = SOURCE_ROOT; };
+		E916CC1D9F77632A8CA8529C /* Orbit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Orbit; path = .; sourceTree = SOURCE_ROOT; };
 		B0A01C472F4A3668A1DD14B8 /* OrbitSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitSetupView.swift; sourceTree = "<group>"; };
 		B537A0D3AF8759D60DFEEA20 /* OrbitSettingsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitSettingsController.swift; sourceTree = "<group>"; };
 		B74C6BC763E00FD91024D63A /* OrbitUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OrbitUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -263,7 +263,7 @@
 		A0A25C17E75C74C24DCDCEB5 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				AEAA779E1C97088F37F3331F /* Orbit-settings-setup */,
+				E916CC1D9F77632A8CA8529C /* Orbit */,
 			);
 			name = Packages;
 			sourceTree = "<group>";

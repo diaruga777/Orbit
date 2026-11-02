@@ -4,7 +4,7 @@ Orbit can renew a cached development build without the Mac. A code change still
 needs a new Mac build. Refresh does not bypass Apple account limits, add paid
 capabilities, or guarantee background execution.
 
-In the iPhone Refresh tab:
+On iPhone, open **More → Phone-only refresh**:
 
 1. Connect to Wi-Fi and install/enable LocalDevVPN.
 2. Import this phone’s pairing plist. The Mac wizard can explicitly export its

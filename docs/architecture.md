@@ -77,8 +77,8 @@ The state, pairing identities and installation journals are never recreated.
 The active wizard has six steps: welcome, tools, folder access, Apple account,
 iPhone, ready. Legacy agent/install/connect/refresh step values migrate without
 changing existing source, signing identifiers or durable installation job IDs.
-Phone-only refresh is not required by the wizard. The iPhone's explicit More tab holds separate Phone-only refresh and Remote
-builds rows, plus Mac connection settings. Each setup row has its own badge;
+Phone-only refresh is not required by the wizard. The iPhone's explicit More tab
+holds separate Phone-only refresh and Remote builds rows, plus Mac connection settings. Each setup row has its own badge;
 More is badged when either is incomplete. Phone refresh reads the refresh
 engine's durable setup check, including a previously verified connection, while
 remote setup reads the authenticated saved route snapshot (falling back to an
