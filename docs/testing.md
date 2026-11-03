@@ -106,6 +106,15 @@ config permissions, existing configs, missing/mismatched saved state, source/con
 symlinks, and rejection by the real Host build RPC before work is submitted.
 These fixtures never access a phone or Apple account.
 
+Legacy identity verification (2026-11-03): bootstrap generated the native
+dependencies from committed detached source using the installed full Xcode.
+All 238 Swift checks completed without failures (six optional fixtures skipped),
+all 48 Python checks passed, and both Go race suites plus helper vet passed.
+The iOS Simulator client and complete Mac review bundle built with the ignored
+local identity. Strict Mac signature verification and the packaged source
+extraction/resume fixture passed. No physical phone access, Apple sign-in,
+installation/renewal, public notarization or marketplace acceptance was tested.
+
 Before treating a release as verified for unattended personal use, test using the intended Xcode/account/phone:
 
 - First installation with a free Personal Team, then profile renewal before seven-day expiry; verify the installed profile's new expiration and extensions.
