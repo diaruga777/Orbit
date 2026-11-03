@@ -1077,3 +1077,13 @@ rejection, structured editor payloads and service/transport errors.
 checks the recovery message on a paused retained job. No fixture contacts Apple
 or a phone. Physical self-update deployment and subsequent phone-initiated
 build/install acceptance are separate from these checks.
+
+Phone-RPC verification (2026-11-03): bootstrap generated source-built native
+dependencies in committed detached source. All 246 Swift checks completed
+without failures (six optional fixtures skipped), including the real Host
+acknowledgement test. All 48 Python checks, both Go race suites and helper vet
+passed. The iOS Simulator client and all ten monitor checks passed; the complete
+Mac review bundle built with the ignored local identity and passed strict
+signature verification. The initial test compilation required moving an awaited
+Host reply outside a synchronous XCTest autoclosure. These are synthetic checks;
+physical deployment and phone-initiated self-update acceptance remain separate.
