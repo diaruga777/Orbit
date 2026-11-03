@@ -387,6 +387,13 @@ scheme in Advanced. Apps exposed only through a custom scheme remain available.
 
 ## Apps build feedback and self-build identity
 
+The phone's editor/control `CodeClient` bridges its encoded request bytes to the
+Host's authenticated `code` JSON RPC with `CodeClient.overRPC`. It parses those
+bytes as the request object; re-encoding `Data` would send a base64 string and
+break editor requests, phone forwarding and self-update acknowledgement while
+Apps' separate build/status RPCs still appeared to work. Retained-job recovery
+messages remain visible in the running progress screen after a handoff timeout.
+
 Apps and Project share `CodeBuildMonitor`, restored from Luna Code's stage/task
 progress, console, durable job reattachment, reconnect handling and
 `BGContinuedProcessingTask` system Live Activity. Apps polls the shared Host

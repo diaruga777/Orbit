@@ -134,6 +134,16 @@ public struct CodeResponse: Codable, Sendable {
 public struct CodeClient: Sendable {
     public var exchange: @Sendable (Data) async throws -> Data
     public init(exchange: @escaping @Sendable (Data) async throws -> Data) { self.exchange = exchange }
+    /// Bridge the already encoded Code request into an authenticated JSON RPC.
+    /// Encoding `data` again would turn the request object into a base64 string.
+    public static func overRPC(_ rpc: @escaping @Sendable ([String: Any]) async throws -> Any) -> CodeClient {
+        CodeClient { data in
+            guard let request = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw CodeFailure("Invalid editor request.")
+            }
+            return try JSONSerialization.data(withJSONObject: await rpc(request))
+        }
+    }
     public func call(_ request: CodeRequest) async throws -> CodeResponse {
         let data = try JSONEncoder().encode(request)
         guard data.count <= CodeWire.maxPayloadBytes else { throw CodeFailure("This request is too large.") }

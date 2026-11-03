@@ -139,6 +139,18 @@ import OrbitCore
         XCTAssertEqual(oldTask.completions, [true])
         XCTAssertEqual(monitor.job?.state, .failed)
     }
+    func testHandoffTimeoutExplainsRecoveryWhileRetainingTheMacJob() {
+        let scheduler = Scheduler(), monitor = monitor(scheduler)
+        let target = CodeOvernightTarget(peerID: "mac", deviceID: "fixture",
+            project: CodeProject(path: "/Fixture/App.xcodeproj", scheme: "App"), branch: "main", generation: "fixture")
+        var retained = CodeOvernightJob(requestID: "request", invocationID: "fixture", target: target)
+        retained.state = .waitingForPhone
+        retained.error = CodeOvernightError(.interrupted, stage: "handoff",
+            recovery: "The build finished, but the update couldn’t start installing. Reopen Orbit and try the build again.")
+        monitor.observe(retained.monitoring())
+        XCTAssertEqual(monitor.backgroundMessage, retained.error?.recovery)
+        XCTAssertEqual(monitor.job?.state, .running, "The retained artifact can still install")
+    }
     func testBackgroundAttemptIsScopedToThePairedMac() {
         let scheduler = Scheduler(); var peer = "mac-one"
         let monitor = monitor(scheduler, peer: { peer })

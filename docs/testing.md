@@ -1065,3 +1065,15 @@ progress/completion, reconnect/failure and self-update handoff/relaunch UI tests
 passed on Simulator. No physical phone access, Apple sign-in, actual system
 activity delivery, installation/renewal, public notarization or marketplace
 acceptance was performed.
+
+
+## Phone Code RPC bridge
+
+`CodeClientRPCTests` sends a self-update acknowledgement through the production
+JSON adapter and real authenticated Host `code` handler to a synthetic retained
+job. It checks persisted acknowledgement, idempotent replies, wrong-token
+rejection, structured editor payloads and service/transport errors.
+`CodeBuildMonitorTests.testHandoffTimeoutExplainsRecoveryWhileRetainingTheMacJob`
+checks the recovery message on a paused retained job. No fixture contacts Apple
+or a phone. Physical self-update deployment and subsequent phone-initiated
+build/install acceptance are separate from these checks.

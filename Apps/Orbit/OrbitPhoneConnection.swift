@@ -19,9 +19,8 @@ final class OrbitPhoneConnection: @unchecked Sendable {
     }
     var localID: String { UserDefaults.standard.string(forKey: "Orbit.localID") ?? "" }
     var peerID: String { (try? OrbitPairingCode(string: pairingCode).deviceID.description) ?? "unpaired" }
-    lazy var client = CodeClient { [self] request in
-        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] ?? [:]
-        return try JSONSerialization.data(withJSONObject: await rpc("code", object))
+    lazy var client = CodeClient.overRPC { [self] request in
+        try await rpc("code", request)
     }
     func offerInstallWindow(seconds: Int) async {
         let deadline = Date().addingTimeInterval(Double(seconds))

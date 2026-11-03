@@ -42,6 +42,7 @@ import OrbitCore
                 ? "Installing the update. Orbit may close."
                 : "Keep Orbit open until the update starts installing."
         }
+        if let message = job?.failureMessage { return message }
         if disconnected { return "Reconnecting… Your Mac can keep building while you wait." }
         if monitoringStopped || !requested {
             return "You can leave Orbit. Come back to check progress."
