@@ -26,7 +26,8 @@ extension CodeJobs {
                   let product = app["FULL_PRODUCT_NAME"], product.hasSuffix(".app") else {
                 throw CodeFailure("Choose a runnable iOS app scheme in the row menu.")
             }
-            try CodeOrbitIdentity.verify(bundleID: bundle, project: buildProject)
+            try CodeOrbitIdentity.verify(bundleID: bundle, project: buildProject,
+                phoneBundleID: phoneBundleID, monitorBundleID: options.monitorBundleID)
             var localApp: [String: String]?
             if CodeDeviceSigning.team(app) == nil {
                 // Git worktrees omit ignored local signing configuration. Resolve
@@ -145,6 +146,16 @@ struct CodeDeviceCheckout {
                 let local = directory.appendingPathComponent("Config/Local.xcconfig")
                 try Data("ORBIT_BUNDLE_PREFIX = \(prefix)\nDEVELOPMENT_TEAM = \(team)\nORBIT_IOS_BUNDLE_IDENTIFIER = \(bundle)\n".utf8).write(to: local, options: .atomic)
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: local.path)
+                // Source checkouts keep generated native archives ignored; the
+                // bundled wizard snapshot already commits its reviewed copies.
+                for relative in ["Vendor/OrbitNet.xcframework", "Vendor/DeviceGateway/IDevice.xcframework"] {
+                    let destination = directory.appendingPathComponent(relative)
+                    let native = URL(fileURLWithPath: project.root).appendingPathComponent(relative)
+                    if !FileManager.default.fileExists(atPath: destination.path), FileManager.default.fileExists(atPath: native.path) {
+                        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        try FileManager.default.copyItem(at: native, to: destination)
+                    }
+                }
             }
         } catch {
             _ = try? await CodeDeviceSupport.git(["worktree", "remove", "--force", directory.path], directory: repo, root: root)

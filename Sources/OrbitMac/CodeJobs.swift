@@ -5,7 +5,7 @@ import OrbitCore
 public actor CodeJobs {
     public let root: URL
     private var jobs: [String: CodeJob] = [:]
-    private let phoneBundleID: String?
+    let phoneBundleID: String?
     private var processes: [String: CodeProcess] = [:]
     private var waiting: [(CodeRequest, CodeProject, CodeJob, CodeProcess)] = []
     private let installGate = CodeInstallHandoffGate()

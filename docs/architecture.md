@@ -423,6 +423,17 @@ agree. It validates the restored values with the same self-build validator,
 preserves an explicit phone bundle ID, writes owner-only permissions and never
 overwrites an existing config or follows a symlink outside private source.
 Missing or conflicting saved identity cannot manufacture a replacement identity.
+For a source-installed Mac companion, its pinned `OrbitSourceRoot` takes precedence
+over old wizard snapshots. Host reconciles private bundled-source Orbit targets to
+that checkout's validated local prefix/team/exact phone ID before creating the
+build service, retaining target IDs, devices, schedules and job history. Success
+for a different bundle is cleared. Active targets are never silently rebound.
+The wizard uses the canonical source too and carries explicit phone IDs through
+setup. Detached phone builds also copy the two ignored generated native archives
+from the canonical checkout, preserving framework symlinks; committed archives in
+bundled snapshots take precedence. Both device compilation and retained-artifact installation compare Orbit's
+actual bundle ID with the configured phone ID and, when present, the requesting
+client's bundle ID. A mismatch produces a durable failure before installation.
 
 Known Xcode signing failures are summarized from bounded startup and tail log reads. Capability/profile mismatches lead the durable job failure shown by Mac, phone and CLI/MCP. App Groups and Time Sensitive Notifications have specific recovery copy that includes embedded extensions. A generic “No Accounts” error directs users to check target/team provisioning without assuming they signed out. A correlated missing-token diagnostic explains that command-line signing can be unavailable while the account still appears signed in; only an explicit expired-session error prescribes signing in again. Unrelated account warnings do not replace a compiler failure. Summaries contain fixed recovery copy; raw account names, project paths and repository output remain in the job log. Orbit preserves the requested entitlements and leaves account authentication and profile updates to Xcode.
 

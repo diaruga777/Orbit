@@ -24,7 +24,7 @@ final class CodeOrbitIdentityTests: XCTestCase {
         XCTAssertEqual(try CodeOrbitIdentity.resolve(project), project)
         XCTAssertEqual(try JSONDecoder().decode(CodeProject.self, from: JSONEncoder().encode(selected)), selected)
     }
-    func testDetachedSelfBuildStagesOnlyIdentityAndPreservesSourceCheckout() async throws {
+    func testDetachedSelfBuildStagesIdentityAndNativeArchivesAndPreservesSourceCheckout() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let repo = root.appendingPathComponent("Repo"), state = root.appendingPathComponent("State")
@@ -35,18 +35,31 @@ final class CodeOrbitIdentityTests: XCTestCase {
         _ = try await git(["init", "-b", "main"])
         _ = try await git(["config", "user.name", "Orbit Tests"])
         _ = try await git(["config", "user.email", "orbit@example.invalid"])
-        try Data("Config/Local.xcconfig\n".utf8).write(to: repo.appendingPathComponent(".gitignore"))
+        try Data("Config/Local.xcconfig\nVendor/*.xcframework/\nVendor/DeviceGateway/*.xcframework/\n".utf8).write(to: repo.appendingPathComponent(".gitignore"))
         try Data("committed configuration".utf8).write(to: repo.appendingPathComponent("Config/Orbit.xcconfig"))
         try Data("committed project".utf8).write(to: repo.appendingPathComponent("Orbit.xcodeproj/project.pbxproj"))
         _ = try await git(["add", "."]); _ = try await git(["commit", "-m", "fixture"])
         let config = "ORBIT_BUNDLE_PREFIX = dev.test.orbit\nDEVELOPMENT_TEAM = ABCDEFGHIJ\nORBIT_IOS_BUNDLE_IDENTIFIER = dev.test.existing\nPRIVATE_UNRELATED_SETTING = do-not-copy\n"
         try Data(config.utf8).write(to: repo.appendingPathComponent("Config/Local.xcconfig"))
+        let archives = ["Vendor/OrbitNet.xcframework", "Vendor/DeviceGateway/IDevice.xcframework"]
+        for relative in archives {
+            let archive = repo.appendingPathComponent(relative)
+            try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
+            try Data("generated native archive".utf8).write(to: archive.appendingPathComponent("Info.plist"))
+            try FileManager.default.createSymbolicLink(atPath: archive.appendingPathComponent("Current").path, withDestinationPath: "Info.plist")
+        }
         try Data("unsaved project".utf8).write(to: repo.appendingPathComponent("Orbit.xcodeproj/project.pbxproj"))
         let before = try await git(["status", "--porcelain"])
         let checkout = try await CodeDeviceCheckout.create(project: CodeProject(path: repo.appendingPathComponent("Orbit.xcodeproj").path, scheme: "Orbit"), branch: "main", root: state, name: "identity")
         let staged = try String(contentsOf: checkout.directory.appendingPathComponent("Config/Local.xcconfig"), encoding: .utf8)
         XCTAssertTrue(staged.contains("ORBIT_IOS_BUNDLE_IDENTIFIER = dev.test.existing"))
         XCTAssertFalse(staged.contains("PRIVATE_UNRELATED_SETTING"))
+        for relative in archives {
+            let archive = checkout.directory.appendingPathComponent(relative)
+            XCTAssertEqual(try String(contentsOf: archive.appendingPathComponent("Info.plist"), encoding: .utf8), "generated native archive")
+            XCTAssertTrue(try archive.appendingPathComponent("Current").resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true)
+            XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: archive.appendingPathComponent("Current").path), "Info.plist")
+        }
         XCTAssertEqual(try String(contentsOf: checkout.directory.appendingPathComponent("Orbit.xcodeproj/project.pbxproj"), encoding: .utf8), "committed project")
         let branch = try await CodeDeviceSupport.git(["branch", "--show-current"], directory: checkout.directory.path, root: state)
         XCTAssertEqual(branch, "")

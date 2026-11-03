@@ -47,6 +47,7 @@ public struct OrbitSetupState: Codable, Sendable {
     public var step: OrbitSetupStep = .welcome
     public var teamID = ""
     public var bundlePrefix = ""
+    public var iosBundleID: String?
     public var deviceID = ""
     public var folder: String?
     public var source: String?
@@ -83,14 +84,25 @@ public struct OrbitToolReadiness: Sendable {
 /// No Apple passwords or pairing keys are part of this state or these logs.
 public actor OrbitSetup {
     public let root: URL
-    public init(root: URL) { self.root = root }
+    private let canonicalSource: URL?
+    public init(root: URL, canonicalSource: URL? = nil) {
+        self.root = root; self.canonicalSource = canonicalSource ?? OrbitPhoneIdentity.canonicalSource
+    }
     public func load() throws -> OrbitSetupState {
         let url = root.appendingPathComponent("setup.json")
-        guard FileManager.default.fileExists(atPath: url.path) else { return .init() }
-        var state = try JSONDecoder().decode(OrbitSetupState.self, from: Data(contentsOf: url))
+        var state = FileManager.default.fileExists(atPath: url.path)
+            ? try JSONDecoder().decode(OrbitSetupState.self, from: Data(contentsOf: url)) : OrbitSetupState()
         state.step = state.step.current
         if state.folder == nil { state.folder = OrbitSetupState.defaultFolder.path }
         if state.bundlePrefix.isEmpty { state.bundlePrefix = OrbitSetupState().bundlePrefix }
+        if let canonicalSource {
+            let project = try OrbitPhoneIdentity.project(at: canonicalSource)
+            if (state.iosBundleID ?? state.bundlePrefix + ".ios") != project.iosBundleID {
+                state.installJobID = nil; state.installed = false
+            }
+            state.source = canonicalSource.path; state.bundlePrefix = project.bundlePrefix!
+            state.teamID = project.developmentTeam!; state.iosBundleID = project.iosBundleID
+        }
         return state
     }
     public func save(_ state: OrbitSetupState) throws {
@@ -160,6 +172,10 @@ public actor OrbitSetup {
         return hardware["udid"] as? String == expected && hardware["reality"] as? String == "physical" && properties["developerModeStatus"] as? String == "enabled"
     }
     public func prepareSource(bundle: Bundle = .main) async throws -> URL {
+        if let canonicalSource {
+            _ = try OrbitPhoneIdentity.project(at: canonicalSource)
+            return canonicalSource
+        }
         guard let archive = bundle.url(forResource: "OrbitPhoneSource", withExtension: "zip"),
               let manifest = bundle.url(forResource: "OrbitPhoneSource", withExtension: "json") else {
             // Source builds can use an explicit checkout; a distributed DMG must
@@ -194,14 +210,15 @@ public actor OrbitSetup {
         guard source.standardizedFileURL.path.hasPrefix(root.appendingPathComponent("PhoneSource").standardizedFileURL.path + "/") else { return }
         guard OrbitSetupState.validTeam(state.teamID), OrbitSetupState.validPrefix(state.bundlePrefix) else { throw CodeFailure("Choose your Apple Account first.") }
         let file = source.appendingPathComponent("Config/Local.xcconfig")
-        var bundle = state.bundlePrefix + ".ios"
+        var bundle = state.iosBundleID ?? state.bundlePrefix + ".ios"
         if FileManager.default.fileExists(atPath: file.path) {
             let existing = try CodeOrbitIdentity.resolve(CodeProject(path: source.appendingPathComponent("Orbit.xcodeproj").path))
             guard existing.bundlePrefix == state.bundlePrefix else { throw CodeFailure("Keep Orbit’s existing bundle prefix to preserve phone data.") }
             bundle = existing.iosBundleID ?? bundle
         }
         // Account changes update the team while preserving the phone identity.
-        try Data("ORBIT_BUNDLE_PREFIX = \(state.bundlePrefix)\nDEVELOPMENT_TEAM = \(state.teamID)\nORBIT_IOS_BUNDLE_IDENTIFIER = \(bundle)\n".utf8).write(to: file, options: .atomic)
+        let config = try CodeOrbitIdentity.localConfiguration(bundlePrefix: state.bundlePrefix, developmentTeam: state.teamID, iosBundleID: bundle)
+        try Data(config.utf8).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
     /// Older bundled installs kept signing identity only in setup and the catalog.

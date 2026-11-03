@@ -106,6 +106,21 @@ config permissions, existing configs, missing/mismatched saved state, source/con
 symlinks, and rejection by the real Host build RPC before work is submitted.
 These fixtures never access a phone or Apple account.
 
+`OrbitCanonicalIdentityTests` covers a stale wizard target whose identity agrees
+with old setup but differs from the canonical checkout, including an exact bundle
+ID unrelated to the prefix. It checks Host catalog/config repair, unchanged local
+config, wizard source selection, active-job refusal, rejection of requests from a
+different Orbit instance and durable rejection of a retained wrong-bundle artifact
+before artifact access or installation. Other apps may still be built from Orbit.
+
+Canonical identity verification (2026-11-03): all 243 Swift checks completed
+without failures (six optional fixtures skipped), and all 48 Python checks passed.
+The detached-checkout fixture also verified native archive copying and relative
+framework links. The iOS Simulator app built and its actual Info.plist bundle ID
+matched the canonical local config. The Mac review bundle passed strict signature
+verification. Physical phone replacement and removal of any duplicate app remain
+separate from these checks.
+
 Legacy identity verification (2026-11-03): bootstrap generated the native
 dependencies from committed detached source using the installed full Xcode.
 All 238 Swift checks completed without failures (six optional fixtures skipped),

@@ -131,7 +131,8 @@ import OrbitCore
             guard self.phoneReady else { throw CodeFailure("Unlock your iPhone and turn on Developer Mode, then try again.") }
             let source = try await self.setup.prepareSource(); self.state.source = source.path
             try await self.setup.configureSource(source, state: self.state)
-            _ = try await model.rpc("setup_phone", ["bundlePrefix": self.state.bundlePrefix])
+            _ = try await model.rpc("setup_phone", ["bundlePrefix": self.state.bundlePrefix,
+                "bundleID": self.state.iosBundleID ?? self.state.bundlePrefix + ".ios"])
             // Setup installs a source snapshot committed in its own private
             // repository. Its identity lives in ignored local configuration.
             if let old = self.state.installTargetID, self.state.installJobID == nil {

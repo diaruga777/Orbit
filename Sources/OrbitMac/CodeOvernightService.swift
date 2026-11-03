@@ -126,7 +126,7 @@ public actor CodeOvernightService {
             let protected = Set(store.jobs().filter { $0.hasActionableArtifact || $0.needsInstallReconciliation }.compactMap { $0.artifact?.id })
             try artifacts.prune(protecting: protected)
             var request = CodeRequest(.runOnDevice); request.id = "overnight-compile-" + job.id; request.project = job.target.project
-            var options = CodeDeviceBuild(branch: job.target.branch, deviceID: job.target.deviceID)
+            var options = CodeDeviceBuild(branch: job.target.branch, deviceID: job.target.deviceID, monitorBundleID: job.monitorBundleID)
             options.installOnly = true; options.artifactTarget = job.target; request.deviceBuild = options
             let compilation = try await builds.start(request)
             job.compilationJobID = compilation.id; job.state = .building; job.revision += 1; try store.save(job)
@@ -158,6 +158,14 @@ public actor CodeOvernightService {
             while installBusy { try Task.checkCancellation(); try await Task.sleep(for: .milliseconds(250)) }
             try Task.checkCancellation()
             guard var job = store.jobs().first(where: { $0.id == id }), job.state != .cancelled, let artifact = job.artifact else { return }
+            do {
+                try CodeOrbitIdentity.verify(bundleID: artifact.bundleID, project: job.target.project,
+                    phoneBundleID: phoneBundleID, monitorBundleID: job.monitorBundleID)
+            } catch {
+                job.state = .failed
+                job.error = CodeOvernightError(.integrity, stage: "identity", recovery: error.localizedDescription)
+                job.revision += 1; try store.save(job); return
+            }
             installBusy = true; defer { installBusy = false }
             let process = CodeProcess(); installProcesses[id] = process; defer { installProcesses[id] = nil }
             let app: URL

@@ -190,6 +190,10 @@ Open `Orbit.xcodeproj`. Select the **Orbit** scheme and your phone, then Run. Xc
 Builds of older DMG-installed phone source restore a missing local identity file
 from matching saved setup, app and phone settings before building. Existing local
 files stay authoritative. Developer checkouts still require their own local config.
+When Orbit Mac was installed from a source checkout, setup and phone self-builds
+use that checkout's local identity. Older bundled-source catalog entries move to
+the canonical checkout. A self-build whose bundle ID differs from the configured
+phone app or the requesting Orbit app stops before installing another copy.
 
 For the Mac, choose **OrbitMac → My Mac → Run** in Xcode, or run:
 

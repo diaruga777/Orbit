@@ -4,15 +4,21 @@ import OrbitCore
 /// Carry the user's ignored Orbit identity into a committed detached checkout.
 /// Other apps retain their own signing and bundle settings.
 public enum CodeOrbitIdentity {
-    static func verify(bundleID: String, project: CodeProject) throws {
+    public static func isOrbit(_ project: CodeProject) -> Bool {
+        URL(fileURLWithPath: project.path).lastPathComponent == "Orbit.xcodeproj" &&
+            FileManager.default.fileExists(atPath: URL(fileURLWithPath: project.root).appendingPathComponent("Config/Orbit.xcconfig").path)
+    }
+    public static func verify(bundleID: String, project: CodeProject, phoneBundleID: String? = nil, monitorBundleID: String? = nil) throws {
+        if isOrbit(project), [phoneBundleID, monitorBundleID].compactMap({ $0 }).contains(where: { !$0.isEmpty && $0 != bundleID }) {
+            throw CodeFailure("This build would install a different Orbit app. Reopen Orbit Mac and try again from your original Orbit app.")
+        }
         if let expected = project.iosBundleID, expected != bundleID {
             throw CodeFailure("This Orbit revision doesn’t use your configured phone bundle ID. Update the selected branch before building it.")
         }
     }
     public static func resolve(_ project: CodeProject) throws -> CodeProject {
         let root = URL(fileURLWithPath: project.root)
-        guard URL(fileURLWithPath: project.path).lastPathComponent == "Orbit.xcodeproj",
-              FileManager.default.fileExists(atPath: root.appendingPathComponent("Config/Orbit.xcconfig").path) else { return project }
+        guard isOrbit(project) else { return project }
         let file = root.appendingPathComponent("Config/Local.xcconfig")
         guard let text = try? String(contentsOf: file, encoding: .utf8) else {
             throw CodeFailure("Set Orbit’s identity in Config/Local.xcconfig on your Mac before building.")

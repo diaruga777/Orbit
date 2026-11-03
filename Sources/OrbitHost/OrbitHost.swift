@@ -34,10 +34,13 @@ public actor OrbitHost {
     private var diagnosticStores: [String: OrbitDiagnostics] = [:]
     private var jobStates: [String: String] = [:]
     private var iconLookups: [String: Date] = [:]
+    private let canonicalSource: URL?
     public private(set) var configuration: OrbitConfiguration
     public private(set) var pairingUntil = Date.distantPast
-    public init(root: URL = OrbitPaths.root) throws {
+    public init(root: URL = OrbitPaths.root, canonicalSource: URL? = nil) throws {
+        let canonicalSource = canonicalSource ?? OrbitPhoneIdentity.canonicalSource
         self.root = root
+        self.canonicalSource = canonicalSource
         macTargets = OrbitMacTargets(root: root)
         macUpdate = OrbitMacUpdate(root: root)
         appDiagnostics = try OrbitAppDiagnosticCollector(root: root.appendingPathComponent("Logs/Apps"))
@@ -47,6 +50,18 @@ public actor OrbitHost {
         let configURL = root.appendingPathComponent("config.json"), targetsURL = root.appendingPathComponent("targets.json")
         configuration = FileManager.default.fileExists(atPath: configURL.path) ? try JSONDecoder().decode(OrbitConfiguration.self, from: Data(contentsOf: configURL)) : OrbitConfiguration()
         targets = FileManager.default.fileExists(atPath: targetsURL.path) ? try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: targetsURL)) : []
+        var phoneBundleID = configuration.phoneBundleID ?? Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String
+        if let canonicalSource {
+            do {
+                try OrbitPhoneIdentity.reconcile(root: root, source: canonicalSource, configuration: &configuration, targets: &targets)
+                phoneBundleID = configuration.phoneBundleID
+            } catch {
+                // Retained jobs must not fall back to an old wizard identity if
+                // the canonical source is temporarily missing or a job is active.
+                phoneBundleID = Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String ?? phoneBundleID
+                diagnostics.error("setup", "phone_identity", error)
+            }
+        }
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
         if !configuration.allowedRoots.isEmpty || configuration.appletFolder != nil || configuration.widgetFolder != nil {
             let base = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root
@@ -62,7 +77,7 @@ public actor OrbitHost {
             }
         }
         service = try CodeService(root: root.appendingPathComponent("Builds"),
-            installBundleID: configuration.phoneBundleID ?? Bundle.main.object(forInfoDictionaryKey: "OrbitPhoneBundleIdentifier") as? String,
+            installBundleID: phoneBundleID,
             installHelper: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/orbit-apple-adapter"), diagnostics: diagnostics)
     }
     public func collectAppDiagnostics() async {
@@ -253,7 +268,8 @@ public actor OrbitHost {
             guard peer == nil, targets.allSatisfy({ $0.jobID == nil && $0.pendingRequest == nil }) else { throw CodeFailure("Finish active builds before changing phone setup.") }
             let prefix = try required(p, "bundlePrefix")
             guard OrbitSetupState.validPrefix(prefix) else { throw CodeFailure("Choose a reverse-DNS bundle prefix.") }
-            let bundleID = prefix + ".ios"
+            let bundleID = p["bundleID"] as? String ?? prefix + ".ios"
+            guard OrbitSetupState.validPrefix(bundleID) else { throw CodeFailure("Choose a valid phone bundle ID.") }
             if let existing = configuration.phoneBundleID, existing != bundleID { throw CodeFailure("Keep Orbit’s existing bundle prefix to preserve phone data.") }
             if configuration.phoneBundleID == bundleID { return ["bundleID": bundleID] }
             configuration.phoneBundleID = bundleID; try saveConfiguration()
@@ -394,6 +410,7 @@ public actor OrbitHost {
             guard OrbitSetupState.validPrefix(prefix) else { throw CodeFailure("Invalid bundle prefix.") }; project.bundlePrefix = prefix
         }
         if let team = p["teamID"] as? String, !team.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { project.developmentTeam = team }
+        project = try CodeOrbitIdentity.resolve(project)
         var request = CodeRequest(.apps, path: url.path); request.project = project
         let response = try JSONDecoder().decode(CodeResponse.self, from: await service.handle(JSONEncoder().encode(request)))
         if let error = response.error { throw CodeFailure(error) }
@@ -482,6 +499,17 @@ public actor OrbitHost {
         guard startingTargets.insert(id).inserted else { throw CodeFailure("This build is already starting. Check Apps in a moment.") }
         defer { startingTargets.remove(id) }
         diagnostics.record("build", "starting", ["target": id, "launch": String(launch ?? (target.mac != nil))])
+        if target.mac == nil, CodeOrbitIdentity.isOrbit(target.project) {
+            if canonicalSource == nil {
+                try await OrbitSetup(root: root).restoreLegacyIdentity(for: target.project, phoneBundleID: configuration.phoneBundleID)
+            }
+            let selected = try canonicalSource.map { try OrbitPhoneIdentity.project(at: $0) } ?? CodeOrbitIdentity.resolve(target.project)
+            try CodeOrbitIdentity.verify(bundleID: selected.iosBundleID ?? "", project: target.project,
+                phoneBundleID: configuration.phoneBundleID, monitorBundleID: monitorBundleID)
+            guard canonicalSource == nil || selected.path == target.project.path else {
+                throw CodeFailure("Reopen Orbit Mac to finish updating its canonical phone target.")
+            }
+        }
         var branch = target.branch
         if target.repository != nil {
             _ = try await OrbitCommand.run("/usr/bin/git", ["check-ref-format", "--branch", branch])
@@ -501,7 +529,6 @@ public actor OrbitHost {
                 throw error
             }
         }
-        try await OrbitSetup(root: root).restoreLegacyIdentity(for: target.project, phoneBundleID: configuration.phoneBundleID)
         var request: CodeRequest
         if let pending = target.pendingRequest { request = pending }
         else if launch == true {
