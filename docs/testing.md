@@ -1009,14 +1009,19 @@ notarization or marketplace acceptance was performed.
 ## Apps tile grid
 
 `testTargetListDisplaysIconsAndMissingImageFallbacks` checks equal-width columns,
-viewport containment, the next row, prominent icons, 14hr/2d ages, the never-built
-fallback and the history label to the left of Play. `testTargetTilesKeepControlsWithLargestText`
-scrolls to the tiles and checks both footer controls remain inside their tile
-at the largest accessibility text size. Existing Apps fixtures cover tile actions,
-Wi-Fi rejection, live progress/completion, failure/reconnect, cached replacement,
-empty/retry messaging and the separate Mac update section. Run the iPad rotation
-check too to verify the grid and anchored action menu in wide windows. Fixtures
-use inert Mac replies; they never install on or access a physical phone.
+viewport containment, fixed 160 × 220-point cards, 60-point icons, 14hr/2d ages and
+history to the left of Play. `testTargetTilesKeepControlsWithLargestText` checks
+footer containment at the largest accessibility text size.
+`testFixedTargetCardExpandsWithBoundedLongErrorAndSettings` opens the red issue
+button, checks fixed card geometry, inset expansion, unchanged icon size,
+bounded long-error scrolling, visible controls, schedule updates, reopening and
+removal cancellation. The failure/reconnect check opens the issue and logs after
+completion. `testBuildRequestFailureUsesIssueIconWithoutResizing` checks rejected
+requests retain their message behind the issue icon. The landscape/iPad rotation checks cover fixed card dimensions and expanded
+card containment in wide windows.
+Other Apps fixtures cover build progress/completion, Wi-Fi rejection, cached
+replacement, empty/retry messaging and separate Mac updates. These are inert Mac
+replies; they never install on or access a physical phone.
 
 Tile-grid verification (2026-11-03): bootstrap generated native dependencies in
 committed detached source. After integrating the latest main, all 233 Swift
@@ -1102,3 +1107,30 @@ renewal, public notarization and marketplace acceptance were not exercised.
 `OrbitMacAppIconTests` checks installed Mac icon thumbnails, bundle-ID matching,
 legacy catalog backfill, changed icons after restart, wire encoding and missing
 artwork. Mac catalog lookups never invoke iOS scheme discovery.
+
+
+## Fixed Apps cards and expansion (2026-11-03)
+
+The grid keeps absolute 160 × 220-point cards across status changes, large text,
+and rotation; wider windows add columns. Shared artwork stays at 60 points in
+both grid and expanded card. Long error text scrolls inside the expanded card
+while refresh, caching, build, logs and removal controls stay within its bounds.
+Request rejection, failure after reconnect, direct console access, schedule
+updates, reopening, removal cancellation and VoiceOver modal isolation are covered.
+
+Bootstrap generated source-built dependencies in committed detached source.
+After integrating the current main, all 247 Swift checks completed without
+failures (six optional fixtures skipped), all 48 Python checks passed, and both
+Go race suites plus helper vet passed. Both clients built using the ignored local
+identity; the complete Mac review bundle passed strict signature verification
+and its packaged phone-source extraction/resume check. Eight focused small-iPhone
+UI checks, three iPad checks and two dark-appearance checks passed. Portrait
+captures were reviewed in light and dark appearance. An iPad rotation command
+failed to change the shared Simulator's orientation; the full iPad set passed on
+a fresh Simulator. Landscape containment and fixed dimensions passed; XCTest's
+landscape screenshot cropping was unsuitable for visual review. Earlier runs
+caught background accessibility duplication, stale selection after dismissal and
+clipped refresh labels, all corrected before the final checks. The terminal-job
+log check now asserts console content instead of a running-only progress view.
+No physical phone access, Apple sign-in, installation/renewal, public notarization
+or marketplace acceptance was performed.

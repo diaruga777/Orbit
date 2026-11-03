@@ -83,7 +83,7 @@ queue files too. Hooks render native layouts, fetch network data, store private
 JSON values, and supply future timeline entries. iOS controls actual refresh times;
 exact polling is not guaranteed. See [widgets](docs/widgets/README.md).
 
-Cache a build in Apps → Cache for Mac-Free Refresh, or cache Orbit itself in the
+In Apps, tap an app and choose **Cache build**, or cache Orbit itself in
 More → Phone-only refresh. Sign in with your Apple Account (no server address needed), then set up the team, certificate, pairing file and
 LocalDevVPN once; then renew cached installed revisions without the Mac. The default sign-in helper uses Mac ADI with matching client settings; an old saved helper can be reset by clearing Advanced’s server field. Export the pairing file in Orbit Mac after your iPhone has trusted that Mac; iOS sign-in and LocalDevVPN aren’t needed for the export. New code
 still needs a Mac build. See [phone refresh](docs/local-refresh.md).
@@ -129,16 +129,19 @@ exports include the app helper. Existing native apps need source instrumentation
 and a rebuild. No logging switch, manual export or hosted service is involved.
 See [app debugging](docs/app-debugging.md) for integration and connection limits.
 
-The iPhone Apps page shows two columns of tiles with large app icons. Below each
-icon, a history clock and a short last-built age (like **14hr** or **2d**) sit to
-the left of Play. A dash means the app has not been built yet. Tap a tile for
-its build log, refresh schedule and other actions.
+The iPhone Apps page shows fixed-size cards with Home Screen-size icons.
+The grid fits more columns in wider windows; the cards keep the same size. A history clock and last-built age (like **14hr** or **2d**) sit beside
+Play; a dash means the app has not been built yet. Errors show a small red **!**
+without resizing the card. Tap anywhere except Play to expand the card inside
+the screen’s safe area. It keeps the same icon and build controls, adds refresh
+settings and build caching, and has icon buttons for logs, cancellation and
+removal. All controls stay visible; long status/error text scrolls in its own box.
 
 The iPhone Apps list loads independently of job-console reads, shows errors with
 Retry, and explains how to add apps when the catalog is empty. Tap the play
 button beside an app to build and install it in one press. Connect the phone to
 Wi-Fi first; Orbit checks before requesting a build and explains how to retry
-when the phone is on cellular alone. Row menus still hold
+when the phone is on cellular alone. Expanded cards hold
 schedules, cancellation and console actions. An interrupted build reply asks you
 to check Apps before retrying, since the Mac may already be building.
 

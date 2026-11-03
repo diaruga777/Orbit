@@ -37,11 +37,17 @@ import OrbitTransport
                 if ProcessInfo.processInfo.arguments.contains("--target-cache-delayed") { try await Task.sleep(for: .seconds(8)) }
                 if ProcessInfo.processInfo.arguments.contains("--target-list-retry"), await fixture.failList() { throw CodeFailure("Fixture Mac unavailable. Retry to load apps.") }
                 if ProcessInfo.processInfo.arguments.contains("--target-list-empty") { return [[String: Any]]() }
-                var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": false]
+                var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": await fixture.scheduled, "intervalHours": await fixture.intervalHours]
                 if await fixture.started { row["jobID"] = "fixture-job" }
                 if ProcessInfo.processInfo.arguments.contains("--target-no-wifi") { row["failure"] = "Build requests: \(await fixture.buildRequests)" }
-                return [row]
+                if ProcessInfo.processInfo.arguments.contains("--target-long-error"), !(await fixture.started) { row["failure"] = Self.longError }
+                return await fixture.removed ? [[String: Any]]() : [row]
+            case "schedule":
+                await fixture.schedule(enabled: params["enabled"] as? Bool == true, hours: params["intervalHours"] as? Int ?? 144)
+                return ["ok": true]
+            case "target_remove": await fixture.remove(); return ["ok": true]
             case "build":
+                if ProcessInfo.processInfo.arguments.contains("--target-build-request-failure") { throw CodeFailure("Fixture build request failed. Try again when your Mac is ready.") }
                 guard params["monitorBundleID"] as? String == Bundle.main.bundleIdentifier else { throw CodeFailure("Missing self-update monitor identity") }
                 await fixture.begin()
                 return try JSONSerialization.jsonObject(with: JSONEncoder().encode(await fixture.status()))
@@ -53,7 +59,13 @@ import OrbitTransport
         }, defaults: defaults)
         return UINavigationController(rootViewController: controller)
     }
+    static let longError = "Fixture compilation failed.\n" + (1...80).map { "Diagnostic \($0): Check the app’s build settings and try again." }.joined(separator: "\n")
     actor Fixture {
+        var scheduled = false
+        var intervalHours = 144
+        var removed = false
+        func schedule(enabled: Bool, hours: Int) { scheduled = enabled; intervalHours = hours }
+        func remove() { removed = true }
         private var macStarted: Date?
         func beginMacUpdate() { macStarted = Date() }
         func macDisconnected() -> Bool {

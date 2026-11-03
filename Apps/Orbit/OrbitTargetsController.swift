@@ -14,6 +14,9 @@ import OrbitTransport
     private var macUpdate: [String: Any] = [:]
     private var startingMacUpdate = false
     private var jobs: [String: CodeJob] = [:]
+    private var requestFailures: [String: String] = [:]
+    private weak var expandedTarget: OrbitTargetDetailController?
+    private var cachingTarget: String?
     private var starting: String?
     private var poll: Timer?
     private var refreshing = false
@@ -64,7 +67,8 @@ import OrbitTransport
     private func restoreCachedState() {
         let origin = peerID()
         guard peer != origin else { return }
-        peer = origin; jobs = [:]; apps = []; macUpdate = [:]
+        expandedTarget?.dismiss(animated: false); expandedTarget = nil
+        peer = origin; jobs = [:]; requestFailures = [:]; apps = []; macUpdate = [:]
         startingMacUpdate = false; starting = nil; loaded = false; listMessage = "Loading apps…"
         if let data = appsCache.load(peer: origin),
            let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
@@ -87,7 +91,7 @@ import OrbitTransport
         refreshing = true
         if !loaded { listMessage = "Loading apps…" }
         updateListMessage()
-        defer { refreshing = false; collectionView.refreshControl?.endRefreshing(); updateListMessage(); collectionView.reloadData() }
+        defer { refreshing = false; collectionView.refreshControl?.endRefreshing(); updateListMessage(); collectionView.reloadData(); updateExpandedTarget() }
         let origin = peerID()
         async let macStatus: Void = refreshMacStatus(origin: origin)
         do {
@@ -138,7 +142,7 @@ import OrbitTransport
             guard let index = collectionView.indexPath(for: cell), index.section == 1, apps.indices.contains(index.row) else { continue }
             configure(cell, row: apps[index.row])
         }
-        collectionView.collectionViewLayout.invalidateLayout()
+        updateExpandedTarget()
     }
     private func build(_ row: [String: Any]) {
         guard !checkingNetwork, let monitor, let id = row["id"] as? String else { return }
@@ -155,6 +159,7 @@ import OrbitTransport
                 if row["mac"] == nil { try await preparePhoneInstall() }
                 guard origin == peerID(), UIApplication.shared.applicationState == .active else { return }
                 try monitor.begin(title: (row["mac"] == nil ? "Build & Install · " : "Build on Mac · ") + (row["name"] as? String ?? "App"))
+                requestFailures[id] = nil
                 began = true; starting = id; buildChanged()
                 let result = try await rpc("build", ["id": id, "monitorBundleID": Bundle.main.bundleIdentifier ?? ""])
                 let job = try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: result))
@@ -162,11 +167,13 @@ import OrbitTransport
                 guard origin == peerID() else { return }
                 if let index = apps.firstIndex(where: { $0["id"] as? String == id }) { apps[index]["jobID"] = job.id }
                 jobs[job.id] = job; monitor.accept(job)
-                monitor.show(job, from: self)
+                monitor.show(job, from: self.expandedTarget ?? self)
             } catch {
                 if origin == peerID() {
-                    let alert = UIAlertController(title: error is OrbitInstallNetwork.WiFiRequired ? "Wi-Fi Needed" : "Apps", message: error.localizedDescription, preferredStyle: .alert)
-                    alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true)
+                    if error is OrbitInstallNetwork.WiFiRequired {
+                        let alert = UIAlertController(title: "Wi-Fi Needed", message: error.localizedDescription, preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "OK", style: .default)); (self.expandedTarget ?? self).present(alert, animated: true)
+                    } else { requestFailures[id] = error.localizedDescription; buildChanged() }
                 }
             }
         }
@@ -185,15 +192,19 @@ import OrbitTransport
             guard let self else { return nil }
             let section: NSCollectionLayoutSection
             if !self.searching, sectionIndex == 1, !self.apps.isEmpty {
-                let tileWidth = max(1, (environment.container.effectiveContentSize.width - 44) / 2)
-                let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(tileWidth), heightDimension: .estimated(260)))
+                let width = environment.container.effectiveContentSize.width
+                let tileWidth: CGFloat = 160
+                let columns = max(1, Int((width - 20) / (tileWidth + 12)))
+                let gridWidth = CGFloat(columns) * tileWidth + CGFloat(columns - 1) * 12
+                let inset = max(16, (width - gridWidth) / 2)
+                let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(widthDimension: .absolute(tileWidth), heightDimension: .absolute(220)))
                 let group = NSCollectionLayoutGroup.horizontal(
-                    layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .estimated(260)),
-                    repeatingSubitem: item, count: 2)
+                    layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(220)),
+                    repeatingSubitem: item, count: columns)
                 group.interItemSpacing = .fixed(12)
                 section = NSCollectionLayoutSection(group: group)
                 section.interGroupSpacing = 12
-                section.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 24, trailing: 16)
+                section.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: inset, bottom: 24, trailing: inset)
             } else {
                 var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
                 configuration.headerMode = .none
@@ -268,10 +279,15 @@ import OrbitTransport
         }
     }
     private func configure(_ cell: UICollectionViewCell, row: [String: Any]) {
+        guard let cell = cell as? OrbitTargetCell else { return }
+        configure(cell.card, row: row)
+        cell.accessibilityIdentifier = "OrbitTarget:" + (row["id"] as? String ?? "")
+        cell.accessibilityHint = "Tap for app options."
+    }
+    private func configure(_ cell: OrbitTargetCard, row: [String: Any]) {
         let id = row["id"] as? String ?? ""
         let job = ((row["jobID"] ?? row["lastJobID"]) as? String).flatMap { jobs[$0] }
         let busy = starting == id || job?.state == .running
-        guard let cell = cell as? OrbitTargetCell else { return }
         cell.name.text = row["name"] as? String
         cell.play.accessibilityIdentifier = "OrbitTargetPlay:" + id
         cell.play.accessibilityLabel = (row["mac"] == nil ? "Build and install " : "Build and open on Mac ") + (row["name"] as? String ?? "app")
@@ -279,20 +295,34 @@ import OrbitTransport
         cell.play.removeAction(identifiedBy: UIAction.Identifier("play"), for: .touchUpInside)
         cell.play.addAction(UIAction(identifier: UIAction.Identifier("play")) { [weak self] _ in self?.build(row) }, for: .touchUpInside)
         let schedule = (row["enabled"] as? Bool == true) ? "Refreshes every \(row["intervalHours"] ?? 144) hours" : "Manual builds"
+        let failure = requestFailures[id] ?? row["failure"] as? String
         let status: String?
         if starting == id { status = "Starting on your Mac…" }
+        else if let failure, !failure.isEmpty, !busy { status = failure }
         else if let job {
             status = job.state == .running
                 ? job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
                 : job.state == .succeeded ? (row["mac"] == nil ? "Installed on your phone" : "Installed on your Mac") : job.failureMessage ?? "Build " + job.state.rawValue
-        } else { status = row["failure"] as? String }
+        } else { status = nil }
         cell.accessibilityHint = schedule + ". Tap for app options."
-        cell.detail.text = status
-        cell.detail.isHidden = status?.isEmpty != false
+        cell.accessibilityValue = busy ? status : nil
+        cell.issue.isHidden = busy || !(job?.state == .failed || failure?.isEmpty == false)
+        cell.issue.accessibilityIdentifier = "OrbitTargetIssue:" + id
+        cell.issue.accessibilityLabel = "Build issue for " + (row["name"] as? String ?? "app")
+        cell.issue.removeAction(identifiedBy: UIAction.Identifier("issue"), for: .touchUpInside)
+        cell.issue.addAction(UIAction(identifier: UIAction.Identifier("issue")) { [weak self] _ in self?.openTarget(id) }, for: .touchUpInside)
+        if expandedTarget?.targetID == id {
+            let text = status.flatMap { $0.isEmpty ? nil : $0 } ?? "No build issues."
+            if expandedTarget?.message.text != text { expandedTarget?.message.text = text }
+            expandedTarget?.message.textColor = cell.issue.isHidden ? .secondaryLabel : .systemRed
+            expandedTarget?.setSchedule(schedule)
+            expandedTarget?.logs.isEnabled = (row["jobID"] ?? row["lastJobID"]) is String
+            expandedTarget?.cache.isEnabled = cachingTarget != id && row["mac"] == nil && (row["lastJobID"] ?? row["jobID"]) is String
+            expandedTarget?.cancel.isHidden = job?.state != .running
+        }
         let built = (row["lastSuccess"] as? Double).flatMap { $0.isFinite && $0 >= Date.distantPast.timeIntervalSinceReferenceDate && $0 <= Date.distantFuture.timeIntervalSinceReferenceDate ? Date(timeIntervalSinceReferenceDate: $0) : nil }
         cell.setLastBuilt(built, id: id)
         cell.icon.image = (row["iconPNG"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
-        cell.accessibilityIdentifier = "OrbitTarget:" + id
         cell.progress.isHidden = !busy; cell.progress.update(job)
         cell.progress.accessibilityIdentifier = "OrbitTargetProgress:" + id
     }
@@ -315,23 +345,53 @@ import OrbitTransport
                 alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = collectionView; alert.popoverPresentationController?.sourceRect = collectionView.layoutAttributesForItem(at: indexPath)?.frame ?? collectionView.bounds; present(alert, animated: true)
             } catch { show(error.localizedDescription) } }
         } else {
-            let app = apps[indexPath.row], id = app["id"] as? String ?? ""
-            let alert = UIAlertController(title: app["name"] as? String, message: nil, preferredStyle: .actionSheet)
-            alert.addAction(UIAlertAction(title: app["mac"] == nil ? "Build and Install" : "Build and Open on Mac", style: .default) { _ in self.build(app) })
-            if let jobID = app["jobID"] as? String, jobs[jobID]?.state == .running {
-                alert.addAction(UIAlertAction(title: "Cancel Build", style: .destructive) { _ in Task {
-                    do {
-                        _ = try await self.rpc("cancel", ["id": jobID])
-                        let job = try await self.fetchJob(jobID); self.jobs[jobID] = job
-                        self.monitor?.observe(job); self.collectionView.reloadData()
-                    } catch { self.show(error.localizedDescription) }
+            openTarget(apps[indexPath.row]["id"] as? String ?? "")
+        }
+    }
+    private func openTarget(_ id: String) {
+        guard expandedTarget == nil, let row = apps.first(where: { $0["id"] as? String == id }) else { return }
+        let detail = OrbitTargetDetailController(targetID: id)
+        detail.sourceFrame = { [weak self] in
+            guard let self, let index = self.apps.firstIndex(where: { $0["id"] as? String == id }),
+                  let cell = self.collectionView.cellForItem(at: IndexPath(item: index, section: 1)), let window = self.view.window else { return nil }
+            return cell.convert(cell.bounds, to: window)
+        }
+        expandedTarget = detail
+        detail.onDismiss = { [weak self, weak detail] in
+            if self?.expandedTarget === detail { self?.expandedTarget = nil }
+        }
+        detail.loadViewIfNeeded()
+        configure(detail.card, row: row)
+        detail.onAction = { [weak self, weak detail] action in
+            guard let self, let detail, let row = self.apps.first(where: { $0["id"] as? String == id }) else { return }
+            switch action {
+            case .schedule: self.configureSchedule(row, from: detail)
+            case .remove:
+                let alert = UIAlertController(title: "Remove this app?", message: "You can add it again from your Mac.", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in Task {
+                    do { _ = try await self.rpc("target_remove", ["id": id]); detail.dismiss(animated: true); self.refresh() }
+                    catch { self.show(error.localizedDescription) }
                 } })
-            }
-            let enabled = app["enabled"] as? Bool == true
-            alert.addAction(UIAlertAction(title: enabled ? "Pause Refreshes" : "Refresh Every Six Days", style: .default) { _ in Task { do { _ = try await self.rpc("schedule", ["id": id, "enabled": !enabled, "intervalHours": 144]); self.refresh() } catch { self.show(error.localizedDescription) } } })
-            if let jobID = (app["jobID"] ?? app["lastJobID"]) as? String { alert.addAction(UIAlertAction(title: "View Build Log", style: .default) { _ in Task { do { let job = try await self.fetchJob(jobID); if let monitor = self.monitor { monitor.show(job, from: self) } else { self.show(job.log) } } catch { self.show(error.localizedDescription) } } }) }
-            if app["mac"] == nil, let jobID = (app["lastJobID"] ?? app["jobID"]) as? String {
-                alert.addAction(UIAlertAction(title: "Cache for Mac-Free Refresh", style: .default) { _ in Task {
+                detail.present(alert, animated: true)
+            case .logs:
+                guard let jobID = (row["jobID"] ?? row["lastJobID"]) as? String else { return }
+                Task { do {
+                    let job = try await self.fetchJob(jobID)
+                    if let monitor = self.monitor { monitor.show(job, from: detail, console: true) } else { self.show(job.log) }
+                } catch { self.show(error.localizedDescription) } }
+            case .cancel:
+                guard let jobID = row["jobID"] as? String else { return }
+                Task { do {
+                    _ = try await self.rpc("cancel", ["id": jobID])
+                    let job = try await self.fetchJob(jobID); self.jobs[jobID] = job
+                    self.monitor?.observe(job); self.buildChanged(); self.refresh()
+                } catch { self.show(error.localizedDescription) } }
+            case .cache:
+                guard let jobID = (row["lastJobID"] ?? row["jobID"]) as? String else { return }
+                self.cachingTarget = id; detail.cache.isEnabled = false
+                Task {
+                    defer { self.cachingTarget = nil; self.updateExpandedTarget() }
                     do {
                         try await CodeRefreshEngine.shared.cacheFromMac { offset in
                             let result = try await self.rpc("artifact", ["jobID": jobID, "offset": offset])
@@ -339,11 +399,34 @@ import OrbitTransport
                         }
                         self.show("Build cached. Open More → Phone-only refresh to renew it on this phone.")
                     } catch { self.show(error.localizedDescription) }
-                } })
+                }
             }
-            alert.addAction(UIAlertAction(title: "Remove App Target", style: .destructive) { _ in Task { do { _ = try await self.rpc("target_remove", ["id": id]); self.refresh() } catch { self.show(error.localizedDescription) } } })
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel)); alert.popoverPresentationController?.sourceView = collectionView; alert.popoverPresentationController?.sourceRect = collectionView.layoutAttributesForItem(at: indexPath)?.frame ?? collectionView.bounds; present(alert, animated: true)
         }
+        present(detail, animated: true)
+    }
+    private func updateExpandedTarget() {
+        guard let detail = expandedTarget else { return }
+        guard let row = apps.first(where: { $0["id"] as? String == detail.targetID }) else {
+            detail.dismiss(animated: true); return
+        }
+        configure(detail.card, row: row)
+    }
+    private func configureSchedule(_ row: [String: Any], from detail: OrbitTargetDetailController) {
+        guard let id = row["id"] as? String else { return }
+        let alert = UIAlertController(title: "Refresh settings", message: "Your Mac builds and installs on this schedule.", preferredStyle: .actionSheet)
+        let enabled = row["enabled"] as? Bool == true
+        let options: [(String, Bool, Int)] = [("Manual builds", false, 144), ("Every day", true, 24), ("Every three days", true, 72), ("Every six days", true, 144)]
+        for (title, active, hours) in options {
+            let selected = active == enabled && (!active || row["intervalHours"] as? Int == hours)
+            alert.addAction(UIAlertAction(title: title + (selected ? " ✓" : ""), style: .default) { _ in Task {
+                do { _ = try await self.rpc("schedule", ["id": id, "enabled": active, "intervalHours": hours]); await self.refreshTargets(showError: true) }
+                catch { self.show(error.localizedDescription) }
+            } })
+        }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.popoverPresentationController?.sourceView = detail.schedule
+        alert.popoverPresentationController?.sourceRect = detail.schedule.bounds
+        detail.present(alert, animated: true)
     }
     private func detectProjects() {
         let list = OrbitDetectedProjectsController(rpc: rpc) { [weak self] project, scheme in
@@ -379,7 +462,7 @@ import OrbitTransport
             picker.addAction(UIAlertAction(title: "Cancel", style: .cancel)); picker.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem; present(picker, animated: true)
         } catch { show(error.localizedDescription) } }
     }
-    private func show(_ text: String) { OrbitDiagnostics.shared.record("ui", "error_shown", ["error": text]); let alert = UIAlertController(title: "Orbit", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true) }
+    private func show(_ text: String) { OrbitDiagnostics.shared.record("ui", "error_shown", ["error": text]); let alert = UIAlertController(title: "Orbit", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); (expandedTarget ?? self).present(alert, animated: true) }
 }
 
 
@@ -466,82 +549,16 @@ import OrbitTransport
     }
 }
 
-/// Two-column tiles keep the icon dominant and the last build beside Play.
+/// Absolute grid geometry never depends on text, errors or build state.
 @MainActor private final class OrbitTargetCell: UICollectionViewCell {
-    let icon = UIImageView()
-    let name = UILabel()
-    let detail = UILabel()
-    let progress = CodeBuildProgressView()
-    let play = UIButton(type: .system)
-    private let lastBuilt = UILabel()
-    private let history = UIStackView()
-
+    let card = OrbitTargetCard()
     override init(frame: CGRect) {
         super.init(frame: frame)
-        contentView.backgroundColor = .secondarySystemGroupedBackground
-        contentView.layer.cornerRadius = 20; contentView.layer.cornerCurve = .continuous
-        contentView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 12, bottom: 12, trailing: 12)
-        name.font = .preferredFont(forTextStyle: .headline); name.numberOfLines = 2; name.textAlignment = .center
-        detail.font = .preferredFont(forTextStyle: .caption1); detail.textColor = .secondaryLabel; detail.numberOfLines = 0
-        for label in [name, detail, lastBuilt] { label.adjustsFontForContentSizeCategory = true }
-        icon.contentMode = .scaleAspectFit; icon.tintColor = .tertiaryLabel
-        icon.layer.cornerRadius = 24; icon.layer.cornerCurve = .continuous; icon.clipsToBounds = true
-        icon.accessibilityIdentifier = "OrbitTargetIcon"
-        let artwork = UIView(); artwork.addSubview(icon); icon.translatesAutoresizingMaskIntoConstraints = false
-        let preferredWidth = icon.widthAnchor.constraint(equalTo: artwork.widthAnchor)
-        preferredWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            preferredWidth, icon.widthAnchor.constraint(lessThanOrEqualToConstant: 180),
-            icon.widthAnchor.constraint(lessThanOrEqualTo: artwork.widthAnchor),
-            icon.heightAnchor.constraint(equalTo: icon.widthAnchor),
-            icon.centerXAnchor.constraint(equalTo: artwork.centerXAnchor),
-            icon.topAnchor.constraint(equalTo: artwork.topAnchor), icon.bottomAnchor.constraint(equalTo: artwork.bottomAnchor)
-        ])
-        lastBuilt.font = .preferredFont(forTextStyle: .caption1); lastBuilt.textColor = .secondaryLabel
-        lastBuilt.adjustsFontSizeToFitWidth = true; lastBuilt.minimumScaleFactor = 0.5
-        lastBuilt.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        let clock = UIImageView(image: UIImage(systemName: "clock.arrow.circlepath"))
-        clock.tintColor = .secondaryLabel; clock.contentMode = .scaleAspectFit
-        clock.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption1)
-        clock.isAccessibilityElement = false
-        history.addArrangedSubview(clock); history.addArrangedSubview(lastBuilt)
-        history.spacing = 4; history.alignment = .center; history.isAccessibilityElement = true
-        clock.widthAnchor.constraint(equalToConstant: 16).isActive = true
-        clock.heightAnchor.constraint(equalToConstant: 16).isActive = true
-        progress.isAccessibilityElement = true; progress.accessibilityLabel = "Build progress"; progress.isHidden = true
-        play.configuration = .tinted(); play.configuration?.cornerStyle = .capsule
-        play.setImage(UIImage(systemName: "play.fill"), for: .normal)
-        play.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        play.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        let actions = UIStackView(arrangedSubviews: [history, UIView(), play]); actions.spacing = 4; actions.alignment = .center
-        let body = UIStackView(arrangedSubviews: [artwork, name, actions, progress, detail])
-        body.axis = .vertical; body.spacing = 8
-        body.translatesAutoresizingMaskIntoConstraints = false; contentView.addSubview(body)
-        NSLayoutConstraint.activate([
-            body.leadingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.leadingAnchor),
-            body.trailingAnchor.constraint(equalTo: contentView.layoutMarginsGuide.trailingAnchor),
-            body.topAnchor.constraint(equalTo: contentView.layoutMarginsGuide.topAnchor),
-            body.bottomAnchor.constraint(lessThanOrEqualTo: contentView.layoutMarginsGuide.bottomAnchor)
-        ])
-        let preferredBottom = body.bottomAnchor.constraint(equalTo: contentView.layoutMarginsGuide.bottomAnchor)
-        preferredBottom.priority = .defaultHigh; preferredBottom.isActive = true
+        contentView.addSubview(card)
+        card.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        card.frame = contentView.bounds
     }
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
-
-    func setLastBuilt(_ date: Date?, id: String) {
-        history.accessibilityIdentifier = "OrbitTargetLastBuilt:" + id
-        guard let date else {
-            lastBuilt.text = "—"; history.accessibilityLabel = "Not built yet"; history.accessibilityValue = "—"
-            return
-        }
-        let seconds = max(0, Date().timeIntervalSince(date))
-        if seconds < 60 { lastBuilt.text = "now" }
-        else if seconds < 3600 { lastBuilt.text = "\(Int(seconds / 60))m" }
-        else if seconds < 86400 { lastBuilt.text = "\(Int(seconds / 3600))hr" }
-        else { lastBuilt.text = "\(Int(seconds / 86400))d" }
-        history.accessibilityValue = lastBuilt.text
-        history.accessibilityLabel = "Last built " + min(date, Date()).formatted(.relative(presentation: .named))
-    }
 }
 
 @MainActor private final class OrbitTargetsHeader: UICollectionReusableView {

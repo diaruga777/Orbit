@@ -34,7 +34,7 @@ On iPhone, open **More → Phone-only refresh**:
    certificates are never automatically revoked. Account repair, certificate
    limits, and two-factor prompts can require foreground attention.
 5. Choose Cache Orbit for the client itself. For another installed app, build it
-   from the Apps catalog, then choose Cache for Mac-Free Refresh. The archive is
+   from the Apps catalog, then tap the app and choose **Cache build**. The archive is
    downloaded in bounded chunks and verified with SHA-256. IPA import also works.
 6. Choose Refresh Now. When replacing Orbit itself, go to the Home Screen when
    prompted and reopen Orbit afterward. Enable automatic refresh per app if wanted.

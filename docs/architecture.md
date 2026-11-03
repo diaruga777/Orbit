@@ -577,12 +577,29 @@ scoped to the paired Mac ID; a different or removed peer never displays them.
 Job/installation evidence still comes from live durable-job reads.
 
 The iOS Apps controller uses a compositional collection layout: full-width Mac
-update/search/message rows and a fixed two-column app grid. Self-sizing tiles
-show a large icon, name and a history-clock/compact-age footer beside Play.
-The age uses the Host's `lastSuccess` (JSONEncoder reference-date seconds), so
-failed or pending installs cannot replace the last confirmed success. Missing
-dates show a dash; future clock skew clamps to now. VoiceOver reads the relative
-last-build time and each Play action names its app. Progress/failure text stays
-inside each tile; tile selection opens the existing anchored app actions.
+update/search/message rows and an adaptive grid of absolute 160 × 220-point
+cards. The column count changes with the viewport; card dimensions never do.
+Each shared `OrbitTargetCard` keeps its icon at 60 points, reserves
+space for live progress and bounds the name/footer independently of text size.
+Errors appear only as a red accessible issue button in the grid. Rejected build
+requests keep their message in peer-scoped presentation state until a retry;
+Wi-Fi preflight retains its connection guidance alert. The age uses
+Host `lastSuccess` (JSONEncoder reference-date seconds), so failed or pending
+installs cannot replace the last confirmed success. Missing dates show a dash;
+future clock skew clamps to now. VoiceOver reads the relative last-build time
+and each Play action names its app.
+
+Selecting a card or its issue button opens `OrbitTargetDetailController` through
+a custom UIKit frame expansion from the current visible cell, with a fade for
+Reduce Motion or an unavailable origin. The presentation frame stays 12 points
+inside all safe-area edges, including after rotation. The icon remains 60 points.
+A compact horizontal header makes room in short landscape windows. Refresh
+settings, caching and icon-only removal/log/cancel actions remain outside the
+bounded scrolling status text; the surrounding card never scrolls. Schedule
+changes use the existing Host RPC (six days remains the default). The expanded
+card receives the same catalog/monitor updates as the grid, and errors preserve
+the text's scroll position when its contents have not changed. Build progress,
+logs and action alerts present from the expanded controller when it is open.
+Removal requires confirmation and peer/catalog changes dismiss stale details.
 
 Registered Mac apps use the installed bundle’s `CFBundleIconFile` for 132px catalog thumbnails. Registration and background catalog polling populate missing icons and refresh changed artwork at most once every five minutes. The same persisted PNG travels to Orbit Mac and iOS; missing or unreadable icons leave the target available.

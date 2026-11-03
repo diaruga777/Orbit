@@ -56,7 +56,7 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         for attempt in 0..<2 {
             if attempt == 0 { app.buttons["OrbitTargetPlay:fixture"].tap() }
-            else { row.tap(); app.buttons["Build and Install"].tap() }
+            else { row.tap(); app.buttons["OrbitTargetPlay:fixture"].tap() }
             let alert = app.alerts["Wi-Fi Needed"]
             XCTAssertTrue(alert.waitForExistence(timeout: 5))
             XCTAssertTrue(alert.staticTexts["Connect this phone to Wi-Fi, then try again. Remote app installation can’t use cellular alone."].exists)
@@ -65,13 +65,15 @@ final class CodeEditorUITests: XCTestCase {
             alert.buttons["OK"].tap()
             XCTAssertTrue(app.buttons["OrbitTargetPlay:fixture"].isEnabled)
             XCTAssertFalse(app.descendants(matching: .any)["OrbitTargetProgress:fixture"].exists)
+            if attempt == 0 { row.tap() }
             // Let the production catalog poll expose any mistakenly sent build RPC.
             let unexpectedRequest = expectation(for: NSPredicate { _, _ in
-                row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Build requests: 1")).count > 0
+                (app.textViews["OrbitTargetMessage"].value as? String ?? "").contains("Build requests: 1")
             }, evaluatedWith: nil)
             unexpectedRequest.isInverted = true
             waitForExpectations(timeout: 4)
-            XCTAssertTrue(row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Build requests: 0")).firstMatch.exists)
+            XCTAssertTrue((app.textViews["OrbitTargetMessage"].value as? String ?? "").contains("Build requests: 0"))
+            app.buttons["Close app details"].tap()
         }
         // The next probe models joining Wi-Fi; the same play button now starts work.
         app.buttons["OrbitTargetPlay:fixture"].tap()
@@ -101,7 +103,8 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["OrbitTargetProgress:fixture"].exists)
         XCTAssertFalse(row.label.lowercased().contains("estimated"))
         XCTAssertFalse((app.descendants(matching: .any)["OrbitTargetProgress:fixture"].value as? String ?? "").contains("%"))
-        expectation(for: NSPredicate { _, _ in row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Installed on your phone")).count > 0 }, evaluatedWith: nil)
+        row.tap()
+        expectation(for: NSPredicate { _, _ in (app.textViews["OrbitTargetMessage"].value as? String ?? "").contains("Installed on your phone") }, evaluatedWith: nil)
         waitForExpectations(timeout: 20)
         attach("Apps confirmed completion", app)
     }
@@ -112,14 +115,24 @@ final class CodeEditorUITests: XCTestCase {
         app.launch()
         let row = app.cells["OrbitTarget:fixture"]
         XCTAssertTrue(row.waitForExistence(timeout: 15)); row.tap()
-        app.buttons["Build and Install"].tap()
+        app.buttons["OrbitTargetPlay:fixture"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["CodeBuildProgress"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["CodeBuildStatus"].waitForExistence(timeout: 3))
         expectation(for: NSPredicate { _, _ in app.staticTexts["CodeBuildStatus"].label.contains("Reconnecting") }, evaluatedWith: nil)
         waitForExpectations(timeout: 7)
         app.buttons["Done"].tap()
-        expectation(for: NSPredicate { _, _ in row.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fixture compilation failed")).count > 0 }, evaluatedWith: nil)
+        app.buttons["Close app details"].tap()
+        expectation(for: NSPredicate { _, _ in row.buttons["OrbitTargetIssue:fixture"].exists }, evaluatedWith: nil)
         waitForExpectations(timeout: 20)
+        let size = row.frame.size
+        row.buttons["OrbitTargetIssue:fixture"].tap()
+        XCTAssertTrue((app.textViews["OrbitTargetMessage"].value as? String ?? "").contains("Fixture compilation failed"))
+        app.buttons["View Build Log"].tap()
+        XCTAssertTrue(app.textViews["CodeBuildConsole"].waitForExistence(timeout: 5))
+        XCTAssertTrue((app.textViews["CodeBuildConsole"].value as? String ?? "").contains("Fixture build output"))
+        app.buttons["Done"].tap()
+        app.buttons["Close app details"].tap()
+        XCTAssertEqual(row.frame.size, size)
         attach("Apps failure after reconnect", app)
     }
 
@@ -140,15 +153,23 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(first.isHittable)
         XCTAssertTrue(second.isHittable)
         XCTAssertEqual(first.frame.width, second.frame.width, accuracy: 2)
-        XCTAssertGreaterThan(third.frame.minY, first.frame.maxY)
-        XCTAssertEqual(first.frame.minX, third.frame.minX, accuracy: 2)
+        XCTAssertEqual(first.frame.width, 160, accuracy: 1)
+        XCTAssertEqual(first.frame.height, 220, accuracy: 1)
+        XCTAssertEqual(second.frame.height, first.frame.height, accuracy: 1)
+        if app.frame.width < 536 {
+            XCTAssertGreaterThan(third.frame.minY, first.frame.maxY)
+            XCTAssertEqual(first.frame.minX, third.frame.minX, accuracy: 2)
+        } else {
+            XCTAssertEqual(third.frame.minY, first.frame.minY, accuracy: 2)
+            XCTAssertGreaterThan(third.frame.minX, second.frame.maxX)
+        }
         let age = first.descendants(matching: .any)["OrbitTargetLastBuilt:preview"]
         XCTAssertEqual(age.value as? String, "14hr")
         XCTAssertEqual(second.descendants(matching: .any)["OrbitTargetLastBuilt:missing"].value as? String, "2d")
         XCTAssertEqual(third.descendants(matching: .any)["OrbitTargetLastBuilt:invalid"].label, "Not built yet")
         let play = first.buttons["OrbitTargetPlay:preview"]
         let icon = first.images["OrbitTargetIcon"]
-        XCTAssertGreaterThan(icon.frame.width, play.frame.width * 2)
+        XCTAssertEqual(icon.frame.width, 60, accuracy: 1)
         XCTAssertLessThan(icon.frame.maxY, play.frame.minY)
         XCTAssertLessThan(age.frame.maxX, play.frame.minX)
         XCTAssertEqual(age.frame.midY, play.frame.midY, accuracy: 2)
@@ -177,6 +198,111 @@ final class CodeEditorUITests: XCTestCase {
         attach("App tile controls at largest text size", app)
     }
 
+    func testBuildRequestFailureUsesIssueIconWithoutResizing() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-build-request-failure"]
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        let original = row.frame.size
+        row.buttons["OrbitTargetPlay:fixture"].tap()
+        let issue = row.buttons["OrbitTargetIssue:fixture"]
+        XCTAssertTrue(issue.waitForExistence(timeout: 5))
+        XCTAssertEqual(row.frame.size, original)
+        XCTAssertFalse(app.alerts["Apps"].exists)
+        issue.tap()
+        XCTAssertTrue((app.textViews["OrbitTargetMessage"].value as? String ?? "").contains("Fixture build request failed"))
+        XCTAssertTrue(app.buttons["OrbitTargetPlay:fixture"].isEnabled)
+        app.buttons["Close app details"].tap()
+        XCTAssertEqual(row.frame.size, original)
+    }
+
+    func testFixedTargetCardExpandsWithBoundedLongErrorAndSettings() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-long-error"]
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        let original = row.frame
+        XCTAssertEqual(original.width, 160, accuracy: 1)
+        XCTAssertEqual(original.height, 220, accuracy: 1)
+        XCTAssertFalse(row.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Diagnostic'")).firstMatch.exists)
+        row.buttons["OrbitTargetIssue:fixture"].tap()
+        let panel = app.otherElements["OrbitTargetDetail"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(panel.frame.height, original.height)
+        XCTAssertGreaterThan(panel.frame.minX, app.frame.minX)
+        XCTAssertLessThan(panel.frame.maxX, app.frame.maxX)
+        XCTAssertGreaterThan(panel.frame.minY, app.frame.minY)
+        XCTAssertLessThan(panel.frame.maxY, app.frame.maxY)
+        XCTAssertEqual(panel.images["OrbitTargetIcon"].frame.width, 60, accuracy: 1)
+        let message = app.textViews["OrbitTargetMessage"]
+        XCTAssertTrue((message.value as? String ?? "").contains("Diagnostic 80"))
+        let textFrame = message.frame
+        message.swipeUp()
+        XCTAssertEqual(message.frame, textFrame)
+        for label in ["Refresh settings", "Cache build", "Remove App Target", "View Build Log", "Close app details"] {
+            XCTAssertTrue(app.buttons[label].exists)
+            XCTAssertGreaterThanOrEqual(app.buttons[label].frame.minY, panel.frame.minY)
+            XCTAssertLessThanOrEqual(app.buttons[label].frame.maxY, panel.frame.maxY)
+        }
+        app.buttons["Refresh settings"].tap()
+        app.buttons["Every six days"].tap()
+        expectation(for: NSPredicate(format: "value CONTAINS '144'"), evaluatedWith: app.buttons["Refresh settings"])
+        waitForExpectations(timeout: 5)
+        attach("Expanded card with long error and fixed controls", app)
+        app.buttons["Close app details"].tap()
+        XCTAssertEqual(row.frame, original)
+        row.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        app.buttons["Remove App Target"].tap()
+        app.alerts["Remove this app?"].buttons["Cancel"].tap()
+        XCTAssertTrue(panel.exists)
+        app.buttons["Close app details"].tap()
+        XCTAssertEqual(row.frame, original)
+    }
+
+    func testExpandedTargetKeepsControlsInLandscapeWithLargestText() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-long-error", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        let grid = app.collectionViews["OrbitTargets"]
+        XCTAssertTrue(grid.waitForExistence(timeout: 10))
+        for _ in 0..<8 {
+            if row.exists && row.isHittable { break }
+            grid.swipeUp()
+        }
+        XCTAssertTrue(row.isHittable)
+        row.buttons["OrbitTargetIssue:fixture"].tap()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        expectation(for: NSPredicate { _, _ in app.frame.width > app.frame.height }, evaluatedWith: app)
+        waitForExpectations(timeout: 10)
+        let panel = app.otherElements["OrbitTargetDetail"]
+        let message = app.textViews["OrbitTargetMessage"]
+        XCTAssertGreaterThan(message.frame.height, 44)
+        XCTAssertEqual(panel.images["OrbitTargetIcon"].frame.width, 60, accuracy: 1)
+        for label in ["Refresh settings", "Cache build", "Remove App Target", "View Build Log", "Close app details"] {
+            let control = app.buttons[label]
+            XCTAssertTrue(control.exists)
+            XCTAssertGreaterThanOrEqual(control.frame.minX, panel.frame.minX)
+            XCTAssertLessThanOrEqual(control.frame.maxX, panel.frame.maxX)
+            XCTAssertGreaterThanOrEqual(control.frame.minY, panel.frame.minY)
+            XCTAssertLessThanOrEqual(control.frame.maxY, panel.frame.maxY)
+        }
+        XCTAssertLessThanOrEqual(message.frame.maxY, app.buttons["Refresh settings"].frame.minY)
+        Thread.sleep(forTimeInterval: 1)
+        attach("Landscape expanded card at largest text size", app)
+        app.buttons["Close app details"].tap()
+        XCTAssertEqual(row.frame.width, 160, accuracy: 1)
+        XCTAssertEqual(row.frame.height, 220, accuracy: 1)
+    }
+
     func testIPadRotationAndTargetMenu() throws {
         guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("iPad layout check") }
         continueAfterFailure = false
@@ -191,8 +317,17 @@ final class CodeEditorUITests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         expectation(for: NSPredicate { _, _ in app.frame.width > app.frame.height }, evaluatedWith: app)
         waitForExpectations(timeout: 10)
+        XCTAssertEqual(row.frame.width, 160, accuracy: 1)
+        XCTAssertEqual(row.frame.height, 220, accuracy: 1)
         row.tap()
-        XCTAssertTrue(app.buttons["Build and Install"].waitForExistence(timeout: 5))
+        let panel = app.otherElements["OrbitTargetDetail"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(panel.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(panel.frame.maxX, app.frame.maxX)
+        XCTAssertGreaterThanOrEqual(panel.frame.minY, app.frame.minY)
+        XCTAssertLessThanOrEqual(panel.frame.maxY, app.frame.maxY)
+        // The screenshot surface settles after UIKit has updated its frames.
+        Thread.sleep(forTimeInterval: 1)
         attach("iPad target menu landscape", app)
         app.terminate()
     }
