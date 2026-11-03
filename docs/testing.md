@@ -1087,3 +1087,14 @@ Mac review bundle built with the ignored local identity and passed strict
 signature verification. The initial test compilation required moving an awaited
 Host reply outside a synchronous XCTest autoclosure. These are synthetic checks;
 physical deployment and phone-initiated self-update acceptance remain separate.
+
+Production recovery deployment (2026-11-03): inspection of the stalled live job
+showed successful compilation and no installation attempts, followed by a
+self-update acknowledgement timeout. That job was cancelled before installation.
+After synthetic validation, a Mac-initiated install-only catalog build of
+`6720431` compiled committed detached source with the existing ignored local
+identity. Native installation and exact installed-build readback succeeded on
+the configured phone. This was an explicit recovery deployment, separate from
+unattended tests. Reopening the phone app and completing a subsequent
+phone-initiated self-build remain manual acceptance; Apple sign-in, provisioning
+renewal, public notarization and marketplace acceptance were not exercised.
