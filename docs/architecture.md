@@ -399,7 +399,10 @@ attempt across catalog polls, foreground transitions and relaunch. System
 expiration or a rejected submission stops background monitoring without failing
 the Mac job or automatically creating a replacement activity. Late launches use
 the latest confirmed terminal/handoff state, and stale expiration callbacks
-cannot stop a newer activity. Handoff clears the expiration handler and finishes
+cannot stop a newer activity. The launch handler attaches the task and its
+expiration handler synchronously on the scheduler's main queue. Private
+`build_activity` diagnostics distinguish submitted, started, expired and finished
+monitoring from Mac build transitions. Handoff clears the expiration handler and finishes
 indeterminate progress with explicit completed units before acknowledging install.
 Scheduled retained jobs expose their compilation snapshot alongside their durable
 installation state, translated by `CodeJob.targetStatus` for the same UI.

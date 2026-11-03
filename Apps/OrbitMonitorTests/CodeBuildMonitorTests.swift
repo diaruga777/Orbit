@@ -106,6 +106,21 @@ import OrbitCore
         restored.observe(job); restored.activated()
         XCTAssertEqual(restoredScheduler.submissions, 0)
     }
+    func testSelfInstallBeforeSchedulerLaunchCompletesLateActivitySuccessfully() {
+        let scheduler = Scheduler(), monitor = monitor(scheduler)
+        var job = CodeJob(id: "self", title: "Build Orbit")
+        monitor.observe(job)
+        job.installHandoff = CodeInstallHandoff(acknowledged: true)
+        monitor.accept(job)
+        let task = scheduler.launch()
+        XCTAssertEqual(task.completions, [true])
+        XCTAssertEqual(task.progress.totalUnitCount, 1)
+        XCTAssertEqual(task.progress.completedUnitCount, 1)
+        XCTAssertNil(task.expirationHandler)
+        monitor.activated(); monitor.observe(job)
+        XCTAssertEqual(scheduler.submissions, 1)
+        XCTAssertEqual(monitor.job?.state, .running)
+    }
     func testOldExpirationCannotFailTheNextBuildAndActualFailureIsPreserved() async throws {
         let scheduler = Scheduler(), monitor = monitor(scheduler)
         var first = CodeJob(id: "one", title: "Build")

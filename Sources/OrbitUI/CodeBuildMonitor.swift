@@ -18,7 +18,7 @@ import OrbitCore
     private var lease: UIBackgroundTaskIdentifier = .invalid
     private var continued: (any CodeBuildBackgroundTask)?
     private let background: any CodeBuildBackgroundScheduling
-    private let isActive: () -> Bool
+    private let isActive: @MainActor () -> Bool
     private var requested = false
     private var title = "Build"
     private var disconnected = false
@@ -49,18 +49,20 @@ import OrbitCore
         return "You can leave Orbit while your Mac builds."
     }
 
-    init(client: CodeClient, defaults: UserDefaults, peerID: @escaping () -> String, status: ((String) async throws -> CodeJob)? = nil, background: (any CodeBuildBackgroundScheduling)? = nil, isActive: @escaping () -> Bool = { UIApplication.shared.applicationState == .active }, pollAutomatically: Bool = true) {
+    init(client: CodeClient, defaults: UserDefaults, peerID: @escaping () -> String, status: ((String) async throws -> CodeJob)? = nil, background: (any CodeBuildBackgroundScheduling)? = nil, isActive: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState == .active }, pollAutomatically: Bool = true) {
         self.status = status; self.client = client; self.defaults = defaults; self.peerID = peerID
         self.background = background ?? CodeBuildSystemScheduler(); self.isActive = isActive
         self.background.register(identifier: identifier) { [weak self] task in
             guard let self else { task.setTaskCompleted(success: false); return }
-            if self.didHandOff || self.job?.installHandoff != nil || self.job?.state == .succeeded {
-                self.finish(task, success: true); return
+            let handoff = self.didHandOff || self.job?.installHandoff != nil
+            if handoff || self.job?.state == .succeeded {
+                self.finish(task, success: true, handoff: handoff); return
             }
             guard self.job?.shouldMonitorInBackground == true, !self.monitoringStopped else {
                 self.finish(task, success: false); return
             }
             self.continued = task
+            OrbitDiagnostics.shared.record("build_activity", "started", ["job": self.job?.id ?? ""])
             task.expirationHandler = { [weak self, weak task] in
                 Task { @MainActor in
                     guard let self, let task, self.continued === task else { return }
@@ -126,8 +128,13 @@ import OrbitCore
         // A system expiration/dismissal ends this job's monitoring attempt. Neither
         // catalog polls nor foreground/relaunch may create another system activity.
         defaults.set(job.id, forKey: activityKey)
-        do { try background.submit(identifier: identifier, title: title); requested = true }
-        catch { requested = false; monitoringStopped = true }
+        do {
+            try background.submit(identifier: identifier, title: title); requested = true
+            OrbitDiagnostics.shared.record("build_activity", "submitted", ["job": job.id])
+        } catch {
+            requested = false; monitoringStopped = true
+            OrbitDiagnostics.shared.error("build_activity", "submission_failed", error, ["job": job.id])
+        }
     }
     @objc public func activated() {
         if peer != peerID() { job = nil; isStarting = false; complete(success: false); peer = peerID() }
@@ -221,6 +228,7 @@ import OrbitCore
         // Expiration may mean system resource pressure or user dismissal. The Mac
         // owns accepted work; stopping phone monitoring must not kill that build.
         monitoringStopped = true
+        OrbitDiagnostics.shared.record("build_activity", "expired", ["job": job?.id ?? ""])
         if let continued { finish(continued, success: false) }; continued = nil; requested = false
         endLease(); publish(); becameIdle?()
     }
@@ -232,6 +240,7 @@ import OrbitCore
             task.progress.totalUnitCount = 1; task.progress.completedUnitCount = 1
         }
         task.setTaskCompleted(success: success)
+        OrbitDiagnostics.shared.record("build_activity", "finished", ["job": job?.id ?? "", "success": String(success)])
     }
     private func complete(success: Bool) {
         if let continued { finish(continued, success: success) }; continued = nil
