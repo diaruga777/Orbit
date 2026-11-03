@@ -584,3 +584,5 @@ failed or pending installs cannot replace the last confirmed success. Missing
 dates show a dash; future clock skew clamps to now. VoiceOver reads the relative
 last-build time and each Play action names its app. Progress/failure text stays
 inside each tile; tile selection opens the existing anchored app actions.
+
+Registered Mac apps use the installed bundle’s `CFBundleIconFile` for 132px catalog thumbnails. Registration and background catalog polling populate missing icons and refresh changed artwork at most once every five minutes. The same persisted PNG travels to Orbit Mac and iOS; missing or unreadable icons leave the target available.

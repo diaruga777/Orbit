@@ -438,9 +438,13 @@ public actor OrbitHost {
         let settings = try JSONSerialization.jsonObject(with: deployment.settings) as? [String: Any] ?? [:]
         guard let path = settings["project"] as? String, let scheme = settings["scheme"] as? String,
               let branch = settings["branch"] as? String else { throw CodeFailure("Couldn’t read this Mac project.") }
-        if let existing = targets.first(where: { $0.mac?.installPath == deployment.installPath }) {
+        if let index = targets.firstIndex(where: { $0.mac?.installPath == deployment.installPath }) {
+            let existing = targets[index]
             guard existing.project.path == path, existing.project.scheme == scheme else { throw CodeFailure("Another target already owns this installation path.") }
-            return try object(existing)
+            if let icon = OrbitMacAppIcon.png(path: deployment.installPath, bundleID: deployment.bundleID) {
+                targets[index].iconPNG = icon; try saveTargets()
+            }
+            return try object(targets[index])
         }
         let hours = p["intervalHours"] as? Int ?? 144
         guard (1...8760).contains(hours) else { throw CodeFailure("Choose an interval from 1 to 8760 hours.") }
@@ -448,6 +452,7 @@ public actor OrbitHost {
             project: CodeProject(path: path, scheme: scheme), deviceID: "host-mac", branch: branch,
             intervalHours: hours, enabled: p["enabled"] as? Bool ?? false)
         target.mac = deployment
+        target.iconPNG = OrbitMacAppIcon.png(path: deployment.installPath, bundleID: deployment.bundleID)
         target.repository = p["repository"] as? String
         targets.append(target); try saveTargets()
         return try object(target)
@@ -456,6 +461,17 @@ public actor OrbitHost {
     /// never hide targets or invoke a build, and polling does not hammer Xcode.
     func populateMissingTargetIcons(discover: (CodeProject) async throws -> [CodeBuildApp]) async {
         var changed = false
+        // Recheck installed Mac icons after updates, including older catalogs.
+        // Never invoke iOS project discovery for a Mac target.
+        for index in targets.indices {
+            guard let mac = targets[index].mac else { continue }
+            let key = "mac\u{0}" + mac.installPath
+            guard Date().timeIntervalSince(iconLookups[key] ?? .distantPast) >= 300 else { continue }
+            iconLookups[key] = Date()
+            if let icon = OrbitMacAppIcon.png(path: mac.installPath, bundleID: mac.bundleID), targets[index].iconPNG != icon {
+                targets[index].iconPNG = icon; changed = true
+            }
+        }
         for target in targets where target.iconPNG == nil && target.mac == nil {
             let key = target.project.path + "\u{0}" + target.project.scheme
             guard Date().timeIntervalSince(iconLookups[key] ?? .distantPast) >= 300 else { continue }
