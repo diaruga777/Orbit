@@ -21,7 +21,8 @@ final class CodeClientRPCTests: XCTestCase {
             XCTAssertEqual(params["jobID"] as? String, jobID)
             XCTAssertNotNil(params["handoffToken"] as? String)
             let frame = try JSONSerialization.data(withJSONObject: ["method": "code", "params": params])
-            let response = try XCTUnwrap(JSONSerialization.jsonObject(with: await host.handle(frame, peer: "fixture-phone")) as? [String: Any])
+            let reply = await host.handle(frame, peer: "fixture-phone")
+            let response = try XCTUnwrap(JSONSerialization.jsonObject(with: reply) as? [String: Any])
             XCTAssertNil(response["error"])
             return try XCTUnwrap(response["result"])
         }
