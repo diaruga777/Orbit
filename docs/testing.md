@@ -1053,3 +1053,15 @@ Physical acceptance separately checks a long Orbit self-build, leaving/reopening
 the app and the system activity, iOS expiration/dismissal, and the final native
 installation/readback. iOS still controls background lifetime; synthetic scheduler
 checks do not establish actual system activity delivery or physical installation.
+
+Build-activity verification (2026-11-03): bootstrap generated native dependencies
+in committed detached source. All 243 Swift checks completed without failures
+(six optional fixtures skipped); all 48 Python checks, both Go race suites and
+Apple-helper vet passed. The iOS Simulator client and complete Mac review bundle
+built with the ignored local identity; strict Mac signature verification and
+packaged phone-source extraction/resume passed. All nine monitor lifecycle tests
+passed, including through the dedicated `OrbitMonitor` scheme. Existing Apps
+progress/completion, reconnect/failure and self-update handoff/relaunch UI tests
+passed on Simulator. No physical phone access, Apple sign-in, actual system
+activity delivery, installation/renewal, public notarization or marketplace
+acceptance was performed.
