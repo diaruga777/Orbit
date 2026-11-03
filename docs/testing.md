@@ -99,6 +99,13 @@ They are visual fixtures, not physical acceptance or proof of installation.
 
 ## Physical acceptance
 
+`OrbitLegacyIdentityTests` reproduces a legacy bundled source with no local config,
+restores its saved identity, and verifies a detached checkout uses committed source
+while preserving editor changes. It also covers exact phone bundle IDs, owner-only
+config permissions, existing configs, missing/mismatched saved state, source/config
+symlinks, and rejection by the real Host build RPC before work is submitted.
+These fixtures never access a phone or Apple account.
+
 Before treating a release as verified for unattended personal use, test using the intended Xcode/account/phone:
 
 - First installation with a free Personal Team, then profile renewal before seven-day expiry; verify the installed profile's new expiration and extensions.

@@ -25,6 +25,13 @@ public enum CodeOrbitIdentity {
         let prefix = values["ORBIT_BUNDLE_PREFIX"] ?? ""
         let team = values["DEVELOPMENT_TEAM"] ?? ""
         let bundle = values["ORBIT_IOS_BUNDLE_IDENTIFIER"] ?? prefix + ".ios"
+        _ = try localConfiguration(bundlePrefix: prefix, developmentTeam: team, iosBundleID: bundle)
+        var value = project
+        value.bundlePrefix = prefix; value.developmentTeam = team; value.iosBundleID = bundle
+        return value
+    }
+    /// Validate saved setup identity before restoring an older private source snapshot.
+    public static func localConfiguration(bundlePrefix prefix: String, developmentTeam team: String, iosBundleID bundle: String) throws -> String {
         func validID(_ value: String) -> Bool {
             value.split(separator: ".", omittingEmptySubsequences: false).count >= 3 &&
             value.split(separator: ".", omittingEmptySubsequences: false).allSatisfy { !$0.isEmpty && $0.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") } } &&
@@ -34,8 +41,6 @@ public enum CodeOrbitIdentity {
               team.allSatisfy({ $0.isASCII && ($0.isUppercase || $0.isNumber) }) else {
             throw CodeFailure("Replace the sample bundle prefix and development team in Config/Local.xcconfig before building Orbit.")
         }
-        var value = project
-        value.bundlePrefix = prefix; value.developmentTeam = team; value.iosBundleID = bundle
-        return value
+        return "ORBIT_BUNDLE_PREFIX = \(prefix)\nDEVELOPMENT_TEAM = \(team)\nORBIT_IOS_BUNDLE_IDENTIFIER = \(bundle)\n"
     }
 }

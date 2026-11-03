@@ -204,6 +204,35 @@ public actor OrbitSetup {
         try Data("ORBIT_BUNDLE_PREFIX = \(state.bundlePrefix)\nDEVELOPMENT_TEAM = \(state.teamID)\nORBIT_IOS_BUNDLE_IDENTIFIER = \(bundle)\n".utf8).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     }
+    /// Older bundled installs kept signing identity only in setup and the catalog.
+    /// Restore their missing ignored file only when all saved identities agree.
+    func restoreLegacyIdentity(for project: CodeProject, phoneBundleID: String?) throws {
+        let source = URL(fileURLWithPath: project.root).resolvingSymlinksInPath()
+        let privateRoot = root.appendingPathComponent("PhoneSource").resolvingSymlinksInPath()
+        guard URL(fileURLWithPath: project.path).lastPathComponent == "Orbit.xcodeproj",
+              source.path.hasPrefix(privateRoot.path + "/"),
+              FileManager.default.fileExists(atPath: source.appendingPathComponent("Config/Orbit.xcconfig").path) else { return }
+        let file = source.appendingPathComponent("Config/Local.xcconfig")
+        // Even an invalid existing config belongs to the user; the build reports it.
+        guard !FileManager.default.fileExists(atPath: file.path),
+              (try? file.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true else { return }
+        let saved = root.appendingPathComponent("setup.json")
+        guard FileManager.default.fileExists(atPath: saved.path) else { return }
+        let state = try JSONDecoder().decode(OrbitSetupState.self, from: Data(contentsOf: saved))
+        guard let original = state.source,
+              URL(fileURLWithPath: original).resolvingSymlinksInPath().path == source.path else { return }
+        let bundle = project.iosBundleID ?? state.bundlePrefix + ".ios"
+        guard project.bundlePrefix == state.bundlePrefix, project.developmentTeam == state.teamID,
+              phoneBundleID == bundle else {
+            throw CodeFailure("Orbit’s saved signing details don’t match. Open setup on your Mac before building.")
+        }
+        let config = try CodeOrbitIdentity.localConfiguration(bundlePrefix: state.bundlePrefix,
+            developmentTeam: state.teamID, iosBundleID: bundle)
+        // Resolve Config too: a symlink must not turn recovery into an outside write.
+        guard file.deletingLastPathComponent().resolvingSymlinksInPath().path == source.appendingPathComponent("Config").path else { return }
+        try Data(config.utf8).write(to: file, options: .withoutOverwriting)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+    }
     public func exportMCP(app: URL) throws -> URL {
         let directory = root.appendingPathComponent("AgentSetup"); try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent("orbit-mcp.json")

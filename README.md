@@ -187,6 +187,10 @@ Use your own unique reverse-DNS prefix and your team identifier from Xcode. The 
 
 Open `Orbit.xcodeproj`. Select the **Orbit** scheme and your phone, then Run. Xcode uses automatic development signing. The phone may ask you to trust your development certificate in Settings → General → VPN & Device Management. Keep the app installed; reinstalling from scratch can discard its local drafts and pairing identity.
 
+Builds of older DMG-installed phone source restore a missing local identity file
+from matching saved setup, app and phone settings before building. Existing local
+files stay authoritative. Developer checkouts still require their own local config.
+
 For the Mac, choose **OrbitMac → My Mac → Run** in Xcode, or run:
 
 ```sh

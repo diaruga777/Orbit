@@ -501,6 +501,7 @@ public actor OrbitHost {
                 throw error
             }
         }
+        try await OrbitSetup(root: root).restoreLegacyIdentity(for: target.project, phoneBundleID: configuration.phoneBundleID)
         var request: CodeRequest
         if let pending = target.pendingRequest { request = pending }
         else if launch == true {
