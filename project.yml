@@ -204,7 +204,13 @@ schemes:
       targets:
         Orbit: all
     test:
-      targets: [OrbitMonitorTests, OrbitUITests]
+      targets: [OrbitUITests]
+  OrbitMonitor:
+    build:
+      targets:
+        Orbit: all
+    test:
+      targets: [OrbitMonitorTests]
   OrbitMac:
     build:
       targets:

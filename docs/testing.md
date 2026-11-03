@@ -1044,7 +1044,7 @@ isolation, real build failure and completion before self-install acknowledgement
 The fixture never connects to a Mac or phone. Run with:
 
 ```sh
-xcodebuild test -project Orbit.xcodeproj -scheme Orbit \
+xcodebuild test -project Orbit.xcodeproj -scheme OrbitMonitor \
   -destination 'platform=iOS Simulator,id=YOUR_BOOTED_SIMULATOR' \
   -only-testing:OrbitMonitorTests
 ```

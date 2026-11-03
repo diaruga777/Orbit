@@ -44,17 +44,6 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "021F756577F0FA7EC2425F4F"
-               BuildableName = "OrbitMonitorTests.xctest"
-               BlueprintName = "OrbitMonitorTests"
-               ReferencedContainer = "container:Orbit.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "60C563C8337C0BB1E97DDB59"
                BuildableName = "OrbitUITests.xctest"
                BlueprintName = "OrbitUITests"
