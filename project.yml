@@ -134,6 +134,20 @@ targets:
         TEST_TARGET_NAME: Orbit
     dependencies:
       - target: Orbit
+  OrbitMonitorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Apps/OrbitMonitorTests]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ORBIT_BUNDLE_PREFIX).monitor-tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Orbit.app/Orbit
+        BUNDLE_LOADER: $(TEST_HOST)
+    dependencies:
+      - target: Orbit
+      - package: Orbit
+        product: OrbitUI
   OrbitMacClient:
     type: application
     platform: macOS
@@ -190,7 +204,7 @@ schemes:
       targets:
         Orbit: all
     test:
-      targets: [OrbitUITests]
+      targets: [OrbitMonitorTests, OrbitUITests]
   OrbitMac:
     build:
       targets:

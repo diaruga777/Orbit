@@ -393,6 +393,14 @@ progress, console, durable job reattachment, reconnect handling and
 catalog and includes the monitoring client's bundle ID in retained install-only
 jobs. Native and authorized remote installation still use the existing pipeline. Self-installation waits for the phone's acknowledgement after ending
 the activity. Successful compilation alone never completes installation.
+The system activity is submitted only after a running job is accepted; startup
+uses a short UIKit lease. The peer-scoped job ID records a single monitoring
+attempt across catalog polls, foreground transitions and relaunch. System
+expiration or a rejected submission stops background monitoring without failing
+the Mac job or automatically creating a replacement activity. Late launches use
+the latest confirmed terminal/handoff state, and stale expiration callbacks
+cannot stop a newer activity. Handoff clears the expiration handler and finishes
+indeterminate progress with explicit completed units before acknowledging install.
 Scheduled retained jobs expose their compilation snapshot alongside their durable
 installation state, translated by `CodeJob.targetStatus` for the same UI.
 Retained artifacts remain available for phone refresh, retries and reconciliation.

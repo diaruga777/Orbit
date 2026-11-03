@@ -1032,3 +1032,24 @@ accessibility text size. Visual review caught an initial offscreen second column
 viewport assertions now cover it. An interrupted shared-Simulator run was rerun.
 No physical phone access, Apple sign-in, installation/renewal, public notarization
 or marketplace acceptance was performed.
+
+
+## Build activity lifecycle
+
+`OrbitMonitorTests/CodeBuildMonitorTests` drives the production monitor with an
+injected scheduler on Simulator. It checks slow/interrupted startup, one activity
+after acceptance, expiration and submission rejection across polls/foreground/
+relaunch, late successful launch, stale expiration after a new build, peer
+isolation, real build failure and completion before self-install acknowledgement.
+The fixture never connects to a Mac or phone. Run with:
+
+```sh
+xcodebuild test -project Orbit.xcodeproj -scheme Orbit \
+  -destination 'platform=iOS Simulator,id=YOUR_BOOTED_SIMULATOR' \
+  -only-testing:OrbitMonitorTests
+```
+
+Physical acceptance separately checks a long Orbit self-build, leaving/reopening
+the app and the system activity, iOS expiration/dismissal, and the final native
+installation/readback. iOS still controls background lifetime; synthetic scheduler
+checks do not establish actual system activity delivery or physical installation.
