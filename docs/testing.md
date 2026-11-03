@@ -1098,3 +1098,7 @@ the configured phone. This was an explicit recovery deployment, separate from
 unattended tests. Reopening the phone app and completing a subsequent
 phone-initiated self-build remain manual acceptance; Apple sign-in, provisioning
 renewal, public notarization and marketplace acceptance were not exercised.
+
+`OrbitMacAppIconTests` checks installed Mac icon thumbnails, bundle-ID matching,
+legacy catalog backfill, changed icons after restart, wire encoding and missing
+artwork. Mac catalog lookups never invoke iOS scheme discovery.
