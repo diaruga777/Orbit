@@ -680,6 +680,7 @@ import OrbitCore
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = .systemBackground
         text.font = .monospacedSystemFont(ofSize: 12, weight: .regular); text.isEditable = false; text.translatesAutoresizingMaskIntoConstraints = false
+        navigationItem.largeTitleDisplayMode = .never
         text.accessibilityIdentifier = "CodeBuildConsole"
         status.font = .preferredFont(forTextStyle: .title2); status.textAlignment = .center; status.numberOfLines = 0
         status.adjustsFontForContentSizeCategory = true
@@ -718,7 +719,14 @@ import OrbitCore
     func update(_ value: CodeJob?) {
         guard let value else { return }; job = value
         guard isViewLoaded else { return }
-        title = value.title
+        // Keep the app name centered within the space beside Done. A long
+        // operation + app title pushes the system navigation title to one side.
+        if let separator = value.title.range(of: " · ") {
+            title = String(value.title[separator.upperBound...])
+            navigationItem.prompt = String(value.title[..<separator.lowerBound])
+        } else {
+            title = value.title; navigationItem.prompt = nil
+        }
         text.isHidden = !showConsole; summary.isHidden = showConsole
         text.text = value.log.isEmpty ? "Starting on your Mac…" : value.log
         console.setTitle(showConsole ? "Hide Console" : "Show Console", for: .normal)

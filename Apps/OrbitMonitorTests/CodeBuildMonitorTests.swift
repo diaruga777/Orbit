@@ -50,7 +50,9 @@ import OrbitCore
         let task = scheduler.launch()
         task.expirationHandler?()
         await Task.yield()
-        XCTAssertEqual(task.completions, [false])
+        XCTAssertEqual(task.completions, [true], "Ending phone monitoring must not announce a failed Mac build")
+        XCTAssertEqual(task.title, "Build monitoring paused")
+        XCTAssertEqual(task.subtitle, "Open Orbit to check your Mac’s result.")
         XCTAssertNil(task.expirationHandler)
         for _ in 0..<3 { monitor.activated(); monitor.observe(job) }
         XCTAssertEqual(scheduler.submissions, 1)
@@ -61,6 +63,44 @@ import OrbitCore
         XCTAssertEqual(restoredScheduler.submissions, 0)
         XCTAssertEqual(restored.job?.state, .running)
         XCTAssertTrue(restored.backgroundMessage.contains("Come back to check progress"))
+    }
+    func testConfirmedInstallAfterExpirationDoesNotLeaveAFailedActivityOrRestartMonitoring() async {
+        let scheduler = Scheduler(), monitor = monitor(scheduler)
+        var job = CodeJob(id: "reader", title: "Build & Install · LunaReader")
+        job.progress = CodeJobProgress(stage: "Installing on your phone…", start: 0.80, end: 0.93, estimatedSeconds: 40)
+        monitor.observe(job)
+        let task = scheduler.launch()
+        task.expirationHandler?(); await Task.yield()
+        XCTAssertEqual(monitor.job?.state, .running)
+        XCTAssertEqual(task.completions, [true])
+        XCTAssertEqual(task.title, "Build monitoring paused")
+        job.state = .succeeded; monitor.accept(job)
+        XCTAssertEqual(monitor.job?.state, .succeeded)
+        XCTAssertEqual(monitor.fraction, 1)
+        XCTAssertEqual(scheduler.submissions, 1)
+        XCTAssertEqual(task.completions, [true], "An expired task must only complete once")
+    }
+    func testConfirmedSuccessReplacesTheLastInstallingStageInActivity() {
+        let scheduler = Scheduler(), monitor = monitor(scheduler)
+        var job = CodeJob(id: "reader", title: "Build & Install · LunaReader")
+        job.progress = CodeJobProgress(stage: "Installing on your phone…", start: 0.80, end: 0.93, estimatedSeconds: 40)
+        monitor.observe(job)
+        let task = scheduler.launch()
+        job.state = .succeeded; monitor.accept(job)
+        XCTAssertEqual(task.completions, [true])
+        XCTAssertEqual(task.title, "Build completed")
+        XCTAssertEqual(task.progress.totalUnitCount, 1)
+        XCTAssertEqual(task.progress.completedUnitCount, 1)
+    }
+    func testLateFailedJobWithAnOldHandoffIsStillAFailure() {
+        let scheduler = Scheduler(), monitor = monitor(scheduler)
+        var job = CodeJob(id: "self", title: "Build Orbit")
+        monitor.observe(job)
+        job.state = .failed; job.installHandoff = CodeInstallHandoff(acknowledged: true)
+        monitor.accept(job)
+        let task = scheduler.launch()
+        XCTAssertEqual(task.completions, [false])
+        XCTAssertEqual(task.title, "Build failed")
     }
     func testRejectedSubmissionIsNotRetriedByStatusPolls() {
         let scheduler = Scheduler(); scheduler.reject = true
@@ -136,6 +176,7 @@ import OrbitCore
         XCTAssertEqual(scheduler.submissions, 2)
         next.state = .failed; monitor.accept(next)
         XCTAssertEqual(currentTask.completions, [false])
+        XCTAssertEqual(currentTask.title, "Build failed")
         XCTAssertEqual(oldTask.completions, [true])
         XCTAssertEqual(monitor.job?.state, .failed)
     }
@@ -155,7 +196,10 @@ import OrbitCore
         let scheduler = Scheduler(); var peer = "mac-one"
         let monitor = monitor(scheduler, peer: { peer })
         monitor.observe(CodeJob(id: "same-id", title: "Build"))
+        let oldTask = scheduler.launch()
         peer = "mac-two"; monitor.activated()
+        XCTAssertEqual(oldTask.completions, [true])
+        XCTAssertEqual(oldTask.title, "Build monitoring paused")
         monitor.observe(CodeJob(id: "same-id", title: "Build"))
         XCTAssertEqual(scheduler.submissions, 2)
     }
@@ -177,6 +221,8 @@ import OrbitCore
     let progress = Progress(totalUnitCount: 1000)
     var expirationHandler: (() -> Void)?
     var completions: [Bool] = []
-    func updateTitle(_ title: String, subtitle: String) {}
+    var title = ""
+    var subtitle = ""
+    func updateTitle(_ title: String, subtitle: String) { self.title = title; self.subtitle = subtitle }
     func setTaskCompleted(success: Bool) { completions.append(success) }
 }

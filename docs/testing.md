@@ -1134,3 +1134,17 @@ clipped refresh labels, all corrected before the final checks. The terminal-job
 log check now asserts console content instead of a running-only progress view.
 No physical phone access, Apple sign-in, installation/renewal, public notarization
 or marketplace acceptance was performed.
+
+
+## Remote build result and monitoring expiration
+
+The Simulator monitor suite reproduces expiration during Luna Reader-style
+installation, then a confirmed successful install. It checks that the ended
+monitoring session says **Build monitoring paused**, never changes the Mac job
+to success/failure, completes once and does not restart on subsequent polls.
+Other cases check explicit completed/failed activity titles, failure taking
+precedence over a retained handoff, and ending monitoring on a peer change.
+`testAppsBuildShowsLiveProgressConsoleAndCompletion` also checks a centered app
+heading, separate action prompt and no overlap with Done in the actual sheet.
+These checks use synthetic jobs and Simulator; actual system activity delivery
+and physical installation remain separate acceptance checks.

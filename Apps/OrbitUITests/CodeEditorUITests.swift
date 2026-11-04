@@ -92,6 +92,12 @@ final class CodeEditorUITests: XCTestCase {
         let progress = app.descendants(matching: .any)["CodeBuildProgress"]
         XCTAssertTrue(progress.waitForExistence(timeout: 8))
         let first = progress.value as? String
+        let bar = app.navigationBars.firstMatch
+        let heading = bar.staticTexts["Fixture App"]
+        XCTAssertTrue(heading.exists)
+        XCTAssertTrue(bar.staticTexts["Build & Install"].exists)
+        XCTAssertEqual(heading.frame.midX, bar.frame.midX, accuracy: 3)
+        XCTAssertLessThan(heading.frame.maxX, bar.buttons["Done"].frame.minX)
         XCTAssertTrue(app.staticTexts["Compile Feature.swift"].exists)
         app.buttons["Show Console"].tap()
         XCTAssertTrue(app.textViews["CodeBuildConsole"].value as? String == "Compile Feature.swift\nFixture build output\n")

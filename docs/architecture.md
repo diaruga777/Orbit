@@ -406,7 +406,14 @@ attempt across catalog polls, foreground transitions and relaunch. System
 expiration or a rejected submission stops background monitoring without failing
 the Mac job or automatically creating a replacement activity. Late launches use
 the latest confirmed terminal/handoff state, and stale expiration callbacks
-cannot stop a newer activity. The launch handler attaches the task and its
+cannot stop a newer activity. The monitoring task ends successfully with an explicit **Build monitoring paused**
+title on expiration or a peer change. Its completed units describe the ended
+monitoring session, not compilation or installation; the Mac job remains running
+until confirmed otherwise. Only confirmed failed/cancelled jobs finish the task
+unsuccessfully. Terminal activity titles replace stale installation-stage text,
+and a failed job takes precedence over any retained self-install handoff.
+The progress sheet uses the app name as its centered inline navigation title and
+the action as a separate system prompt. The launch handler attaches the task and its
 expiration handler synchronously on the scheduler's main queue. Private
 `build_activity` diagnostics distinguish submitted, started, expired and finished
 monitoring from Mac build transitions. Handoff clears the expiration handler and finishes

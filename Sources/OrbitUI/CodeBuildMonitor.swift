@@ -55,12 +55,14 @@ import OrbitCore
         self.background = background ?? CodeBuildSystemScheduler(); self.isActive = isActive
         self.background.register(identifier: identifier) { [weak self] task in
             guard let self else { task.setTaskCompleted(success: false); return }
-            let handoff = self.didHandOff || self.job?.installHandoff != nil
-            if handoff || self.job?.state == .succeeded {
-                self.finish(task, success: true, handoff: handoff); return
+            if let job = self.job, job.state != .running {
+                self.finish(task, outcome: job.state == .succeeded ? .succeeded : job.state == .cancelled ? .cancelled : .failed); return
+            }
+            if self.didHandOff || self.job?.installHandoff != nil {
+                self.finish(task, outcome: .handoff); return
             }
             guard self.job?.shouldMonitorInBackground == true, !self.monitoringStopped else {
-                self.finish(task, success: false); return
+                self.finish(task, outcome: .monitoringStopped); return
             }
             self.continued = task
             OrbitDiagnostics.shared.record("build_activity", "started", ["job": self.job?.id ?? ""])
@@ -138,7 +140,10 @@ import OrbitCore
         }
     }
     @objc public func activated() {
-        if peer != peerID() { job = nil; isStarting = false; complete(success: false); peer = peerID() }
+        if peer != peerID() {
+            if let continued { finish(continued, outcome: .monitoringStopped) }; continued = nil
+            job = nil; isStarting = false; complete(success: false); peer = peerID()
+        }
         requestBackgroundMonitoring()
         Task {
             let origin = peerID(), key = "Code.activeJob." + peerID()
@@ -197,7 +202,7 @@ import OrbitCore
         // Persist before acknowledging. Relaunch must never create another
         // continued-processing activity for the installation that replaces us.
         defaults.set(id, forKey: handoffKey)
-        if let continued { finish(continued, success: true, handoff: true) }; continued = nil
+        if let continued { finish(continued, outcome: .handoff) }; continued = nil
         background.cancel(identifier: identifier); requested = false
         if handoff.acknowledged { if !acknowledgingInstall { becameIdle?() }; return }
         guard !acknowledgingInstall else { return }
@@ -230,21 +235,32 @@ import OrbitCore
         // owns accepted work; stopping phone monitoring must not kill that build.
         monitoringStopped = true
         OrbitDiagnostics.shared.record("build_activity", "expired", ["job": job?.id ?? ""])
-        if let continued { finish(continued, success: false) }; continued = nil; requested = false
+        if let continued { finish(continued, outcome: .monitoringStopped) }; continued = nil; requested = false
         endLease(); publish(); becameIdle?()
     }
-    private func finish(_ task: any CodeBuildBackgroundTask, success: Bool, handoff: Bool = false) {
+    private enum BackgroundOutcome: String { case succeeded, failed, cancelled, handoff, monitoringStopped }
+    private func finish(_ task: any CodeBuildBackgroundTask, outcome: BackgroundOutcome) {
         task.expirationHandler = nil
+        let success = outcome != .failed && outcome != .cancelled
+        switch outcome {
+        case .succeeded: task.updateTitle("Build completed", subtitle: "Open Orbit for details.")
+        case .failed: task.updateTitle("Build failed", subtitle: "Open Orbit for details.")
+        case .cancelled: task.updateTitle("Build cancelled", subtitle: "Open Orbit for details.")
+        case .handoff: task.updateTitle("Build complete", subtitle: "Updating Orbit…")
+        case .monitoringStopped:
+            // This task owns phone monitoring, not the Mac job. End that session
+            // without presenting an unconfirmed remote build as a failed build.
+            task.updateTitle("Build monitoring paused", subtitle: "Open Orbit to check your Mac’s result.")
+        }
         if success {
-            if handoff { task.updateTitle("Build complete", subtitle: "Updating Orbit…") }
             // Running progress has an unknown total. Never complete it with -1 units.
             task.progress.totalUnitCount = 1; task.progress.completedUnitCount = 1
         }
         task.setTaskCompleted(success: success)
-        OrbitDiagnostics.shared.record("build_activity", "finished", ["job": job?.id ?? "", "success": String(success)])
+        OrbitDiagnostics.shared.record("build_activity", "finished", ["job": job?.id ?? "", "success": String(success), "outcome": outcome.rawValue])
     }
     private func complete(success: Bool) {
-        if let continued { finish(continued, success: success) }; continued = nil
+        if let continued { finish(continued, outcome: success ? .succeeded : job?.state == .cancelled ? .cancelled : .failed) }; continued = nil
         background.cancel(identifier: identifier); requested = false
         endLease()
         if job?.state != .running { defaults.removeObject(forKey: "Code.activeJob." + peer); defaults.removeObject(forKey: handoffKey) }

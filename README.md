@@ -145,6 +145,11 @@ when the phone is on cellular alone. Expanded cards hold
 schedules, cancellation and console actions. An interrupted build reply asks you
 to check Apps before retrying, since the Mac may already be building.
 
+If iOS ends live build monitoring, the activity says **Build monitoring paused**.
+Open Orbit to get the Mac’s result; the build can continue there. Only a confirmed
+failed or cancelled job uses a failed activity. The progress sheet centers the app
+name and shows the build action separately above it.
+
 ## Quick path with an agent
 
 Clone this repository and ask your agent:
