@@ -660,6 +660,8 @@ import OrbitCore
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) { select(indexPath.row) }
 }
 @MainActor final class CodeLogController: UIViewController {
+    private let appTitle = UILabel()
+    private let actionTitle = UILabel()
     private let text = UITextView()
     private let progress = CodeBuildProgressView()
     private let percent = UILabel()
@@ -681,6 +683,19 @@ import OrbitCore
         super.viewDidLoad(); view.backgroundColor = .systemBackground
         text.font = .monospacedSystemFont(ofSize: 12, weight: .regular); text.isEditable = false; text.translatesAutoresizingMaskIntoConstraints = false
         navigationItem.largeTitleDisplayMode = .never
+        appTitle.font = UIFontMetrics(forTextStyle: .headline).scaledFont(for: .systemFont(ofSize: 17, weight: .semibold), maximumPointSize: 20)
+        actionTitle.font = UIFontMetrics(forTextStyle: .caption2).scaledFont(for: .systemFont(ofSize: 11), maximumPointSize: 13)
+        actionTitle.textColor = .secondaryLabel
+        for label in [appTitle, actionTitle] {
+            label.textAlignment = .center; label.lineBreakMode = .byTruncatingTail
+            label.adjustsFontForContentSizeCategory = true
+        }
+        appTitle.accessibilityIdentifier = "CodeBuildAppTitle"
+        actionTitle.accessibilityIdentifier = "CodeBuildActionTitle"
+        let heading = UIStackView(arrangedSubviews: [actionTitle, appTitle])
+        heading.axis = .vertical; heading.spacing = 2
+        heading.widthAnchor.constraint(lessThanOrEqualToConstant: 220).isActive = true
+        navigationItem.titleView = heading
         text.accessibilityIdentifier = "CodeBuildConsole"
         status.font = .preferredFont(forTextStyle: .title2); status.textAlignment = .center; status.numberOfLines = 0
         status.adjustsFontForContentSizeCategory = true
@@ -719,14 +734,14 @@ import OrbitCore
     func update(_ value: CodeJob?) {
         guard let value else { return }; job = value
         guard isViewLoaded else { return }
-        // Keep the app name centered within the space beside Done. A long
-        // operation + app title pushes the system navigation title to one side.
+        // Separate the action and app name so both fit in a centered heading.
         if let separator = value.title.range(of: " · ") {
             title = String(value.title[separator.upperBound...])
-            navigationItem.prompt = String(value.title[..<separator.lowerBound])
+            actionTitle.text = String(value.title[..<separator.lowerBound])
         } else {
-            title = value.title; navigationItem.prompt = nil
+            title = value.title; actionTitle.text = nil
         }
+        appTitle.text = title; actionTitle.isHidden = actionTitle.text == nil
         text.isHidden = !showConsole; summary.isHidden = showConsole
         text.text = value.log.isEmpty ? "Starting on your Mac…" : value.log
         console.setTitle(showConsole ? "Hide Console" : "Show Console", for: .normal)

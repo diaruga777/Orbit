@@ -1145,6 +1145,6 @@ to success/failure, completes once and does not restart on subsequent polls.
 Other cases check explicit completed/failed activity titles, failure taking
 precedence over a retained handoff, and ending monitoring on a peer change.
 `testAppsBuildShowsLiveProgressConsoleAndCompletion` also checks a centered app
-heading, separate action prompt and no overlap with Done in the actual sheet.
+heading, separate action label and no overlap with Done in the actual sheet.
 These checks use synthetic jobs and Simulator; actual system activity delivery
 and physical installation remain separate acceptance checks.
