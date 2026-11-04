@@ -429,8 +429,9 @@ live work counts with an indeterminate indicator during builds; it does not divi
 by a previous build's workload or advance progress based on elapsed time. Apps,
 Project, the console summary and the system activity share this behavior. Legacy
 companions without events show the last stage and wait for updates. Internal
-stage markers advance only at confirmed boundaries, and only job success shows
-100%; a successful build action still does not confirm phone installation.
+stage markers advance only at confirmed boundaries. Only confirmed job success
+shows 100% in Orbit’s build screen; ending a monitoring session does not change
+that job or confirm installation.
 
 Orbit's detached checkout resolves its bundle prefix, exact phone bundle ID and
 team from the original ignored `Config/Local.xcconfig`, overriding stale catalog

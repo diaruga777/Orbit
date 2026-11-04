@@ -1148,3 +1148,16 @@ precedence over a retained handoff, and ending monitoring on a peer change.
 heading, separate action label and no overlap with Done in the actual sheet.
 These checks use synthetic jobs and Simulator; actual system activity delivery
 and physical installation remain separate acceptance checks.
+
+Remote-result verification (2026-11-04): bootstrap generated native dependencies
+from committed detached source. All 247 Swift checks completed without failures
+(six optional fixtures skipped), all 48 Python checks passed, and both Go race
+suites plus helper vet passed. All 13 Simulator monitor tests passed. The final
+iOS client passed progress/title geometry, reconnect/failure and self-update
+handoff UI checks in dark appearance; progress/title geometry also passed in
+light appearance. Both heading captures were reviewed. The final Mac review
+package passed strict signature verification and bundled phone-source
+extraction/resume. Both client bundle IDs matched ignored local configuration.
+Reading the existing Luna Reader job confirmed its recorded installation success;
+no new physical-phone access, Apple sign-in, installation/renewal, actual system
+activity delivery, notarization or marketplace acceptance was performed.
