@@ -5,7 +5,8 @@
 Orbit is an open source iPhone/iPad source editor and Mac build companion for iOS and macOS apps. Add a local Xcode project or a GitHub repository, choose your phone, and build immediately or on a schedule. Your Mac runs Xcode and signs the app with **your** Apple account. Source, Apple credentials, pairing records and signing keys stay on your devices. Orbit also hosts single-file JavaScript applets and Home Screen / Lock Screen widgets.
 
 Both apps share a white iPhone-and-MacBook silhouette icon on black. Artwork and export details
-are in [app icons](docs/design/app-icons.md).
+are in [app icons](docs/design/app-icons.md). The Mac menu bar uses a flat,
+monochrome version of the same laptop, phone and orbit.
 
 You need a Mac, an iPhone, and either a coding agent subscription/credits or enough development experience to configure the tools yourself. Orbit includes an MCP and setup/deploy skills, so an agent can follow this README end to end. Orbit does not require an AI provider, subscription, hosted backend or paid Apple membership.
 

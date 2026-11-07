@@ -13,6 +13,10 @@ internal shading; the orbit has no glass effect.
   Exports are resized with macOS `sips`. The packaging script uses `iconutil` to
   turn those same PNGs into the bundle's `Orbit.icns`.
 
+The Mac menu bar uses `OrbitMenuBarIcon` in `OrbitMacApp.swift`: flat vector
+device silhouettes and an open orbit, with no tile, glass or shading. Its AppKit
+template image follows the system menu bar appearance.
+
 Edited with the built-in image generation tool; no runtime AI dependency.
 The prompts below record the selected revision and its Mac adaptation.
 

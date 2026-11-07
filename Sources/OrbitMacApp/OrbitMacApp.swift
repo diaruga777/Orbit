@@ -28,9 +28,12 @@ import UniformTypeIdentifiers
                 Button("Setup…") { setup.state.finished = false; setup.state.step = .welcome; setup.persist() }
             }
         }
-        MenuBarExtra("Orbit", systemImage: "sparkles") {
+        MenuBarExtra {
             Button("Open Orbit") { NSApp.activate(ignoringOtherApps: true); NSApp.windows.first?.makeKeyAndOrderFront(nil) }
             Button("Quit Orbit") { NSApp.terminate(nil) }
+        } label: {
+            Image(nsImage: OrbitMenuBarIcon.image)
+                .accessibilityLabel("Orbit")
         }
     }
 
@@ -58,4 +61,47 @@ final class OrbitMacDelegate: NSObject, NSApplicationDelegate {
             return event
         }
         NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true) }
+}
+
+// Flat device silhouettes from the app icon, redrawn for the menu bar.
+private enum OrbitMenuBarIcon {
+    static let image: NSImage = {
+        let image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { _ in
+            NSColor.black.setFill()
+            NSColor.black.setStroke()
+
+            let orbit = NSBezierPath()
+            orbit.move(to: NSPoint(x: 16, y: 15))
+            orbit.curve(to: NSPoint(x: 2, y: 3),
+                        controlPoint1: NSPoint(x: 7, y: 16), controlPoint2: NSPoint(x: -2, y: 7))
+            orbit.curve(to: NSPoint(x: 20, y: 10),
+                        controlPoint1: NSPoint(x: 6, y: -2), controlPoint2: NSPoint(x: 22, y: 3))
+            orbit.lineWidth = 0.9
+            orbit.lineCapStyle = .round
+            orbit.stroke()
+
+            NSBezierPath(roundedRect: NSRect(x: 5, y: 5, width: 10, height: 8),
+                         xRadius: 0.8, yRadius: 0.8).fill()
+            let base = NSBezierPath()
+            base.move(to: NSPoint(x: 5, y: 4))
+            base.line(to: NSPoint(x: 15, y: 4))
+            base.line(to: NSPoint(x: 17, y: 2.5))
+            base.line(to: NSPoint(x: 3, y: 2.5))
+            base.close()
+            base.fill()
+
+            let phone = NSBezierPath(roundedRect: NSRect(x: 17, y: 11, width: 3.5, height: 6.5),
+                                     xRadius: 0.7, yRadius: 0.7)
+            var tilt = AffineTransform()
+            tilt.translate(x: 18.75, y: 14.25)
+            tilt.rotate(byDegrees: -14)
+            tilt.translate(x: -18.75, y: -14.25)
+            phone.transform(using: tilt)
+            phone.fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Orbit"
+        return image
+    }()
 }

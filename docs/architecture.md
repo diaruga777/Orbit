@@ -24,7 +24,9 @@ The Mac packaging script converts the same Mac PNGs to `Orbit.icns` and declares
 The iOS master is opaque and square for system masking; the Mac artwork includes
 transparent padding and rounded corners. Both use solid white device silhouettes
 on black, subtle glass edges on the devices, and a thin white orbit that tapers
-before the phone. See [app icons](design/app-icons.md).
+before the phone. The Mac menu bar draws simplified device/orbit paths as an
+18-point-high AppKit template image, so macOS supplies the menu bar color.
+See [app icons](design/app-icons.md).
 The everyday `OrbitMac` scheme builds `OrbitMacInstall`, a native application
 product whose script runs the same `scripts/build_and_run.sh --install-only`
 entrypoint as agents and in-app updates. After successful installation,
