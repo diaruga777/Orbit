@@ -23,6 +23,13 @@ xcodebuild -project Orbit.xcodeproj -scheme Orbit \
 scripts/build_and_run.sh --build-only
 ```
 
+For Mac menu bar icon changes, inspect `OrbitMenuBarIcon.image` at 1x and 2x
+for the laptop/phone silhouettes and open orbit, and verify it remains an AppKit
+template image. Build and relaunch the committed Mac client with the canonical
+script, then check the icon and Open/Quit menu in light and dark menu bars.
+An offscreen render checks the artwork; live menu bar acceptance needs an unlocked
+Mac.
+
 For app-icon changes, regenerate the project with XcodeGen and verify the iOS
 build contains `Assets.car` and declares `CFBundleIcons` / `AppIcon`. Also build
 the `OrbitMacBuild` native Xcode scheme and check its icon metadata. The script-built Mac
