@@ -48,15 +48,26 @@ public actor CodeOvernightService {
             guard previous.target == submission.target else { throw CodeFailure("A request ID was reused with a different target.") }
             return previous
         }
-        // Definitively invalid/expired artifacts can be rebuilt. Uncertain
-        // installation evidence must still reconcile the existing revision.
-        for var old in store.jobs() where Self.sameDestination(old.target, submission.target) && Self.canReplaceFailedArtifact(old) {
+        // Failed installs with newer source can be replaced. Pending and
+        // uncertain installs must keep the original artifact for reconciliation.
+        let matching = store.jobs().filter { Self.sameDestination($0.target, submission.target) }
+        if let existing = matching.first(where: {
+            [.accepted, .building].contains($0.state) || ($0.hasActionableArtifact && $0.state != .failed) || $0.needsInstallReconciliation
+        }) { return existing }
+        let failed = matching.filter { $0.state == .failed && $0.artifact != nil }
+        let revision: String?
+        if failed.contains(where: { !Self.canReplaceFailedArtifact($0) }) {
+            revision = try? await CodeDeviceSupport.git(["rev-parse", "--verify", "--end-of-options", submission.target.branch + "^{commit}"],
+                                                       directory: submission.target.project.root, root: store.root)
+            // Resolving the ref suspends this actor. Another caller may have
+            // already submitted or retried an install for the same destination.
+            if store.jobs().filter({ Self.sameDestination($0.target, submission.target) }) != matching {
+                return try await submit(request)
+            }
+        } else { revision = nil }
+        for var old in failed {
+            guard Self.canReplaceFailedArtifact(old) || revision.map({ $0 != old.artifact?.commit }) == true else { return old }
             old.state = .cancelled; old.revision += 1; try store.save(old)
-        }
-        // A missed installation cannot create a fresh artifact each day, even
-        // when a schedule generation or source ref has since changed.
-        if let existing = store.jobs().first(where: { Self.sameDestination($0.target, submission.target) && ([.accepted, .building].contains($0.state) || $0.hasActionableArtifact) }) {
-            return existing
         }
         var job = CodeOvernightJob(requestID: request.id, invocationID: submission.invocationID, target: submission.target)
         job.monitorBundleID = submission.monitorBundleID
