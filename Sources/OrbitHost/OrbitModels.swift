@@ -65,7 +65,7 @@ extension OrbitConfiguration {
         guard ["local", "tailscale", "syncthing", "dumbpipe"].contains(provider) else { throw CodeFailure("Choose a connection type.") }
         guard requireAddress else { return }
         if provider == "tailscale" {
-            guard let address, case .tcp = OrbitPeerAddress(syncthingURL: address) else { throw CodeFailure("Enter your Mac’s tcp:// address from Tailscale.") }
+            guard tailscaleRoute != nil else { throw CodeFailure("Enter this Mac’s Tailscale IP or MagicDNS name.") }
         }
         if provider == "syncthing" {
             guard let relay, let url = URLComponents(string: relay), url.scheme == "relay", let host = url.host, !host.isEmpty,
@@ -73,5 +73,30 @@ extension OrbitConfiguration {
                 throw CodeFailure("Enter a relay:// address including its certificate ID.")
             }
         }
+    }
+}
+
+
+extension OrbitConfiguration {
+    private var tailscaleRoute: OrbitPeerAddress? {
+        guard let address else { return nil }
+        let value = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url: String
+        if value.contains("://") { url = value }
+        else if !value.hasPrefix("["), value.filter({ $0 == ":" }).count > 1 { url = "tcp://[\(value)]" }
+        else { url = "tcp://" + value }
+        guard let parts = URLComponents(string: url), ["tcp", "tcp4", "tcp6"].contains(parts.scheme?.lowercased() ?? ""),
+              parts.user == nil, parts.password == nil, parts.path.isEmpty, parts.query == nil, parts.fragment == nil,
+              let host = parts.url?.host, !host.isEmpty, host != "0.0.0.0", host != "::",
+              let number = parts.port ?? listen.split(separator: ":").last.flatMap({ Int($0) }),
+              let port = UInt16(exactly: number), port > 0 else { return nil }
+        return .tcp(host: host, port: port)
+    }
+
+    func tcpPairingCode(deviceID: DeviceID, localAddresses: [OrbitPeerAddress]) -> OrbitPairingCode {
+        let tailnet = provider == "tailscale" ? tailscaleRoute : nil
+        let relayRoute = provider == "syncthing" ? relay.flatMap(OrbitPeerAddress.init(syncthingURL:)) : nil
+        let routes = [tailnet, relayRoute].compactMap { $0 } + localAddresses
+        return OrbitPairingCode(deviceID: deviceID, addresses: routes, preferredAddress: tailnet)
     }
 }

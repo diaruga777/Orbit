@@ -71,6 +71,27 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         guard let data = UserDefaults.standard.data(forKey: "Orbit.connectionRoutes") else { return nil }
         return try? JSONDecoder().decode(OrbitConnectionRoutes.self, from: data)
     }
+    var connectionName: String? {
+        guard let original = try? OrbitPairingCode(string: pairingCode) else { return nil }
+        if let savedRoutes, let codes = try? savedRoutes.validated(), !codes.isEmpty {
+            switch savedRoutes.provider {
+            case "local": return "Local Wi-Fi"
+            case "tailscale": return "Tailscale"
+            case "syncthing": return "Private Syncthing relay"
+            case "dumbpipe": return "Automatic (iroh)"
+            default: break
+            }
+        }
+        for route in original.addresses {
+            switch route {
+            case .dumbpipe: return "Automatic (iroh)"
+            case .relay: return "Private Syncthing relay"
+            case .tailscale: return "Tailscale"
+            case .tcp: continue
+            }
+        }
+        return nil
+    }
     func syncRoutes() async {
         let original = pairingCode
         guard !original.isEmpty else { return }
@@ -84,8 +105,9 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                     return try await OrbitDumbpipe.shared.start(secretURL: Self.root.appendingPathComponent("Identity/iroh.key"))
                 }
                 return try transport.identity()
-            }, save: { [self] routes in
+            }, tcpIdentity: { [self] in try transport.identity() }, save: { [self] routes in
                 guard pairingCode == original else { throw CancellationError() }
+                guard routes != savedRoutes else { return }
                 UserDefaults.standard.set(try JSONEncoder().encode(routes), forKey: "Orbit.connectionRoutes")
                 if routes.provider != "dumbpipe" { try await OrbitDumbpipe.shared.stop() }
             })

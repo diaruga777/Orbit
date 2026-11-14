@@ -28,6 +28,11 @@ import UniformTypeIdentifiers
                 Button("Setup…") { setup.state.finished = false; setup.state.step = .welcome; setup.persist() }
             }
         }
+        Settings {
+            OrbitConnectionsView(model: model)
+                .padding(20)
+                .frame(width: 520)
+        }
         MenuBarExtra {
             Button("Open Orbit") { NSApp.activate(ignoringOtherApps: true); NSApp.windows.first?.makeKeyAndOrderFront(nil) }
             Button("Quit Orbit") { NSApp.terminate(nil) }

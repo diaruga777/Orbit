@@ -260,18 +260,19 @@ With Automatic remote connections, Orbit syncs the Mac’s relay address to the 
 
 Detailed commands, private relay setup and troubleshooting: **[Pipes](docs/pipes.md)**.
 
-In Orbit Mac, open **Phone & Remote Setup → Build away from home**. Click
-**Enable Remote Connections** for automatic internet connections, or expand
-**Connection options** to choose Local Wi-Fi, Tailscale or a private Syncthing
-relay. Enter a tailnet address or relay URL there if needed. Changes take effect
-immediately, including when running from Xcode; status and errors appear in the
-sheet. No CLI or restart is required.
+Open **Orbit Mac → Settings** (⌘,) and choose **Local Wi-Fi**, **Automatic (iroh)**,
+**Tailscale**, or **Private Syncthing relay**. The same picker is in **Phone & Remote Setup**.
+For Tailscale, connect both devices to your tailnet, enter the Mac’s Tailscale IP or
+MagicDNS name, and click **Apply Connection**. If switching from iroh, open the
+updated iPhone app on the same Wi-Fi and let it sync before and after applying.
+Orbit tries the tailnet address first and keeps local Wi-Fi as a fallback.
+**More → Mac** on iPhone shows the saved connection type.
 
 For your first phone, click **Connect a Phone**, copy the code, and paste it into
 the iPhone app’s **More → Mac → Connect a Mac**. Compare the phone ID on both devices
 before approving on the Mac. Pairing lasts five minutes. After that, connection
 changes sync automatically while Orbit is open and connected. Keep an offline
-phone on the same Wi-Fi until the sheet shows it updated before leaving home.
+phone on the same Wi-Fi until Settings shows it updated before leaving home.
 Both clients need the route-sync update; their existing pairing is preserved.
 CLI configuration remains available for automation in [Pipes](docs/pipes.md).
 

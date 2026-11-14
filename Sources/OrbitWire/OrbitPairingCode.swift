@@ -7,13 +7,19 @@ public struct OrbitPairingCode: Equatable, Sendable {
     public let addresses: [OrbitPeerAddress]
     public let irohRelay: String?
 
-    public init(deviceID: DeviceID, addresses: [OrbitPeerAddress], irohRelay: String? = nil) {
+    public init(deviceID: DeviceID, addresses: [OrbitPeerAddress], irohRelay: String? = nil,
+                preferredAddress: OrbitPeerAddress? = nil) {
         self.irohRelay = Self.validRelay(irohRelay)
         self.deviceID = deviceID
-        self.addresses = addresses.filter {
+        let sorted = addresses.filter {
             if case .tcp(let host, _) = $0 { return host != "0.0.0.0" && host != "::" }
             return true
         }.sorted { $0.dialPriority < $1.dialPriority }
+        if let preferredAddress, sorted.contains(preferredAddress) {
+            self.addresses = [preferredAddress] + sorted.filter { $0 != preferredAddress }
+        } else {
+            self.addresses = sorted
+        }
     }
 
     public init(string: String) throws {

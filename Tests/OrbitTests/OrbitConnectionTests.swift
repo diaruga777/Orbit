@@ -66,6 +66,44 @@ final class OrbitConnectionTests: XCTestCase {
         let rejected = try await request(restarted, "connection_routes", peer: alternate)
         XCTAssertNotNil(rejected["error"])
     }
+    func testSwitchFromIrohToTailscaleKeepsPairedPhoneAndPrioritizesTailnet() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let host = try OrbitHost(root: root)
+        let irohPhone = try identity(1), tlsPhone = try identity(2)
+        let irohMac = try identity(3), tlsMac = try identity(4)
+        let iroh = OrbitPairingCode(deviceID: irohMac, addresses: [.dumbpipe(endpoint: irohMac.bytes.map { String(format: "%02x", $0) }.joined())])
+        let lan = OrbitPeerAddress.tcp(host: "192.168.1.2", port: 49210)
+        let tailnet = OrbitPeerAddress.tcp(host: "mac.tailnet.invalid", port: 49210)
+        await host.installConnectionHandler { config in
+            let tcp = config.tcpPairingCode(deviceID: tlsMac, localAddresses: [lan])
+            return config.provider == "dumbpipe" ? [iroh.text, tcp.text] : [tcp.text]
+        }
+        await host.openPairing()
+        try await host.trust(irohPhone.description)
+        let enabled = try await request(host, "configure", ["provider": "dumbpipe"])
+        XCTAssertNil(enabled["error"])
+        let sync = OrbitRouteSync()
+        try await sync.synchronize(request: { params in
+            let peer = params["receivedCodes"] == nil ? irohPhone : tlsPhone
+            let data = try JSONSerialization.data(withJSONObject: ["method": "connection_routes", "params": params])
+            let reply = await host.handle(data, peer: peer.description)
+            return try XCTUnwrap(JSONDecoder().decode([String: OrbitConnectionRoutes].self, from: reply)["result"])
+        }, identity: { _ in irohPhone }, tcpIdentity: { tlsPhone }, save: { _ in })
+        let account = await host.canonicalPeer(tlsPhone.description)
+        XCTAssertEqual(account, irohPhone.description)
+
+        let switched = try await request(host, "configure", ["provider": "tailscale", "address": "mac.tailnet.invalid"])
+        XCTAssertNil(switched["error"])
+        let reply = try await request(host, "connection_routes", peer: tlsPhone.description)
+        let routes = try JSONDecoder().decode(OrbitConnectionRoutes.self, from: JSONSerialization.data(withJSONObject: XCTUnwrap(reply["result"])))
+        XCTAssertEqual(routes.provider, "tailscale")
+        XCTAssertEqual(routes.accountPeerID, irohPhone.description)
+        let code = try XCTUnwrap(routes.validated().first)
+        XCTAssertEqual(code.deviceID, tlsMac)
+        XCTAssertEqual(code.addresses, [tailnet, lan])
+        XCTAssertEqual(routes.pairingCodes.count, 1)
+    }
     func testCannotClaimAnotherPhoneAndOnlyTCPIsAcceptedForTailscale() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -77,12 +115,25 @@ final class OrbitConnectionTests: XCTestCase {
             let rejected = try await request(host, "connection_routes", ["transportPeerID": key], peer: first)
             XCTAssertNotNil(rejected["error"])
         }
-        for address in ["relay://relay.invalid/?id=TEST", "dumbpipe://" + String(repeating: "a", count: 64), "https://mac.invalid"] {
+        let collision = try await request(host, "connection_routes", ["transportPeerID": try identity(4).description, "tcpPeerID": second], peer: first)
+        XCTAssertNotNil(collision["error"])
+        let unchanged = await host.isTrusted(try identity(4).description)
+        XCTAssertFalse(unchanged)
+        for address in ["relay://relay.invalid/?id=TEST", "dumbpipe://" + String(repeating: "a", count: 64), "https://mac.invalid", "tcp://user@mac.invalid:49210", "0.0.0.0", "mac.invalid:0"] {
             let rejected = try await request(host, "configure", ["provider": "tailscale", "address": address])
             XCTAssertNotNil(rejected["error"])
         }
-        var config = OrbitConfiguration(); config.provider = "tailscale"; config.address = "tcp://mac.tailnet.invalid:49210"
-        XCTAssertNoThrow(try config.validateConnection(requireAddress: true))
+        var config = OrbitConfiguration()
+        config.provider = "tailscale"
+        for (address, host, port) in [("tcp://mac.tailnet.invalid:49210", "mac.tailnet.invalid", 49210),
+                                      (" 100.80.1.2 ", "100.80.1.2", 49210),
+                                      ("[fd7a:115c:a1e0::1]:49211", "fd7a:115c:a1e0::1", 49211),
+                                      ("fd7a:115c:a1e0::1", "fd7a:115c:a1e0::1", 49210)] {
+            config.address = address
+            XCTAssertNoThrow(try config.validateConnection(requireAddress: true))
+            let code = try config.tcpPairingCode(deviceID: identity(5), localAddresses: [])
+            XCTAssertEqual(try OrbitPairingCode(string: code.text).addresses, [.tcp(host: host, port: UInt16(port))])
+        }
     }
     func testPhoneSyncRequiresConfirmedPinsAndEnrollmentBeforeSaving() async throws {
         let phone = try identity(1), mac = try identity(2)

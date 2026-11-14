@@ -343,19 +343,22 @@ public actor OrbitHost {
             _ = await refreshIrohRelay()
             guard isTrusted(peer) else { throw CodeFailure("This phone is no longer paired.") }
             guard !configuringConnections else { throw CodeFailure("Connection setup is still finishing. Try again shortly.") }
-            if let alias = p["transportPeerID"] as? String {
-                let alias = try DeviceID(string: alias).description
-                guard alias == peer || (!configuration.trustedPeers.contains(alias) && (configuration.peerAliases?[alias] == nil || configuration.peerAliases?[alias] == peer)) else {
+            let previous = configuration.peerAliases
+            var aliases = previous ?? [:]
+            for value in [p["transportPeerID"], p["tcpPeerID"]].compactMap({ $0 as? String }) {
+                let alias = try DeviceID(string: value).description
+                guard alias != peer else { continue }
+                guard !configuration.trustedPeers.contains(alias), aliases[alias] == nil || aliases[alias] == peer else {
                     throw CodeFailure("That connection belongs to another paired phone.")
                 }
-                if alias != peer, configuration.peerAliases?[alias] != peer {
-                    var aliases = configuration.peerAliases ?? [:]
-                    guard aliases.filter({ $0.value == peer }).count < 4 || aliases[alias] != nil else { throw CodeFailure("Too many phone transport identities.") }
+                if aliases[alias] == nil {
+                    guard aliases.values.filter({ $0 == peer }).count < 4 else { throw CodeFailure("Too many phone transport identities.") }
                     aliases[alias] = peer
-                    let previous = configuration.peerAliases
-                    configuration.peerAliases = aliases
-                    do { try saveConfiguration() } catch { configuration.peerAliases = previous; throw error }
                 }
+            }
+            if aliases != (previous ?? [:]) {
+                configuration.peerAliases = aliases
+                do { try saveConfiguration() } catch { configuration.peerAliases = previous; throw error }
             }
             if p["receivedCodes"] as? [String] == connectionCodes { syncedPeers.insert(peer) }
             return try object(OrbitConnectionRoutes(provider: configuration.provider, pairingCodes: connectionCodes, accountPeerID: peer))
@@ -380,7 +383,7 @@ public actor OrbitHost {
                 _ = try? await applyConnections(previous)
                 throw error
             }
-            if codes != connectionCodes { syncedPeers.removeAll() }
+            if next.provider != previous.provider || codes != connectionCodes { syncedPeers.removeAll() }
             connectionCodes = codes; connectionError = nil
             return ["configuration": try object(configuration), "restartRequired": false]
         case "pairing_open":

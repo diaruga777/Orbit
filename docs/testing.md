@@ -487,11 +487,18 @@ revocation, backwards-compatible configuration and Tailscale/relay validation.
 Fixtures use inert addresses and injected listeners; they never contact a phone,
 Apple account, public discovery or a relay service.
 
-Interactive acceptance: in an Xcode-built Mac app, open Phone & Remote Setup,
-enable remote connections and check immediate status/progress. Verify automatic
-route sync on an already paired updated iOS client, offline-phone catch-up, both
-clients restarting, local Wi-Fi fallback, switching back to local-only, and
-Tailscale/private-relay errors. Existing Apple installation authorization must
+The iroh-to-Tailscale regression check starts with an iroh-only pairing, enrolls
+its TCP alias through route sync, then checks that the phone is still trusted
+after changing providers and receives the pinned Tailscale address before Wi-Fi.
+
+Interactive acceptance: open **Orbit Mac → Settings** and verify the same picker
+also appears in **Phone & Remote Setup**. With the updated iPhone app open on the
+same Wi-Fi, sync an iroh pairing, select Tailscale, paste the Mac’s Tailscale IP
+or MagicDNS name, and apply. Confirm the phone updates and **More → Mac** shows
+**Tailscale**, then use **Check Connection** and load Apps from a second Wi-Fi
+network on the tailnet. Verify offline-phone catch-up, both clients restarting,
+local Wi-Fi fallback, switching back to local-only, and errors for malformed
+Tailscale and private-relay addresses. Existing Apple installation authorization must
 survive transport changes. Internet reachability and physical installations need
 separate physical acceptance; unit tests do not establish them. The synthetic
 reverse-flow byte/half-close/replay check also covers iroh readiness. Active phone

@@ -4,21 +4,17 @@ All choices carry authenticated app requests. Signing remains on your Mac. A pip
 
 ## Set up in Orbit Mac
 
-Open **Phone & Remote Setup → Build away from home**. **Enable Remote Connections**
-starts the built-in iroh listener immediately, including in Xcode-built apps.
-Progress, errors and the number of updated phones appear in the sheet. No restart
-or replacement pairing code is needed. Keep Orbit open on the paired phone on the
-same Wi-Fi until it receives the update. For Automatic, check **Mac relay connected**
-and the updated phone count before testing from another network. An
-offline phone receives the update on its next connection; both clients must
-include automatic route sync. Updating an older client preserves its saved pairing.
+Open **Orbit Mac → Settings** (⌘,) or **Phone & Remote Setup**. Choose a
+connection type and click **Apply Connection**. Progress, errors and the number
+of updated phones appear below the picker. Keep Orbit open on your paired iPhone
+on the same Wi-Fi until it syncs. If switching away from iroh, sync both before
+and after applying so the Mac recognizes the phone’s TCP identity. For Automatic,
+check **Mac relay connected** and the updated phone count before leaving Wi-Fi.
+The iPhone’s **More → Mac** shows its saved connection type.
 
-**Connection options** includes Local Wi-Fi, Automatic (iroh), Tailscale and a
-private Syncthing relay. Tailscale needs its own clients/account; enter the Mac’s
-`tcp://` tailnet address in Orbit. For Syncthing, enter a full `relay://` URL with
-its certificate ID from a relay you run or trust. Orbit manages its connection to
-the relay; deploying a relay server remains an optional infrastructure task. The
-CLI commands below are alternatives for automation, never required app setup.
+Tailscale uses its own clients and account. For Syncthing, enter a full `relay://`
+URL with its certificate ID from a relay you run or trust. The CLI commands below
+are also available for automation.
 
 Route changes travel over the existing authenticated connection. Each transport
 keeps its own pinned identity; phone aliases retain the original account and
@@ -42,7 +38,11 @@ Install the separate [Tailscale clients](https://tailscale.com/download) on Mac 
 bin/orbit configure --provider tailscale --address tcp://YOUR-MAC.YOUR-TAILNET.ts.net:49210
 ```
 
-Apply in Connection options; existing paired phones receive the route automatically. The code pins Orbit's TLS certificate in addition to Tailscale's network authentication. Orbit never assumes `100.x` is proof of a particular phone. USB or native Xcode Wi-Fi deployment is still a separate connection; remote installation needs the phone forwarding path described in the architecture guide.
+In Settings, select **Tailscale**, paste the Mac’s IP or MagicDNS name, and click
+**Apply Connection**. Orbit assumes the listener’s port (49210 by default) when
+you omit it. Paired phones receive the route automatically and try it before
+local Wi-Fi. The pairing pins Orbit’s TLS certificate. Remote Apple installation
+uses the separate phone forwarding path described in the architecture guide.
 
 ## Syncthing relay
 
@@ -65,7 +65,7 @@ First pair the phone and Mac directly on your LAN. Then:
 bin/orbit configure --provider syncthing --relay 'relay://RELAY-HOST:22067/?id=RELAY_CERTIFICATE_ID'
 ```
 
-Apply the relay in Connection options. Its listener owns the relay registration;
+Apply the relay in Settings. Its listener owns the relay registration;
 phones initiate relay sessions. The relay cannot approve a new phone. Existing
 phones receive the route with its pinned Mac identity automatically; no URL
 editing or replacement code is needed.
@@ -80,7 +80,7 @@ A third-party relay can observe connection metadata and availability. Configure 
 bin/orbit configure --provider dumbpipe
 ```
 
-Enable Automatic (iroh) in Connection options. Existing phones receive its pinned `dumbpipe://…` route automatically. Orbit includes the native [iroh FFI](https://github.com/n0-computer/iroh-ffi), the stream primitive used by [dumbpipe](https://github.com/n0-computer/dumbpipe). The iPhone does not spawn a CLI or need a Rust toolchain. Selecting this provider enables iroh's N0 discovery and relay preset; local-only mode does not start it.
+Select Automatic (iroh) and apply it in Settings. Existing phones receive its pinned `dumbpipe://…` route automatically. Orbit includes the native [iroh FFI](https://github.com/n0-computer/iroh-ffi), the stream primitive used by [dumbpipe](https://github.com/n0-computer/dumbpipe). The iPhone does not spawn a CLI or need a Rust toolchain. Selecting this provider enables iroh's N0 discovery and relay preset; local-only mode does not start it.
 
 Orbit syncs the Mac’s current relay URL over the authenticated connection. This
 lets a phone reach the same pinned endpoint if the network blocks iroh’s endpoint

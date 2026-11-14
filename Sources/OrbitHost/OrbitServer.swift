@@ -68,19 +68,15 @@ public actor OrbitServer {
         if let remoteID {
             codes.append(await irohCode(remoteID))
         }
-        var routes: [OrbitPeerAddress] = []
-        if config.provider == "tailscale", let address = config.address, let route = OrbitPeerAddress(syncthingURL: address) { routes.append(route) }
-        if config.provider == "syncthing", let address = config.relay, let route = OrbitPeerAddress(syncthingURL: address) { routes.append(route) }
-        routes += local
-        if !routes.isEmpty { codes.append(OrbitPairingCode(deviceID: identity, addresses: routes).text) }
+        let tcp = config.tcpPairingCode(deviceID: identity, localAddresses: local)
+        if !tcp.addresses.isEmpty { codes.append(tcp.text) }
         return codes
     }
     public func pairingCode() async throws -> String {
         let config = await host.configuration
         if let dumbpipeID { return try await irohPairingCode(dumbpipeID) }
         let local = await listeners.first?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
-        let route = (config.provider == "syncthing" ? config.relay : config.address).flatMap(OrbitPeerAddress.init(syncthingURL:))
-        return OrbitPairingCode(deviceID: try transport.identity(), addresses: (config.provider != "local" ? route.map { [$0] } ?? [] : []) + local).text
+        return config.tcpPairingCode(deviceID: try transport.identity(), localAddresses: local).text
     }
     private func irohPairingCode(_ id: DeviceID) async throws -> String {
         let code = await irohCode(id)

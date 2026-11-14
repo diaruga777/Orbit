@@ -64,7 +64,7 @@ import OrbitWire
         cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         if indexPath.section == 1 {
             cell.textLabel?.text = "Mac"
-            cell.detailTextLabel?.text = "Connect and manage your Mac"
+            cell.detailTextLabel?.text = connection.connectionName ?? "Connect and manage your Mac"
             cell.imageView?.image = UIImage(systemName: "desktopcomputer")
             cell.accessibilityIdentifier = "settings.mac"
         } else {
@@ -107,8 +107,8 @@ import OrbitWire
     }
     private func showRemoteSetup() {
         let message = status.remote
-            ? "Remote connections are set up. Keep your Mac awake with Orbit running. Authorize this phone by cable first so Apple installations can work remotely too."
-            : "In Orbit Mac, open Phone & Remote Setup and enable remote connections. Your saved connection updates automatically while Orbit is open and connected. No new code needed."
+            ? "Remote connections are set up. \(connection.connectionName.map { "Saved connection: \($0). " } ?? "")To switch, open Orbit Mac → Settings."
+            : "Choose Automatic (iroh), Tailscale, or a private relay in Orbit Mac → Settings. Keep Orbit open on this iPhone to sync the change."
         let alert = UIAlertController(title: "Build away from home", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Open Mac Settings", style: .default) { [weak self] _ in self?.openMac() })
         alert.addAction(UIAlertAction(title: "Done", style: .cancel))

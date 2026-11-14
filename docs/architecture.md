@@ -89,18 +89,20 @@ remote completion even if the original pairing was remote. Offline/VPN state
 does not reset completed setup. Refresh-state, route/pairing and foreground
 changes update the badges. Notification deep links open Refresh inside More.
 The Mac retains its dismissible optional-setup banner. Local Wi-Fi stays
-the default; the Mac’s Phone & Remote Setup sheet explicitly enables the existing
-iroh transport immediately and shows startup errors and phone sync progress.
-Connection options also configures local Wi-Fi, Tailscale and explicit Syncthing
-relay URLs without a CLI. Tailscale clients/account and private relay hosting
-remain user-owned external prerequisites.
+the default. The connection picker in Orbit Mac Settings and Phone & Remote
+Setup switches between Local Wi-Fi, Automatic (iroh), Tailscale and a private
+Syncthing relay. It shows the configured transport and phone sync progress.
+The iPhone’s More → Mac page shows the saved connection type. Tailscale uses the
+external clients and the Mac’s configured tailnet address, with the same pinned
+TLS identity as local Wi-Fi. Tailscale’s address is tried before LAN fallback.
 
 The server serializes live listener changes, starts replacements before retiring
 old remote listeners, and keeps the local listener available. Host configuration
 is saved after activation succeeds. Authenticated `connection_routes` exchanges
 carry per-transport Mac pins and enroll phone transport aliases under the original
-trusted account. Control and Apple reverse streams resolve those aliases to the
-same account, preserving installation bindings; `forget` removes all aliases.
+trusted account. While iroh is active the phone also enrolls its TLS identity so
+it can keep syncing over TCP after iroh shuts down. Control and Apple reverse
+streams resolve those aliases to the same account, preserving installation bindings; `forget` removes all aliases.
 Phone snapshots persist separately from the original pairing and sync on activation
 and every ten seconds while active. Offline phones retain their last authenticated
 snapshot until reachable again; updated routes replace retired routes after sync.

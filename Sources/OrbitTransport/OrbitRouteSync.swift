@@ -9,6 +9,7 @@ public actor OrbitRouteSync {
     public func synchronize(
         request: @escaping @Sendable ([String: Any]) async throws -> OrbitConnectionRoutes,
         identity: @escaping @Sendable (String) async throws -> DeviceID,
+        tcpIdentity: (@Sendable () throws -> DeviceID)? = nil,
         save: @escaping @Sendable (OrbitConnectionRoutes) async throws -> Void
     ) async throws {
         guard !syncing else { return }
@@ -17,7 +18,12 @@ public actor OrbitRouteSync {
         let proposed = try await request([:])
         _ = try proposed.validated()
         let local = try await identity(proposed.provider)
-        let confirmed = try await request(["transportPeerID": local.description])
+        var enrollment = ["transportPeerID": local.description]
+        // An iroh-paired phone also needs a trusted TLS identity when iroh is turned off.
+        if proposed.provider == "dumbpipe", let tcpIdentity {
+            enrollment["tcpPeerID"] = try tcpIdentity().description
+        }
+        let confirmed = try await request(enrollment)
         _ = try confirmed.validated()
         guard confirmed.accountPeerID == proposed.accountPeerID, confirmed.provider == proposed.provider,
               confirmed.pairingCodes == proposed.pairingCodes else {

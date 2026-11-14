@@ -284,14 +284,21 @@ import OrbitWire
         super.viewDidLoad()
         tableView.cellLayoutMarginsFollowReadableWidth = true
     }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        tableView.reloadData()
+    }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 4 }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        "Logs sync to your Mac while Orbit is open." + (connection.localID.isEmpty ? "" : "\n\nThis phone: " + connection.localID)
+        "Change connection type in Orbit Mac → Settings. Changes sync while Orbit is open."
+            + (connection.localID.isEmpty ? "" : "\n\nThis phone: " + connection.localID)
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.textLabel?.text = ["Connect a Mac", "Check Connection", "Authorize This Phone", "Forget Mac"][indexPath.row]
-        if indexPath.row == 0 { cell.detailTextLabel?.text = connection.peerID == "unpaired" ? nil : "Connected Mac saved" }
+        if indexPath.row == 0, connection.peerID != "unpaired" {
+            cell.detailTextLabel?.text = connection.connectionName ?? "Mac saved"
+        }
         cell.accessoryType = .disclosureIndicator; return cell
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -307,10 +314,19 @@ import OrbitWire
                 Task { do {
                     _ = try OrbitPairingCode(string: text); self.connection.pairingCode = text
                     try await self.connection.prepareIdentity(); self.tableView.reloadData()
-                    _ = try await self.connection.rpc("status"); self.tableView.reloadData(); self.message("Connected")
+                    _ = try await self.connection.rpc("status")
+                    await self.connection.syncRoutes()
+                    self.tableView.reloadData(); self.message("Connected")
                 } catch { self.message(error.localizedDescription) } }
             }); present(alert, animated: true)
-        case 1: Task { do { _ = try await connection.rpc("status"); message("Your Mac is ready.") } catch { message(error.localizedDescription) } }
+        case 1: Task {
+            do {
+                _ = try await connection.rpc("status")
+                await connection.syncRoutes()
+                tableView.reloadData()
+                message("Your Mac is ready.")
+            } catch { message(error.localizedDescription) }
+        }
         case 2: CodePhoneAuthorization.choose(client: connection.client, from: self) { [weak self] text in self?.message(text) }
         default: connection.pairingCode = ""; tableView.reloadData()
         }
