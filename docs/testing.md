@@ -505,6 +505,15 @@ reverse-flow byte/half-close/replay check also covers iroh readiness. Active pho
 forwarding restarts when route snapshots change and resolves the current pinned
 route for each Apple stream.
 
+Tailscale settings verification (2026-11-15): bootstrap, 252 Swift checks
+(seven optional fixtures skipped), 48 Python checks, both Go race suites and
+Apple-helper vet passed. The iOS Simulator and native `OrbitMacBuild` builds
+passed with the local identity configuration. Both targeted More settings UI
+tests passed in Simulator. The Mac review package passed strict signature and
+packaged phone-source extraction checks. Live tailnet connectivity and Apple
+installation on a physical phone remain separate acceptance checks. No
+marketplace listing was performed.
+
 Remote-setup verification (2026-10-30): bootstrap ran in a detached committed
 checkout. All 177 Swift tests passed (four optional fixtures skipped), plus
 17 Python MCP tests, both Go race suites and helper vet. Both Xcode client builds
