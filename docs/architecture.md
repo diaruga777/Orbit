@@ -241,7 +241,7 @@ The iOS client offers readiness in the foreground and requests BGProcessing wind
 
 - An Xcode project-file check is preliminary. Private dependencies, missing secrets, unsupported entitlements, nonshared schemes or an unavailable SDK can still stop a build.
 - Apple's Personal Team restrictions remain in force. Automated refresh cannot create more app slots or add paid capabilities.
-- The native dumbpipe-style adapter uses iroh with Orbit's ALPN, not the stock desktop CLI's default protocol.
+- The native dumbpipe-style adapter uses iroh with Orbit's ALPN. Authenticated route sync carries the Mac’s current home relay as a hint alongside its pinned endpoint key. Legacy endpoint-only codes still use discovery.
 - The Mac must be logged in, awake, with Xcode account access available. No always-on Luna/Orbit hosted service fills that role.
 - There is no automatic signing-key migration. The Mac DMG bundles a resumable setup wizard and phone source; it signs the iOS clients with the user’s own account. Public DMGs require Developer ID and notarization, separately from review packaging.
 - WidgetKit controls network refresh scheduling. JavaScript runs in the installed host extension; new scripts do not create native extensions. See [widgets](widgets/README.md) and [phone refresh](local-refresh.md).
@@ -613,3 +613,14 @@ logs and action alerts present from the expanded controller when it is open.
 Removal requires confirmation and peer/catalog changes dismiss stale details.
 
 Registered Mac apps use the installed bundle’s `CFBundleIconFile` for 132px catalog thumbnails. Registration and background catalog polling populate missing icons and refresh changed artwork at most once every five minutes. The same persisted PNG travels to Orbit Mac and iOS; missing or unreadable icons leave the target available.
+
+
+## Recovering native installations
+
+Before native handoff, the installer requires a readable inventory for the
+selected iPhone. CoreDevice usage-assertion error 4016 means device services
+are unavailable even if pairing and Developer Mode are intact. Keep the
+artifact pending and allow already-authorized remote forwarding. A failure
+after handoff requires readback before a retry. A catalog build request that
+returns an older failed job with a retained artifact queues that job for
+installation again, preserving its ID and exact signed revision.

@@ -99,6 +99,29 @@ final class CodeOvernightJobsTests: XCTestCase {
             XCTAssertEqual(CodeNativeInstaller.classify(["error": ["description": message]]), expected)
         }
     }
+    func testRetryChangesLegacyFailedArtifactToWaitingBeforeReturningIt() async throws {
+        let directory = root(); defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try CodeOvernightStore(root: directory.appendingPathComponent("Overnight"))
+        var job = CodeOvernightJob(requestID: "legacy", invocationID: "phone", target: target())
+        job.state = .failed
+        job.artifact = artifact(job.target)
+        job.error = CodeOvernightError(.pairing, stage: "install", recovery: "Check trust.", domain: "com.apple.dt.CoreDeviceError", code: 4016)
+        try store.save(job)
+        let builds = try CodeJobs(root: directory.appendingPathComponent("Jobs"))
+        let service = try CodeOvernightService(root: directory, builds: builds, journal: store)
+        let retry = try await service.retryInstall(job.id)
+        XCTAssertEqual(retry.id, job.id)
+        XCTAssertEqual(retry.artifact, job.artifact)
+        XCTAssertEqual(retry.state, .waitingForPhone)
+        XCTAssertNil(retry.error)
+        // This fixture deliberately has no app on disk, so the worker can
+        // finish without reaching the installer or touching a phone.
+        let deadline = ContinuousClock.now + .seconds(3)
+        while store.jobs().first?.state == .waitingForPhone && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(store.jobs().first?.error?.kind, .integrity)
+    }
     func testCoreDeviceUnavailableWaitsBeforeHandoffAndReconcilesAfterHandoff() throws {
         let domain = "com.apple.dt.CoreDeviceError"
         let document: [String: Any] = ["error": ["domain": domain, "code": 4016, "userInfo": [

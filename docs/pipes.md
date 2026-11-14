@@ -8,7 +8,8 @@ Open **Phone & Remote Setup → Build away from home**. **Enable Remote Connecti
 starts the built-in iroh listener immediately, including in Xcode-built apps.
 Progress, errors and the number of updated phones appear in the sheet. No restart
 or replacement pairing code is needed. Keep Orbit open on the paired phone on the
-same Wi-Fi until it receives the update, then use it from another network. An
+same Wi-Fi until it receives the update. For Automatic, check **Mac relay connected**
+and the updated phone count before testing from another network. An
 offline phone receives the update on its next connection; both clients must
 include automatic route sync. Updating an older client preserves its saved pairing.
 
@@ -80,6 +81,11 @@ bin/orbit configure --provider dumbpipe
 ```
 
 Enable Automatic (iroh) in Connection options. Existing phones receive its pinned `dumbpipe://…` route automatically. Orbit includes the native [iroh FFI](https://github.com/n0-computer/iroh-ffi), the stream primitive used by [dumbpipe](https://github.com/n0-computer/dumbpipe). The iPhone does not spawn a CLI or need a Rust toolchain. Selecting this provider enables iroh's N0 discovery and relay preset; local-only mode does not start it.
+
+Orbit syncs the Mac’s current relay URL over the authenticated connection. This
+lets a phone reach the same pinned endpoint if the network blocks iroh’s endpoint
+lookup. If the saved relay is stale, Orbit can still try discovery. The relay URL
+does not alter the endpoint key or transfer installation authorization.
 
 The endpoint ID is pinned in the pairing code. Orbit uses ALPN `orbit/1` and its own bounded RPC/install framing. It is not wire-compatible with the desktop CLI's default dumbpipe handshake/tickets; this is a native dumbpipe-style provider. The upstream CLI supports `--custom-alpn` for custom protocols, but pointing a default CLI tunnel at Orbit's owner-only control socket is unsupported. Do not expose that local socket over an unauthenticated tunnel.
 

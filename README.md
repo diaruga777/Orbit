@@ -143,7 +143,9 @@ Retry, and explains how to add apps when the catalog is empty. Tap the play
 button beside an app to build and install it in one press. Connect the phone to
 Wi-Fi first; Orbit checks before requesting a build and explains how to retry
 when the phone is on cellular alone. Expanded cards hold
-schedules, cancellation and console actions. An interrupted build reply asks you
+schedules, cancellation and console actions. If CoreDevice loses access after an
+iOS update, Orbit keeps the signed build and waits for the phone. Open the phone
+in a compatible Xcode, then use the same build job to finish installation. An interrupted build reply asks you
 to check Apps before retrying, since the Mac may already be building.
 
 If iOS ends live build monitoring, the activity says **Build monitoring paused**.
@@ -253,6 +255,8 @@ Orbit owns application-level trust independently of the pipe. A route is never p
 | Tailscale | Install and sign in to the separate client on both devices | Direct/relayed networking according to your tailnet policy; Orbit still authenticates its own connection |
 | Syncthing relay | Provide an explicit `strelaysrv` URL | Carries Orbit's end-to-end authenticated streams; this is the Syncthing relay protocol, not a synced-folder job queue |
 | dumbpipe / iroh | Choose the built-in adapter | Uses iroh's authenticated QUIC streams, discovery and N0 relays as needed; no desktop CLI on iPhone |
+
+With Automatic remote connections, Orbit syncs the Mac’s relay address to the paired phone so it can connect even when endpoint discovery fails.
 
 Detailed commands, private relay setup and troubleshooting: **[Pipes](docs/pipes.md)**.
 

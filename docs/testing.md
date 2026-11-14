@@ -1168,3 +1168,20 @@ extraction/resume. Both client bundle IDs matched ignored local configuration.
 Reading the existing Luna Reader job confirmed its recorded installation success;
 no new physical-phone access, Apple sign-in, installation/renewal, actual system
 activity delivery, notarization or marketplace acceptance was performed.
+
+
+## Automatic relay and CoreDevice recovery
+
+The route tests cover relay hints, legacy codes, pin validation and authenticated
+route sync. Run the production iroh dial path with endpoint discovery disabled
+and no direct addresses using temporary endpoints on a public relay:
+
+```sh
+ORBIT_TEST_IROH_RELAY=1 swift test --filter OrbitRPCDeliveryTests.testRelayHintConnectsWithoutEndpointDiscovery
+```
+
+The CoreDevice tests replay a usage-assertion error with
+`remoteServiceDiscoveryTrustedConnectivityAvailable`, check the waiting and
+uncertain states before and after handoff, and resume a failed retained job.
+Physical acceptance checks an Apps refresh on a second network and installation
+with exact revision readback after Xcode reconnects to the iPhone.
