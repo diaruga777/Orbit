@@ -9,6 +9,7 @@ struct OrbitConnectionsView: View {
     @State private var loading = true
     @State private var ready = false
     @State private var activeProvider = "local"
+    @State private var relayReady = false
     @State private var synced = 0
     @State private var phones = 0
     @State private var error = ""
@@ -21,6 +22,10 @@ struct OrbitConnectionsView: View {
                 Label(ready ? (activeProvider == "local" ? "Local Wi-Fi is ready" : "Remote connections are enabled") : "Connections aren’t ready",
                       systemImage: ready ? "checkmark.circle.fill" : "exclamationmark.circle")
                     .foregroundStyle(ready ? Color.green : Color.secondary)
+                if activeProvider == "dumbpipe", ready {
+                    Text(relayReady ? "Mac relay connected." : "Waiting for the Mac relay…")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
                 if activeProvider != "local", ready {
                     Text(phones == 0 ? "Connect a phone to get started." : "\(synced) of \(phones) paired phones updated. Open Orbit on the same Wi-Fi before leaving home.")
                         .font(.callout).foregroundStyle(.secondary)
@@ -77,6 +82,7 @@ struct OrbitConnectionsView: View {
         do {
             let state = try await model.rpc("connection_status") as? [String: Any] ?? [:]
             ready = state["ready"] as? Bool ?? false; activeProvider = state["provider"] as? String ?? "local"
+            relayReady = state["irohRelayReady"] as? Bool ?? false
             phones = state["phones"] as? Int ?? 0; synced = state["syncedPhones"] as? Int ?? 0
             if let failure = state["error"] as? String, !failure.isEmpty { error = failure }
         } catch { self.error = error.localizedDescription }

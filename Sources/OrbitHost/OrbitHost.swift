@@ -16,6 +16,18 @@ public actor OrbitHost {
         do { connectionCodes = try await handler(configuration); connectionError = nil }
         catch { connectionError = error.localizedDescription }
     }
+    private func refreshIrohRelay() async -> Bool {
+        guard !configuringConnections, configuration.provider == "dumbpipe",
+              let original = connectionCodes.first, let code = try? OrbitPairingCode(string: original),
+              code.addresses.contains(where: { if case .dumbpipe = $0 { return true }; return false }),
+              let relay = await OrbitDumbpipe.shared.relayURL(for: code.deviceID),
+              !configuringConnections, configuration.provider == "dumbpipe", connectionCodes.first == original else { return false }
+        if relay != code.irohRelay {
+            connectionCodes[0] = OrbitPairingCode(deviceID: code.deviceID, addresses: code.addresses, irohRelay: relay).text
+            syncedPeers.removeAll()
+        }
+        return true
+    }
     public func canonicalPeer(_ peer: String) -> String {
         configuration.peerAliases?[peer] ?? peer
     }
@@ -322,11 +334,14 @@ public actor OrbitHost {
         case "repo_prepare": return try await prepareRepository(p)
         case "repo_add": return try await importRepository(p)
         case "connection_status":
+            let relayReady = await refreshIrohRelay()
             return ["provider": configuration.provider, "ready": !connectionCodes.isEmpty && connectionError == nil,
                     "error": connectionError ?? "", "phones": configuration.trustedPeers.count,
-                    "syncedPhones": syncedPeers.count]
+                    "syncedPhones": syncedPeers.count, "irohRelayReady": relayReady]
         case "connection_routes":
             guard let peer else { throw CodeFailure("Use a paired phone to sync connections.") }
+            _ = await refreshIrohRelay()
+            guard isTrusted(peer) else { throw CodeFailure("This phone is no longer paired.") }
             guard !configuringConnections else { throw CodeFailure("Connection setup is still finishing. Try again shortly.") }
             if let alias = p["transportPeerID"] as? String {
                 let alias = try DeviceID(string: alias).description
@@ -569,6 +584,13 @@ public actor OrbitHost {
         targets[current].jobKind = request.operation == .overnightSubmit ? "retained" : "build"
         targets[current].failure = nil; try saveTargets()
         diagnostics.record("build", "accepted", ["target": id, "job": jobID])
+        if let retained = response.overnightJobs?.first, retained.state == .failed, retained.artifact != nil {
+            // Submission returns the previous durable artifact. A fresh build
+            // request must resume installation instead of redisplaying its failure.
+            var retry = CodeRequest(.overnightInstall); retry.jobID = jobID
+            _ = try await decoded(retry)
+            return try await job(jobID)
+        }
         return value
     }
     public func tick(at date: Date = Date()) async {

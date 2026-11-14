@@ -42,7 +42,7 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                     generation: generation, provider: provider, dial: { [self] in
                         // Every Apple stream uses the currently reachable, independently pinned route.
                         let (code, route) = try await reachableRoute()
-                        return OrbitInstallStream(authenticatedStream: try await transport.dial(route, expecting: code.deviceID))
+                        return OrbitInstallStream(authenticatedStream: try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay))
                     }, available: { try Task.checkCancellation() }, open: { service, port in
                         try await OrbitLocalAppleServices.openVerifiedService(service, port: port, interfaces: ["en0", "en1"])
                     })
@@ -106,7 +106,7 @@ final class OrbitPhoneConnection: @unchecked Sendable {
             for route in code.addresses {
                 do {
                     try await prepare(route)
-                    let stream = try await transport.dial(route, expecting: code.deviceID)
+                    let stream = try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay)
                     let response = try JSONSerialization.jsonObject(with: await OrbitRPC.exchange(payload, stream: stream, timeout: 5)) as? [String: Any]
                     if let error = response?["error"] as? String { throw CodeFailure(error) }
                     return (code, route)
@@ -152,14 +152,14 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                     guard pairingCode == original else { throw CancellationError() }
                     let stream: any BEPByteStream
                     do {
+                        fields["route"] = routeKind(route)
                         try await prepare(route)
-                        stream = try await transport.dial(route, expecting: code.deviceID)
+                        stream = try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay)
                     } catch {
                         last = error
                         if logging { OrbitDiagnostics.shared.error("rpc", "dial_failed", error, fields) }
                         continue
                     }
-                    fields["route"] = routeKind(route)
                     let data: Data
                     do { data = try await OrbitRPC.exchange(payload, stream: stream, timeout: ["targets", "mac_update_status"].contains(method) ? 30 : 180) }
                     catch {

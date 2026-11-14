@@ -67,9 +67,15 @@ public actor CodeOvernightService {
     public func status() async throws -> [CodeOvernightJob] { try await recover(); return store.jobs() }
     public func retryInstall(_ id: String) async throws -> CodeOvernightJob {
         try await recover()
-        guard let job = store.jobs().first(where: { $0.id == id }) else { throw CodeFailure("This overnight job is no longer available.") }
-        if job.hasActionableArtifact || (job.state == .failed && job.artifact != nil) {
-            if workers[id] == nil { workers[id] = Task { await self.install(id) } }
+        guard var job = store.jobs().first(where: { $0.id == id }) else { throw CodeFailure("This overnight job is no longer available.") }
+        if job.hasActionableArtifact, workers[id] == nil {
+            if job.state == .failed && !job.needsInstallReconciliation {
+                job.state = .waitingForPhone
+                job.error = nil
+                job.revision += 1
+                try store.save(job)
+            }
+            workers[id] = Task { await self.install(id) }
         }
         return job
     }

@@ -38,12 +38,34 @@ public actor OrbitDumbpipe {
         endpoint = nil
         try await current?.close()
     }
-    public func dial(endpoint id: String, expecting expected: DeviceID) async throws -> any BEPByteStream {
+    public func relayURL(for id: DeviceID) -> String? {
+        guard let endpoint, endpoint.id().toBytes() == id.bytes else { return nil }
+        return OrbitPairingCode.validRelay(endpoint.addr().relayUrl())
+    }
+    public func dial(endpoint id: String, expecting expected: DeviceID, relay: String? = nil) async throws -> any BEPByteStream {
         _ = try await start()
+        guard let endpoint else { throw CancellationError() }
+        return try await Self.dial(from: endpoint, to: id, expecting: expected, relay: relay)
+    }
+    static func dial(from endpoint: Endpoint, to id: String, expecting expected: DeviceID, relay: String?) async throws -> any BEPByteStream {
         let remote = try EndpointId.fromString(s: id)
         guard remote.toBytes() == expected.bytes else { throw CodeFailure("The dumbpipe endpoint does not match the paired Mac.") }
-        let connection = try await endpoint!.connect(addr: EndpointAddr(id: remote, relayUrl: nil, addresses: []), alpn: Self.alpn)
-        return OrbitIrohStream(connection: connection, stream: try await connection.openBi())
+        let hint = OrbitPairingCode.validRelay(relay)
+        let connection: Connection
+        do {
+            connection = try await endpoint.connect(addr: EndpointAddr(id: remote, relayUrl: hint, addresses: []), alpn: alpn)
+        } catch {
+            try Task.checkCancellation()
+            guard hint != nil else { throw error }
+            connection = try await endpoint.connect(addr: EndpointAddr(id: remote, relayUrl: nil, addresses: []), alpn: alpn)
+        }
+        do {
+            try Task.checkCancellation()
+            return OrbitIrohStream(connection: connection, stream: try await connection.openBi())
+        } catch {
+            try? connection.close(errorCode: 0, reason: Data())
+            throw error
+        }
     }
     public func accept(_ handler: @escaping @Sendable (OrbitAcceptedPeer) async -> Void) async throws {
         guard let endpoint else { throw CodeFailure("Start dumbpipe before accepting peers.") }

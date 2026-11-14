@@ -32,6 +32,7 @@ public struct CodeNativeInstaller: CodeArtifactInstalling {
         defer { Task { await installLock.release(artifact.target.deviceID, token: token) } }
         let prefix = logs.appendingPathComponent(UUID().uuidString)
         defer { pruneDiagnostics(protecting: prefix.lastPathComponent) }
+        var stage = "identity"
         var handedOff = false
         do {
             let details = try await query(["device", "info", "details", "--device", artifact.target.deviceID], prefix: prefix, stage: "identity", process: process)
@@ -45,12 +46,15 @@ public struct CodeNativeInstaller: CodeArtifactInstalling {
             let connection = properties["connection"] as? [String: Any] ?? result["connectionProperties"] as? [String: Any] ?? [:]
             let route = "CoreDevice automatic; " + (connection["transportType"] as? String ?? "unknown") + "; " + (connection["tunnelTransportProtocol"] as? String ?? "unknown")
             // Readback reconciles a lost install reply or interrupted self-update.
-            if let before = try? await installed(artifact, prefix: prefix, stage: "before", process: process), before {
+            stage = "before"
+            if try await installed(artifact, prefix: prefix, stage: stage, process: process) {
                 return CodeArtifactInstallResult(state: .succeeded, connectionDescription: route)
             }
+            stage = "install"
             handedOff = true
             _ = try await query(["device", "install", "app", "--device", artifact.target.deviceID, app.path], prefix: prefix, stage: "install", process: process, timeout: 120)
-            if try await installed(artifact, prefix: prefix, stage: "readback", process: process) {
+            stage = "readback"
+            if try await installed(artifact, prefix: prefix, stage: stage, process: process) {
                 return CodeArtifactInstallResult(state: .succeeded, connectionDescription: route)
             }
             return CodeArtifactInstallResult(state: .unknownCompletion,
@@ -60,8 +64,7 @@ public struct CodeNativeInstaller: CodeArtifactInstalling {
                 error: CodeOvernightError(.cancelled, stage: handedOff ? "install" : "connection", recovery: handedOff ? "Installation was interrupted. Refresh its status before retrying." : "Installation cancelled."))
         } catch let error as NativeCommandError {
             let kind = Self.classify(error.document)
-            return CodeArtifactInstallResult(state: handedOff && kind == .transport ? .unknownCompletion : (kind == .transport ? .waitingForPhone : .failed),
-                error: CodeOvernightError(kind, stage: handedOff ? "install" : "connection", recovery: Self.recovery(kind), domain: error.domain, code: error.code))
+            return Self.commandFailure(kind, stage: stage, domain: error.domain, code: error.code)
         } catch {
             return CodeArtifactInstallResult(state: handedOff ? .unknownCompletion : .waitingForPhone,
                 error: CodeOvernightError(.unknown, stage: handedOff ? "readback" : "connection", recovery: "Couldn’t confirm the phone’s status. Check its connection and refresh."))
@@ -93,6 +96,9 @@ public struct CodeNativeInstaller: CodeArtifactInstalling {
     }
     private func installed(_ artifact: CodeBuildArtifact, prefix: URL, stage: String, process: CodeProcess) async throws -> Bool {
         let document = try await query(["device", "info", "apps", "--device", artifact.target.deviceID, "--bundle-id", artifact.bundleID], prefix: prefix, stage: stage, process: process)
+        guard (document["result"] as? [String: Any])?["apps"] is [[String: Any]] else {
+            throw CodeFailure("Couldn’t read installed apps.")
+        }
         return Self.matchesReadback(document, artifact: artifact)
     }
     static func matchesReadback(_ document: [String: Any], artifact: CodeBuildArtifact) -> Bool {
@@ -133,9 +139,24 @@ public struct CodeNativeInstaller: CodeArtifactInstalling {
             if total > 18_000_000 && !file.lastPathComponent.hasPrefix(prefix) { try? FileManager.default.removeItem(at: file) }
         }
     }
+    static func commandFailure(_ kind: CodeOvernightError.Kind, stage: String, domain: String, code: Int) -> CodeArtifactInstallResult {
+        let unavailable = domain == "com.apple.dt.CoreDeviceError" && code == 4016
+        let recovery = unavailable
+            ? "The build is ready. Unlock your iPhone and check that Xcode can open it. After an iOS update, use an Xcode version that supports it."
+            : Self.recovery(kind)
+        let needsReadback = stage == "readback" || (stage == "install" && [.transport, .unknown].contains(kind))
+        return CodeArtifactInstallResult(
+            state: needsReadback ? .unknownCompletion : (kind == .transport ? .waitingForPhone : .failed),
+            error: CodeOvernightError(kind, stage: stage, recovery: needsReadback
+                ? "Reconnect your iPhone so Orbit can confirm whether this build installed."
+                : recovery, domain: domain, code: code))
+    }
     static func classify(_ document: [String: Any]) -> CodeOvernightError.Kind {
         // Classification controls fallback, so unknown errors fail closed.
-        let error = document["error"] ?? [:]
+        let error = document["error"] as? [String: Any] ?? [:]
+        // This is a CoreDevice usage assertion, whose requested state names
+        // can include "TrustedConnectivity" even for an already paired phone.
+        if error["domain"] as? String == "com.apple.dt.CoreDeviceError", error["code"] as? Int == 4016 { return .transport }
         let text = String(describing: error).lowercased()
         if text.contains("locked") || text.contains("passcode") { return .locked }
         if text.contains("provision") || text.contains("signature") || text.contains("signing") { return .signing }

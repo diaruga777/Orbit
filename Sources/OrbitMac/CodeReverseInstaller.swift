@@ -119,6 +119,8 @@ public struct CodeFallbackInstaller: CodeArtifactInstalling {
     public func install(_ artifact: CodeBuildArtifact, app: URL, process: CodeProcess, recordRoute: @escaping @Sendable (CodeInstallRoute) async throws -> Void) async -> CodeArtifactInstallResult {
         let first = await native.install(artifact, app: app, process: process, recordRoute: recordRoute)
         guard first.state == .waitingForPhone, first.error?.kind == .transport, !Task.isCancelled else { return first }
-        return await remote.install(artifact, app: app, process: process, recordRoute: recordRoute)
+        let fallback = await remote.install(artifact, app: app, process: process, recordRoute: recordRoute)
+        if fallback.error?.stage == "proxy.readiness", first.error?.code == 4016 { return first }
+        return fallback
     }
 }

@@ -66,7 +66,7 @@ public actor OrbitServer {
         let local = await listeners.first?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
         var codes: [String] = []
         if let remoteID {
-            codes.append(OrbitPairingCode(deviceID: remoteID, addresses: [.dumbpipe(endpoint: remoteID.bytes.map { String(format: "%02x", $0) }.joined())]).text)
+            codes.append(await irohCode(remoteID))
         }
         var routes: [OrbitPeerAddress] = []
         if config.provider == "tailscale", let address = config.address, let route = OrbitPeerAddress(syncthingURL: address) { routes.append(route) }
@@ -77,10 +77,20 @@ public actor OrbitServer {
     }
     public func pairingCode() async throws -> String {
         let config = await host.configuration
-        if let dumbpipeID { return OrbitPairingCode(deviceID: dumbpipeID, addresses: [.dumbpipe(endpoint: dumbpipeID.bytes.map { String(format: "%02x", $0) }.joined())]).text }
+        if let dumbpipeID { return try await irohPairingCode(dumbpipeID) }
         let local = await listeners.first?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
         let route = (config.provider == "syncthing" ? config.relay : config.address).flatMap(OrbitPeerAddress.init(syncthingURL:))
         return OrbitPairingCode(deviceID: try transport.identity(), addresses: (config.provider != "local" ? route.map { [$0] } ?? [] : []) + local).text
+    }
+    private func irohPairingCode(_ id: DeviceID) async throws -> String {
+        let code = await irohCode(id)
+        guard dumbpipeID == id else { throw CancellationError() }
+        return code
+    }
+    private func irohCode(_ id: DeviceID) async -> String {
+        let relay = await OrbitDumbpipe.shared.relayURL(for: id)
+        return OrbitPairingCode(deviceID: id, addresses: [.dumbpipe(endpoint: id.bytes.map { String(format: "%02x", $0) }.joined())],
+                                irohRelay: relay).text
     }
     private func accept(_ listener: OrbitGoListener, pairingAllowed: Bool = true) async {
         do {

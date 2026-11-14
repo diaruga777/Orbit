@@ -99,6 +99,22 @@ final class CodeOvernightJobsTests: XCTestCase {
             XCTAssertEqual(CodeNativeInstaller.classify(["error": ["description": message]]), expected)
         }
     }
+    func testCoreDeviceUnavailableWaitsBeforeHandoffAndReconcilesAfterHandoff() throws {
+        let domain = "com.apple.dt.CoreDeviceError"
+        let document: [String: Any] = ["error": ["domain": domain, "code": 4016, "userInfo": [
+            "CurrentlyAssertableStates": ["array": []],
+            "RequestedDeviceStates": ["array": [["string": "com.apple.coredevice.remoteServiceDiscoveryTrustedConnectivityAvailable"]]]
+        ]]]
+        let kind = CodeNativeInstaller.classify(document)
+        XCTAssertEqual(kind, .transport)
+        let before = CodeNativeInstaller.commandFailure(kind, stage: "before", domain: domain, code: 4016)
+        XCTAssertEqual(before.state, .waitingForPhone)
+        XCTAssertTrue(try XCTUnwrap(before.error?.recovery).contains("Xcode version"))
+        let install = CodeNativeInstaller.commandFailure(kind, stage: "install", domain: domain, code: 4016)
+        XCTAssertEqual(install.state, .unknownCompletion)
+        let readback = CodeNativeInstaller.commandFailure(.locked, stage: "readback", domain: domain, code: 1)
+        XCTAssertEqual(readback.state, .unknownCompletion)
+    }
     func testArtifactDigestDetectsMutationAndRejectsEscapingSymlink() throws {
         let directory = root(); defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

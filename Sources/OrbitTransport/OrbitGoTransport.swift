@@ -55,7 +55,12 @@ public final class OrbitGoTransport: OrbitPeerDialing, OrbitPeerLookup, OrbitPee
     }
 
     public func dial(_ address: OrbitPeerAddress, expecting expected: DeviceID) async throws -> any BEPByteStream {
-        if case .dumbpipe(let endpoint) = address { return try await OrbitDumbpipe.shared.dial(endpoint: endpoint, expecting: expected) }
+        try await dial(address, expecting: expected, irohRelay: nil)
+    }
+    public func dial(_ address: OrbitPeerAddress, expecting expected: DeviceID, irohRelay: String?) async throws -> any BEPByteStream {
+        if case .dumbpipe(let endpoint) = address {
+            return try await OrbitDumbpipe.shared.dial(endpoint: endpoint, expecting: expected, relay: irohRelay)
+        }
         if configuration.requestLocalNetworkAccess, case .tcp(let host, let port) = address {
             try await OrbitLocalNetworkAccess(host: host, port: port).check()
         }

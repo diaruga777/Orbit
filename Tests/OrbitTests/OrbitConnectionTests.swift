@@ -133,6 +133,21 @@ final class OrbitConnectionTests: XCTestCase {
         let invalid = OrbitConnectionRoutes(provider: "dumbpipe", pairingCodes: ["invalid"], accountPeerID: phone.description)
         XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: remote, savedRoutes: invalid))
     }
+    func testIrohRelayHintSurvivesPairingCodeAndKeepsTheSamePin() throws {
+        let mac = try identity(9)
+        let endpoint = mac.bytes.map { String(format: "%02x", $0) }.joined()
+        let route = OrbitPeerAddress.dumbpipe(endpoint: endpoint)
+        let relay = "https://relay.example.com/"
+        let old = OrbitPairingCode(deviceID: mac, addresses: [route])
+        let new = OrbitPairingCode(deviceID: mac, addresses: [route], irohRelay: relay)
+        XCTAssertEqual(try OrbitPairingCode(string: new.text), new)
+        XCTAssertNil(try OrbitPairingCode(string: old.text).irohRelay)
+        let decoded = try OrbitConnectionRoutes(provider: "dumbpipe", pairingCodes: [new.text], accountPeerID: mac.description).validated()
+        XCTAssertEqual(decoded, [new])
+        for invalid in ["http://relay.example.com", "https://user@relay.example.com", "https://relay.example.com/?secret=1"] {
+            XCTAssertNil(OrbitPairingCode(deviceID: mac, addresses: [route], irohRelay: invalid).irohRelay)
+        }
+    }
     func testRouteUpdateRejectsMismatchedRemotePinAndIsBackwardCompatible() throws {
         let mac = try identity(9), other = try identity(10)
         let bad = OrbitPairingCode(deviceID: mac, addresses: [.dumbpipe(endpoint: other.bytes.map { String(format: "%02x", $0) }.joined())])
