@@ -42,7 +42,7 @@ final class OrbitPhoneConnection: @unchecked Sendable {
                     generation: generation, provider: provider, dial: { [self] in
                         // Every Apple stream uses the currently reachable, independently pinned route.
                         let (code, route) = try await reachableRoute()
-                        return OrbitInstallStream(authenticatedStream: try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay))
+                        return OrbitInstallStream(authenticatedStream: try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay, lanProbeTimeout: automatic ? 1.5 : 20))
                     }, available: { try Task.checkCancellation() }, open: { service, port in
                         try await OrbitLocalAppleServices.openVerifiedService(service, port: port, interfaces: ["en0", "en1"])
                     })
@@ -118,24 +118,34 @@ final class OrbitPhoneConnection: @unchecked Sendable {
         let updated = (try? savedRoutes?.validated()) ?? []
         return updated.isEmpty ? (original.map { [$0] } ?? []) : updated
     }
+    private var automatic: Bool {
+        codes.contains { $0.addresses.contains { if case .dumbpipe = $0 { return true }; return false } }
+    }
+    private var candidates: [OrbitConnectionRoutes.Candidate] {
+        OrbitConnectionRoutes.candidates(codes, automatic: automatic)
+    }
+    private func connectionFailure(_ last: Error) -> Error {
+        guard automatic, !candidates.contains(where: { if case .tailscale = $0.address { return true }; return false }),
+              !(last is CancellationError) else { return last }
+        return CodeFailure("Couldn’t connect directly. Set up Tailscale in Orbit Mac → Settings for remote access.")
+    }
     private func prepare(_ route: OrbitPeerAddress) async throws {
         if case .dumbpipe = route { _ = try await OrbitDumbpipe.shared.start(secretURL: Self.root.appendingPathComponent("Identity/iroh.key")) }
     }
     private func reachableRoute() async throws -> (OrbitPairingCode, OrbitPeerAddress) {
         var last: Error = CodeFailure("Your Mac is unavailable.")
         let payload = try JSONSerialization.data(withJSONObject: ["method": "connection_status"])
-        for code in codes {
-            for route in code.addresses {
-                do {
-                    try await prepare(route)
-                    let stream = try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay)
-                    let response = try JSONSerialization.jsonObject(with: await OrbitRPC.exchange(payload, stream: stream, timeout: 5)) as? [String: Any]
-                    if let error = response?["error"] as? String { throw CodeFailure(error) }
-                    return (code, route)
-                } catch { last = error }
-            }
+        for candidate in candidates {
+            let (code, route) = (candidate.code, candidate.address)
+            do {
+                try await prepare(route)
+                let stream = try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay, lanProbeTimeout: automatic ? 1.5 : 20)
+                let response = try JSONSerialization.jsonObject(with: await OrbitRPC.exchange(payload, stream: stream, timeout: 5)) as? [String: Any]
+                if let error = response?["error"] as? String { throw CodeFailure(error) }
+                return (code, route)
+            } catch { last = error }
         }
-        throw last
+        throw connectionFailure(last)
     }
     private let logSync = OrbitDiagnosticSync()
     func syncDiagnostics() async {
@@ -168,39 +178,38 @@ final class OrbitPhoneConnection: @unchecked Sendable {
             let original = pairingCode
             let payload = try JSONSerialization.data(withJSONObject: ["method": method, "params": params, "trace": trace])
             var last: Error = CodeFailure("Your Mac is unavailable.")
-            for code in codes {
-                for route in code.addresses {
-                    try Task.checkCancellation()
-                    guard pairingCode == original else { throw CancellationError() }
-                    let stream: any BEPByteStream
-                    do {
-                        fields["route"] = routeKind(route)
-                        try await prepare(route)
-                        stream = try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay)
-                    } catch {
-                        last = error
-                        if logging { OrbitDiagnostics.shared.error("rpc", "dial_failed", error, fields) }
-                        continue
-                    }
-                    let data: Data
-                    do { data = try await OrbitRPC.exchange(payload, stream: stream, timeout: ["targets", "mac_update_status"].contains(method) ? 30 : 180) }
-                    catch {
-                        if logging { OrbitDiagnostics.shared.error("rpc", "exchange_failed", error, fields) }
-                        // The Mac may have accepted a mutation. Never resend a build/save
-                        // just because its reply was lost. Refresh reads durable job state.
-                        if !Self.readOnly(method, params) { throw CodeFailure("The Mac’s reply was interrupted. Check Apps before trying again.") }
-                        last = error; continue
-                    }
-                    guard pairingCode == original else { throw CancellationError() }
-                    guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          response["result"] != nil || response["error"] is String else { throw CodeFailure("Your Mac sent an invalid reply. Update Orbit Mac and retry.") }
-                    if let message = response["error"] as? String { throw CodeFailure(message) }
-                    fields["milliseconds"] = String(Int(Date().timeIntervalSince(started) * 1000)); fields["bytes"] = String(data.count)
-                    if logging { OrbitDiagnostics.shared.record("rpc", "completed", fields) }
-                    return response["result"] ?? NSNull()
+            for candidate in candidates {
+                let (code, route) = (candidate.code, candidate.address)
+                try Task.checkCancellation()
+                guard pairingCode == original else { throw CancellationError() }
+                let stream: any BEPByteStream
+                do {
+                    fields["route"] = routeKind(route)
+                    try await prepare(route)
+                    stream = try await transport.dial(route, expecting: code.deviceID, irohRelay: code.irohRelay, lanProbeTimeout: automatic ? 1.5 : 20)
+                } catch {
+                    last = error
+                    if logging { OrbitDiagnostics.shared.error("rpc", "dial_failed", error, fields) }
+                    continue
                 }
+                let data: Data
+                do { data = try await OrbitRPC.exchange(payload, stream: stream, timeout: ["targets", "mac_update_status"].contains(method) ? 30 : 180) }
+                catch {
+                    if logging { OrbitDiagnostics.shared.error("rpc", "exchange_failed", error, fields) }
+                    // The Mac may have accepted a mutation. Never resend a build/save
+                    // just because its reply was lost. Refresh reads durable job state.
+                    if !Self.readOnly(method, params) { throw CodeFailure("The Mac’s reply was interrupted. Check Apps before trying again.") }
+                    last = error; continue
+                }
+                guard pairingCode == original else { throw CancellationError() }
+                guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      response["result"] != nil || response["error"] is String else { throw CodeFailure("Your Mac sent an invalid reply. Update Orbit Mac and retry.") }
+                if let message = response["error"] as? String { throw CodeFailure(message) }
+                fields["milliseconds"] = String(Int(Date().timeIntervalSince(started) * 1000)); fields["bytes"] = String(data.count)
+                if logging { OrbitDiagnostics.shared.record("rpc", "completed", fields) }
+                return response["result"] ?? NSNull()
             }
-            throw last
+            throw connectionFailure(last)
         } catch {
             if logging { OrbitDiagnostics.shared.error("rpc", "failed", error, fields) }
             throw error

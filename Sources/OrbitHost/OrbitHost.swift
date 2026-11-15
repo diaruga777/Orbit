@@ -368,7 +368,7 @@ public actor OrbitHost {
             next.provider = p["provider"] as? String ?? next.provider
             try next.validateConnection()
             if next.provider == "syncthing" { next.relay = p["relay"] as? String ?? next.relay }
-            if next.provider == "tailscale" { next.address = p["address"] as? String ?? next.address }
+            if ["dumbpipe", "tailscale"].contains(next.provider) { next.address = p["address"] as? String ?? next.address }
             try next.validateConnection(requireAddress: true)
             guard let applyConnections else { throw CodeFailure("Connections are still starting. Try again shortly.") }
             configuringConnections = true

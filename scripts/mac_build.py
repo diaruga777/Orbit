@@ -255,7 +255,7 @@ def checkout(source, revision, folder):
     # User-owned configuration and generated native binaries stay out of Git.
     (folder / 'Config').mkdir(exist_ok=True)
     shutil.copy2(source / 'Config/Local.xcconfig', folder / 'Config/Local.xcconfig')
-    for relative in ['Vendor/OrbitNet.xcframework', 'Vendor/DeviceGateway/IDevice.xcframework']:
+    for relative in ['Vendor/OrbitNet.xcframework', 'Vendor/DeviceGateway/IDevice.xcframework', 'Vendor/IrohDirect']:
         native = source / relative
         if native.exists():
             shutil.copytree(native, folder / relative, symlinks=True)

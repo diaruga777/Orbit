@@ -7,8 +7,10 @@ import OrbitCore
 /// and pinned endpoint keys; the desktop CLI's default handshake is not used.
 public actor OrbitDumbpipe {
     public static let shared = OrbitDumbpipe()
-    public static let alpn = Data("orbit/1".utf8)
+    public static let alpn = Data("orbit/direct/1".utf8)
     private var endpoint: Endpoint?
+    private var lastDirectAddress: [DeviceID: String] = [:]
+    private var dialBackoff: [DeviceID: ContinuousClock.Instant] = [:]
     private var binding: Task<Endpoint, Error>?
     public init() {}
     public func start(secretURL: URL? = nil) async throws -> DeviceID {
@@ -36,6 +38,8 @@ public actor OrbitDumbpipe {
     public func stop() async throws {
         let current = endpoint
         endpoint = nil
+        lastDirectAddress.removeAll()
+        dialBackoff.removeAll()
         try await current?.close()
     }
     public func relayURL(for id: DeviceID) -> String? {
@@ -45,20 +49,42 @@ public actor OrbitDumbpipe {
     public func dial(endpoint id: String, expecting expected: DeviceID, relay: String? = nil) async throws -> any BEPByteStream {
         _ = try await start()
         guard let endpoint else { throw CancellationError() }
-        return try await Self.dial(from: endpoint, to: id, expecting: expected, relay: relay)
+        let clock = ContinuousClock()
+        if let retry = dialBackoff[expected], clock.now < retry { throw IrohDirectConnection.Unavailable() }
+        do {
+            let stream = try await Self.dial(from: endpoint, to: id, expecting: expected, relay: relay,
+                                             directAddress: lastDirectAddress[expected])
+            lastDirectAddress[expected] = stream.directAddress
+            dialBackoff.removeValue(forKey: expected)
+            return stream
+        } catch {
+            if !Task.isCancelled { dialBackoff[expected] = clock.now + .seconds(10) }
+            throw error
+        }
     }
-    static func dial(from endpoint: Endpoint, to id: String, expecting expected: DeviceID, relay: String?) async throws -> any BEPByteStream {
+
+    static func dial(from endpoint: Endpoint, to id: String, expecting expected: DeviceID,
+                     relay: String?, directAddress: String? = nil) async throws -> OrbitIrohStream {
         let remote = try EndpointId.fromString(s: id)
         guard remote.toBytes() == expected.bytes else { throw CodeFailure("The dumbpipe endpoint does not match the paired Mac.") }
         let hint = OrbitPairingCode.validRelay(relay)
-        let connection: Connection
-        do {
-            connection = try await endpoint.connect(addr: EndpointAddr(id: remote, relayUrl: hint, addresses: []), alpn: alpn)
-        } catch {
-            try Task.checkCancellation()
-            guard hint != nil else { throw error }
-            connection = try await endpoint.connect(addr: EndpointAddr(id: remote, relayUrl: nil, addresses: []), alpn: alpn)
+        var connection: Connection? = nil
+        if let directAddress {
+            connection = try? await IrohDirectConnection.connect(from: endpoint,
+                to: EndpointAddr(id: remote, relayUrl: nil, addresses: [directAddress]), alpn: alpn,
+                timeout: .milliseconds(700))
         }
+        if connection == nil, let hint {
+            try Task.checkCancellation()
+            connection = try? await IrohDirectConnection.connect(from: endpoint,
+                to: EndpointAddr(id: remote, relayUrl: hint, addresses: []), alpn: alpn)
+        }
+        if connection == nil {
+            try Task.checkCancellation()
+            connection = try await IrohDirectConnection.connect(from: endpoint,
+                to: EndpointAddr(id: remote, relayUrl: nil, addresses: []), alpn: alpn)
+        }
+        guard let connection else { throw IrohDirectConnection.Unavailable() }
         do {
             try Task.checkCancellation()
             return OrbitIrohStream(connection: connection, stream: try await connection.openBi())
@@ -75,6 +101,7 @@ public actor OrbitDumbpipe {
                     let accepting = try await incoming.accept()
                     guard try await accepting.alpn() == Self.alpn else { return }
                     let connection = try await accepting.connect()
+                    try await IrohDirectConnection.awaitDirect(connection)
                     let peer = try DeviceID(bytes: connection.remoteId().toBytes())
                     let stream = OrbitIrohStream(connection: connection, stream: try await connection.acceptBi())
                     await handler(OrbitAcceptedPeer(stream: stream, device: peer, remoteDescription: "dumbpipe"))
@@ -87,10 +114,21 @@ final class OrbitIrohStream: BEPByteStream, @unchecked Sendable {
     private let connection: Connection
     private let stream: BiStream
     private let reader: OrbitIrohReader
-    init(connection: Connection, stream: BiStream) { self.connection = connection; self.stream = stream; reader = OrbitIrohReader(recv: stream.recv()) }
+    private let watch: Task<Void, Never>
+    var directAddress: String? { connection.paths().first { $0.isSelected && $0.isIp }?.remoteAddr }
+    init(connection: Connection, stream: BiStream) {
+        self.connection = connection
+        self.stream = stream
+        watch = IrohDirectConnection.stopOnPathLoss(connection)
+        reader = OrbitIrohReader(recv: stream.recv())
+    }
     func read(exactly count: Int) async throws -> Data { try await reader.read(count) }
     func write(_ data: Data) async throws { try await stream.send().writeAll(buf: data) }
-    func close() { try? connection.close(errorCode: 0, reason: Data()) }
+    deinit { close() }
+    func close() {
+        watch.cancel()
+        try? connection.close(errorCode: 0, reason: Data())
+    }
 }
 private actor OrbitIrohReader {
     let recv: RecvStream

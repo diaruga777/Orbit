@@ -13,6 +13,7 @@ final class OrbitSetupPayloadTests: XCTestCase {
         let files = String(decoding: try await OrbitCommand.run("/usr/bin/git", ["ls-files"], directory: source), as: UTF8.self)
         XCTAssertTrue(files.contains("Vendor/OrbitNet.xcframework/Info.plist"))
         XCTAssertTrue(files.contains("Vendor/DeviceGateway/IDevice.xcframework/Info.plist"))
+        XCTAssertTrue(files.contains("Vendor/IrohDirect/Iroh.xcframework/Info.plist"))
         XCTAssertTrue(files.contains("Apps/OrbitWidgets/OrbitWidget.swift"))
         XCTAssertTrue(files.contains("Apps/OrbitShare/OrbitShareController.swift"))
         XCTAssertTrue(files.contains("Apps/OrbitShare/OrbitShare.entitlements"))

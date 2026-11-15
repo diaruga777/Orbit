@@ -1,5 +1,5 @@
 {
-  "originHash" : "34915382ad62299db15353e4eee9ec049e3733b3dfde66e2a7cb2103c32cb016",
+  "originHash" : "acc79a35fd66f59074b67b1bccf62b509e2a6cc9ab933d9a109fe8db6ac9304c",
   "pins" : [
     {
       "identity" : "anisettekit",
@@ -26,15 +26,6 @@
       "state" : {
         "branch" : "main",
         "revision" : "eae2590eaf17fe98ce9c76b3ec2bd42b780eb123"
-      }
-    },
-    {
-      "identity" : "iroh-ffi",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/n0-computer/iroh-ffi.git",
-      "state" : {
-        "revision" : "5e451092dba0c1a09ee83ff6e5be37b1152a5c58",
-        "version" : "1.1.0"
       }
     },
     {

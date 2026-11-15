@@ -96,6 +96,16 @@ The iPhone’s More → Mac page shows the saved connection type. Tailscale uses
 external clients and the Mac’s configured tailnet address, with the same pinned
 TLS identity as local Wi-Fi. Tailscale’s address is tried before LAN fallback.
 
+Automatic mode orders pinned LAN, direct Iroh and optional Tailscale routes.
+Share the fallback address during the normal authenticated route sync. The Iroh
+1.0.2 / noq 1.0.1 native build permits encrypted QUIC setup and path control
+on the relay but excludes STREAM and DATAGRAM frames on synthetic Iroh
+addresses, including retransmissions and changes of selected path. The Swift
+dialer has a bounded direct-path wait, caches successful direct addresses and
+closes the stream if the direct path disappears. Control and Apple forwarding
+use the same transport restriction. Interrupted mutations and uncertain Apple
+installations follow their existing reconciliation paths.
+
 The server serializes live listener changes, starts replacements before retiring
 old remote listeners, and keeps the local listener available. Host configuration
 is saved after activation succeeds. Authenticated `connection_routes` exchanges

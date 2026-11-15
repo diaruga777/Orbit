@@ -196,7 +196,7 @@ public actor OrbitSetup {
         _ = try await OrbitCommand.run("/usr/bin/ditto", ["-x", "-k", archive.path, target.path])
         _ = try await OrbitCommand.run("/usr/bin/git", ["init", "--initial-branch=main"], directory: target)
         _ = try await OrbitCommand.run("/usr/bin/git", ["add", "."], directory: target)
-        _ = try await OrbitCommand.run("/usr/bin/git", ["add", "--force", "Vendor/OrbitNet.xcframework", "Vendor/DeviceGateway/IDevice.xcframework"], directory: target)
+        _ = try await OrbitCommand.run("/usr/bin/git", ["add", "--force", "Vendor/OrbitNet.xcframework", "Vendor/DeviceGateway/IDevice.xcframework", "Vendor/IrohDirect"], directory: target)
         let staged = try await OrbitCommand.run("/usr/bin/git", ["status", "--porcelain", "--untracked-files=no"], directory: target)
         if !staged.isEmpty {
             _ = try await OrbitCommand.run("/usr/bin/git", ["-c", "user.name=Orbit Setup", "-c", "user.email=setup@localhost", "-c", "commit.gpgsign=false", "commit", "-m", "Install bundled Orbit phone source"], directory: target)

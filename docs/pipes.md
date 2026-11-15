@@ -9,7 +9,7 @@ connection type and click **Apply Connection**. Progress, errors and the number
 of updated phones appear below the picker. Keep Orbit open on your paired iPhone
 on the same Wi-Fi until it syncs. If switching away from iroh, sync both before
 and after applying so the Mac recognizes the phone’s TCP identity. For Automatic,
-check **Mac relay connected** and the updated phone count before leaving Wi-Fi.
+check the updated phone count before leaving Wi-Fi.
 The iPhone’s **More → Mac** shows its saved connection type.
 
 Tailscale uses its own clients and account. For Syncthing, enter a full `relay://`
@@ -82,14 +82,21 @@ bin/orbit configure --provider dumbpipe
 
 Select Automatic (iroh) and apply it in Settings. Existing phones receive its pinned `dumbpipe://…` route automatically. Orbit includes the native [iroh FFI](https://github.com/n0-computer/iroh-ffi), the stream primitive used by [dumbpipe](https://github.com/n0-computer/dumbpipe). The iPhone does not spawn a CLI or need a Rust toolchain. Selecting this provider enables iroh's N0 discovery and relay preset; local-only mode does not start it.
 
-Orbit syncs the Mac’s current relay URL over the authenticated connection. This
-lets a phone reach the same pinned endpoint if the network blocks iroh’s endpoint
-lookup. If the saved relay is stale, Orbit can still try discovery. The relay URL
-does not alter the endpoint key or transfer installation authorization.
+Automatic tries the authenticated local Wi-Fi route first. Away from home, it
+uses Iroh to locate the pinned Mac and try a direct path. The Mac shares its
+current Iroh relay address with paired phones. Public Iroh relays carry QUIC
+setup and path coordination. All Orbit requests, source, artifacts and Apple
+installation traffic require a direct path. A direct path that drops closes
+that stream.
+
+For fallback, connect both devices to Tailscale, enter the Mac’s Tailscale IP or
+MagicDNS name in **Tailscale fallback**, and apply the settings. Open Orbit on
+the paired iPhone over a working connection so it saves the fallback. Tailscale
+chooses its own route, including its DERP relays where necessary.
 
 The endpoint ID is pinned in the pairing code. Orbit uses ALPN `orbit/1` and its own bounded RPC/install framing. It is not wire-compatible with the desktop CLI's default dumbpipe handshake/tickets; this is a native dumbpipe-style provider. The upstream CLI supports `--custom-alpn` for custom protocols, but pointing a default CLI tunnel at Orbit's owner-only control socket is unsupported. Do not expose that local socket over an unauthenticated tunnel.
 
-The Mac's iroh secret is stored under `~/.orbit/Identity/iroh.key`; the phone's under its private Application Support directory. Removing those keys changes identity and requires pairing again. iroh's normal route may use public relays; choose local Wi-Fi or your own explicit Syncthing relay if that does not fit your needs.
+The Mac's iroh secret is stored under `~/.orbit/Identity/iroh.key`; the phone's under its private Application Support directory. Removing those keys changes identity and requires pairing again.
 
 ## Diagnostics
 

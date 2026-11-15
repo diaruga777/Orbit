@@ -19,7 +19,7 @@ let package = Package(
         .package(path: "Vendor/DeviceGateway"),
         .package(url: "https://github.com/SideStore/SideSign.git", revision: "752d1ef602aa792a432ffa1e71646dc1ecf7363c"),
         .package(url: "https://github.com/mahee96/AnisetteKit.git", branch: "main"),
-        .package(url: "https://github.com/n0-computer/iroh-ffi.git", exact: "1.1.0"),
+        .package(path: "Vendor/IrohDirect"),
         .package(url: "https://github.com/simonbs/Runestone.git", exact: "0.5.2"),
         .package(url: "https://github.com/simonbs/TreeSitterLanguages.git", exact: "0.1.9"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "602.0.0")
@@ -27,7 +27,7 @@ let package = Package(
     targets: [
         .binaryTarget(name: "COrbitNet", path: "Vendor/OrbitNet.xcframework"),
         .target(name: "OrbitWire"),
-        .target(name: "OrbitTransport", dependencies: ["OrbitWire", "OrbitCore", "COrbitNet", .product(name: "IrohLib", package: "iroh-ffi")], linkerSettings: [.linkedFramework("Security"), .linkedLibrary("resolv")]),
+        .target(name: "OrbitTransport", dependencies: ["OrbitWire", "OrbitCore", "COrbitNet", .product(name: "IrohLib", package: "IrohDirect")], linkerSettings: [.linkedFramework("Security"), .linkedLibrary("resolv")]),
         .target(name: "OrbitHost", dependencies: ["OrbitWidgets", "OrbitCore", "OrbitMac", "OrbitTransport", "OrbitWire"], resources: [.copy("Resources/AppletHost"), .copy("Resources/MacTargets")]),
         .executableTarget(name: "OrbitMacApp", dependencies: ["OrbitHost", "OrbitCore"]),
         .target(name: "OrbitDiagnosticsKit", path: "Sources/OrbitHost/Resources/AppletHost/Diagnostics"),

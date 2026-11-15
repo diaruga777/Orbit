@@ -7,6 +7,7 @@ for tool in xcodebuild swift go python3 xcodegen; do
 done
 if [[ ! -d Vendor/OrbitNet.xcframework ]]; then ./scripts/build_transport.sh; fi
 python3 scripts/bootstrap_refresh.py
+./scripts/iroh/build_iroh_direct.sh "$ROOT/Vendor/IrohDirect"
 xcodegen generate
 swift package resolve
 if [[ ! -f Config/Local.xcconfig ]]; then

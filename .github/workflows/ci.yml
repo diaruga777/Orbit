@@ -18,6 +18,8 @@ jobs:
           swift --version
       - name: Install project generator
         run: brew install xcodegen
+      - name: Prepare Rust targets
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
       - name: Generate transport and project
         run: ./scripts/bootstrap.sh
       - name: Swift tests

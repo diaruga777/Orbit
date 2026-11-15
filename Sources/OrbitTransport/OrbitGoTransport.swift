@@ -57,17 +57,20 @@ public final class OrbitGoTransport: OrbitPeerDialing, OrbitPeerLookup, OrbitPee
     public func dial(_ address: OrbitPeerAddress, expecting expected: DeviceID) async throws -> any BEPByteStream {
         try await dial(address, expecting: expected, irohRelay: nil)
     }
-    public func dial(_ address: OrbitPeerAddress, expecting expected: DeviceID, irohRelay: String?) async throws -> any BEPByteStream {
+    public func dial(_ address: OrbitPeerAddress, expecting expected: DeviceID, irohRelay: String?, lanProbeTimeout: TimeInterval = 20) async throws -> any BEPByteStream {
         if case .dumbpipe(let endpoint) = address {
             return try await OrbitDumbpipe.shared.dial(endpoint: endpoint, expecting: expected, relay: irohRelay)
         }
         if configuration.requestLocalNetworkAccess, case .tcp(let host, let port) = address {
-            try await OrbitLocalNetworkAccess(host: host, port: port).check()
+            try await OrbitLocalNetworkAccess(host: host, port: port).check(timeout: lanProbeTimeout)
         }
         let handle = try await configuration.tailnetHandle?() ?? 0
+        let dialAddress: OrbitPeerAddress
+        if handle == 0, case let .tailscale(host, port) = address { dialAddress = .tcp(host: host, port: port) }
+        else { dialAddress = address }
         var descriptor: Int32 = -1
         let result = configuration.stateDirectory.path.withCString { directory in
-            address.description.withCString { address in
+            dialAddress.description.withCString { address in
                 expected.description.withCString { peer in
                     api.dial(directory, address, peer, handle, &descriptor)
                 }

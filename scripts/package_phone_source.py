@@ -47,7 +47,7 @@ def package(destination):
     archive = destination / 'OrbitPhoneSource.zip'
     subprocess.run(['git','archive','--format=zip','-o',str(archive),'HEAD','--',*include],cwd=ROOT,check=True)
     with zipfile.ZipFile(archive,'a',compression=zipfile.ZIP_DEFLATED,compresslevel=6) as output:
-        for folder in ['Vendor/OrbitNet.xcframework','Vendor/DeviceGateway/IDevice.xcframework']:
+        for folder in ['Vendor/OrbitNet.xcframework','Vendor/DeviceGateway/IDevice.xcframework', 'Vendor/IrohDirect']:
             add_native_payload(output, ROOT/folder, ROOT)
     hasher = hashlib.sha256()
     with archive.open('rb') as file:

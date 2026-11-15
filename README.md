@@ -173,11 +173,13 @@ Install [Homebrew](https://brew.sh/) if you use it, then:
 
 ```sh
 brew install go xcodegen python
+# Install Rust with rustup, then add the Apple targets.
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 # Optional: useful for private GitHub repositories and development.
 brew install gh
 ```
 
-Git and Swift come with Xcode. Go builds Orbit's small transport and Apple installation helper from source. Python runs the CLI/MCP. XcodeGen generates the app project. You do not need Rust for the pinned iroh package; a source-build option is documented upstream.
+Git and Swift come with Xcode. Go builds Orbit's small transport and Apple installation helper from source. Python runs the CLI/MCP. XcodeGen generates the app project. Rust builds the pinned Iroh transport for Mac, iPhone and Simulator. The DMG includes the native archives for end users.
 
 ## 2. Build Orbit with your own identifiers
 
@@ -254,7 +256,7 @@ Orbit owns application-level trust independently of the pipe. A route is never p
 | Local Wi-Fi | Both devices on your LAN; no extra software | Direct encrypted connection, with no intermediary or external discovery |
 | Tailscale | Install and sign in to the separate client on both devices | Direct/relayed networking according to your tailnet policy; Orbit still authenticates its own connection |
 | Syncthing relay | Provide an explicit `strelaysrv` URL | Carries Orbit's end-to-end authenticated streams; this is the Syncthing relay protocol, not a synced-folder job queue |
-| dumbpipe / iroh | Choose the built-in adapter | Uses iroh's authenticated QUIC streams, discovery and N0 relays as needed; no desktop CLI on iPhone |
+| dumbpipe / iroh | Choose the built-in adapter | Tries LAN, then direct Iroh, then optional Tailscale. Public Iroh relays help set up the connection. |
 
 With Automatic remote connections, Orbit syncs the Mac’s relay address to the paired phone so it can connect even when endpoint discovery fails.
 

@@ -1188,16 +1188,31 @@ activity delivery, notarization or marketplace acceptance was performed.
 
 ## Automatic relay and CoreDevice recovery
 
-The route tests cover relay hints, legacy codes, pin validation and authenticated
-route sync. Run the production iroh dial path with endpoint discovery disabled
-and no direct addresses using temporary endpoints on a public relay:
+The route tests cover the LAN → Iroh → Tailscale order, transport pins, legacy
+codes and authenticated route sync. The optional public-relay test uses tiny
+fixtures, supplies a relay hint with discovery disabled, and waits for direct
+before exchanging application data. The private native test establishes a relay
+handshake with IP paths disabled and verifies both peers receive zero STREAM or
+DATAGRAM data, even when both senders queue bytes.
 
 ```sh
-ORBIT_TEST_IROH_RELAY=1 swift test --filter OrbitRPCDeliveryTests.testRelayHintConnectsWithoutEndpointDiscovery
+IROH_DIRECT_TEST=1 scripts/iroh/build_iroh_direct.sh "$PWD/Vendor/IrohDirect"
+ORBIT_TEST_IROH_RELAY=1 swift test --filter OrbitRPCDeliveryTests.testRelayHintBootstrapsDirectConnectionWithoutEndpointDiscovery
 ```
+
+On a second network, test with Tailscale enabled and disabled. Confirm that
+file transfers stop if their direct Iroh path drops and retry on an available
+route. Confirm installation separately with exact Apple revision readback.
 
 The CoreDevice tests replay a usage-assertion error with
 `remoteServiceDiscoveryTrustedConnectivityAvailable`, check the waiting and
 uncertain states before and after handoff, and resume a failed retained job.
 Physical acceptance checks an Apps refresh on a second network and installation
 with exact revision readback after Xcode reconnects to the iPhone.
+
+Direct Iroh verification (2026-11-16): the source-built relay-policy fixture
+passed in both directions. All 253 Swift checks completed without failures
+(seven optional fixtures skipped), and the separate relay-assisted direct and
+bundled installer tests passed. All 48 Python checks, both Go race suites and
+helper vet passed. The iOS Simulator client and signed Mac review app built.
+Live tailnet routing and physical-device installation remain manual checks.

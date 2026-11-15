@@ -148,7 +148,7 @@ struct CodeDeviceCheckout {
                 try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: local.path)
                 // Source checkouts keep generated native archives ignored; the
                 // bundled wizard snapshot already commits its reviewed copies.
-                for relative in ["Vendor/OrbitNet.xcframework", "Vendor/DeviceGateway/IDevice.xcframework"] {
+                for relative in ["Vendor/OrbitNet.xcframework", "Vendor/DeviceGateway/IDevice.xcframework", "Vendor/IrohDirect"] {
                     let destination = directory.appendingPathComponent(relative)
                     let native = URL(fileURLWithPath: project.root).appendingPathComponent(relative)
                     if !FileManager.default.fileExists(atPath: destination.path), FileManager.default.fileExists(atPath: native.path) {

@@ -20,6 +20,22 @@ public struct OrbitConnectionRoutes: Codable, Equatable, Sendable {
             switch $0 { case .dumbpipe, .relay, .tailscale: return true; case .tcp: return false }
         }
     }
+    public struct Candidate: Sendable {
+        public let code: OrbitPairingCode
+        public let address: OrbitPeerAddress
+    }
+
+    public static func candidates(_ codes: [OrbitPairingCode], automatic: Bool) -> [Candidate] {
+        let candidates = codes.flatMap { code in code.addresses.map { Candidate(code: code, address: $0) } }
+        guard automatic else { return candidates }
+        let lan = candidates.filter { if case .tcp = $0.address { return true }; return false }
+        let iroh = candidates.filter { if case .dumbpipe = $0.address { return true }; return false }
+        let fallback = candidates.filter {
+            switch $0.address { case .tailscale, .relay: return true; default: return false }
+        }
+        return lan + iroh + fallback
+    }
+
     public func validated() throws -> [OrbitPairingCode] {
         guard ["local", "tailscale", "syncthing", "dumbpipe"].contains(provider), pairingCodes.count <= 8 else {
             throw OrbitTransportError.internalError("Invalid connection update.")

@@ -5,7 +5,7 @@ import OrbitWire
 @testable import OrbitTransport
 
 final class OrbitRPCDeliveryTests: XCTestCase {
-    func testRelayHintConnectsWithoutEndpointDiscovery() async throws {
+    func testRelayHintBootstrapsDirectConnectionWithoutEndpointDiscovery() async throws {
         guard ProcessInfo.processInfo.environment["ORBIT_TEST_IROH_RELAY"] == "1" else {
             throw XCTSkip("Set ORBIT_TEST_IROH_RELAY=1 to exercise a public relay with temporary endpoints.")
         }
@@ -42,7 +42,7 @@ final class OrbitRPCDeliveryTests: XCTestCase {
             }
 
             let stream = try await OrbitDumbpipe.dial(from: client, to: key, expecting: id, relay: relay)
-            let payload = Data("relay only".utf8)
+            let payload = Data("direct".utf8)
             let result = try await OrbitRPC.exchange(payload, stream: stream, timeout: 10)
             XCTAssertEqual(result, payload)
             try await serving.value

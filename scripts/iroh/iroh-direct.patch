@@ -1,0 +1,69 @@
+--- a/src/connection/mod.rs
++++ b/src/connection/mod.rs
+@@ -6066,6 +6066,7 @@
+         scheduling_info: &PathSchedulingInfo,
+         builder: &mut PacketBuilder<'a, 'b>,
+     ) {
++        let allows_application_data = self.allows_application_data(path_id);
+         let is_multipath_negotiated = self.is_multipath_negotiated();
+         let space_has_keys = self.crypto_state.has_keys(space_id.encryption_level());
+         let is_0rtt = space_id == SpaceId::Data && !space_has_keys;
+@@ -6490,7 +6491,8 @@
+
+         // DATAGRAM
+         let mut sent_datagrams = false;
+-        while !scheduling_info.is_abandoned
++        while allows_application_data
++            && !scheduling_info.is_abandoned
+             && scheduling_info.may_send_data
+             && builder.frame_space_remaining() > Datagram::SIZE_BOUND
+             && space_id == SpaceId::Data
+@@ -6546,8 +6548,9 @@
+             }
+         }
+
+-        // STREAM
+-        if !scheduling_info.is_abandoned
++        // STREAM (including retransmissions of previously queued bytes).
++        if allows_application_data
++            && !scheduling_info.is_abandoned
+             && scheduling_info.may_send_data
+             && space_id == SpaceId::Data
+         {
+@@ -6924,6 +6927,16 @@
+         }
+     }
+
++    // iroh 1.0.2 reserves this ULA prefix for synthetic addresses presented to
++    // QUIC by its socket multiplexer. These addresses can expand to relays,
++    // including the endpoint-ID address used during the initial handshake.
++    fn allows_application_data(&self, path_id: PathId) -> bool {
++        match self.path_data(path_id).network_path.remote.ip() {
++            std::net::IpAddr::V6(addr) => !addr.octets().starts_with(&[0xfd, 0x15, 0x07, 0x0a, 0x51, 0x0b]),
++            std::net::IpAddr::V4(_) => true,
++        }
++    }
++
+     /// Whether we have **on-path** 1-RTT data to send.
+     ///
+     /// This checks for frames that can only be sent in the data space (1-RTT):
+@@ -6946,12 +6959,13 @@
+                 .is_some_and(|pns| pns.pending_path_responses.has_pending_on_path(network_path));
+
+         // Stream control frames are checked in PacketSpace::can_send, only check data here.
+-        let other = self.streams.can_send_stream_data()
+-            || self
+-                .datagrams
+-                .outgoing
+-                .front()
+-                .is_some_and(|x| x.size(true) <= max_size);
++        let other = self.allows_application_data(path_id)
++            && (self.streams.can_send_stream_data()
++                || self
++                    .datagrams
++                    .outgoing
++                    .front()
++                    .is_some_and(|x| x.size(true) <= max_size));
+
+         // All `false` fields are set in PacketSpace::can_send.
+         SendableFrames {

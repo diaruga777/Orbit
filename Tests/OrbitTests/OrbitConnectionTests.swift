@@ -184,6 +184,22 @@ final class OrbitConnectionTests: XCTestCase {
         let invalid = OrbitConnectionRoutes(provider: "dumbpipe", pairingCodes: ["invalid"], accountPeerID: phone.description)
         XCTAssertFalse(OrbitConnectionRoutes.hasRemoteConnection(pairingCode: remote, savedRoutes: invalid))
     }
+    func testAutomaticTriesLANThenIrohThenTailscaleWithTheirOwnPins() throws {
+        let tls = try identity(1), iroh = try identity(2)
+        let lan = OrbitPeerAddress.tcp(host: "192.168.0.3", port: 49210)
+        let tailnet = OrbitPeerAddress.tailscale(host: "mac.example.ts.net", port: 49210)
+        let pipe = OrbitPeerAddress.dumbpipe(endpoint: String(repeating: "02", count: 32))
+        var config = OrbitConfiguration()
+        config.provider = "dumbpipe"
+        config.address = "mac.example.ts.net"
+        let tcpCode = config.tcpPairingCode(deviceID: tls,
+            localAddresses: [lan, .tcp(host: "100.100.0.3", port: 49210)])
+        let irohCode = OrbitPairingCode(deviceID: iroh, addresses: [pipe])
+        let routes = OrbitConnectionRoutes.candidates([irohCode, try OrbitPairingCode(string: tcpCode.text)], automatic: true)
+        XCTAssertEqual(routes.map(\.address), [lan, pipe, tailnet])
+        XCTAssertEqual(routes.map { $0.code.deviceID }, [tls, iroh, tls])
+    }
+
     func testIrohRelayHintSurvivesPairingCodeAndKeepsTheSamePin() throws {
         let mac = try identity(9)
         let endpoint = mac.bytes.map { String(format: "%02x", $0) }.joined()

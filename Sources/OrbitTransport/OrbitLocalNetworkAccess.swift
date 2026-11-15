@@ -16,7 +16,7 @@ final class OrbitLocalNetworkAccess: @unchecked Sendable {
         connection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
     }
 
-    func check() async throws {
+    func check(timeout: TimeInterval = 20) async throws {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 queue.async { [self] in
@@ -29,7 +29,7 @@ final class OrbitLocalNetworkAccess: @unchecked Sendable {
                             OrbitTransportError.unreachable("The Mac did not answer. Check that both devices are on the same Wi-Fi, or connected to the same Tailscale network."))
                     }
                     self.timer = timer
-                    queue.asyncAfter(deadline: .now() + 20, execute: timer)
+                    queue.asyncAfter(deadline: .now() + timeout, execute: timer)
                     connection.start(queue: queue)
                 }
             }

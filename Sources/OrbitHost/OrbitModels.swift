@@ -67,6 +67,9 @@ extension OrbitConfiguration {
         if provider == "tailscale" {
             guard tailscaleRoute != nil else { throw CodeFailure("Enter this Mac’s Tailscale IP or MagicDNS name.") }
         }
+        if provider == "dumbpipe", let address, !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard tailscaleRoute != nil else { throw CodeFailure("Enter this Mac’s Tailscale IP or MagicDNS name.") }
+        }
         if provider == "syncthing" {
             guard let relay, let url = URLComponents(string: relay), url.scheme == "relay", let host = url.host, !host.isEmpty,
                   url.queryItems?.contains(where: { $0.name == "id" && !($0.value ?? "").isEmpty }) == true else {
@@ -96,7 +99,14 @@ extension OrbitConfiguration {
     func tcpPairingCode(deviceID: DeviceID, localAddresses: [OrbitPeerAddress]) -> OrbitPairingCode {
         let tailnet = provider == "tailscale" ? tailscaleRoute : nil
         let relayRoute = provider == "syncthing" ? relay.flatMap(OrbitPeerAddress.init(syncthingURL:)) : nil
-        let routes = [tailnet, relayRoute].compactMap { $0 } + localAddresses
+        let fallback: OrbitPeerAddress?
+        if provider == "dumbpipe", case let .tcp(host, port)? = tailscaleRoute {
+            fallback = .tailscale(host: host, port: port)
+        } else { fallback = nil }
+        let lan = provider == "dumbpipe" ? localAddresses.filter {
+            $0 != tailscaleRoute && !$0.isTailnetIP
+        } : localAddresses
+        let routes = [tailnet, relayRoute, fallback].compactMap { $0 } + lan
         return OrbitPairingCode(deviceID: deviceID, addresses: routes, preferredAddress: tailnet)
     }
 }

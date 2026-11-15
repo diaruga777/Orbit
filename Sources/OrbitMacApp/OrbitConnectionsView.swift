@@ -26,7 +26,9 @@ struct OrbitConnectionsView: View {
                         Text("Private Syncthing relay").tag("syncthing")
                     }
                     if provider == "dumbpipe" {
-                        Text("Uses iroh’s discovery and public relays when needed.")
+                        Text("Tries local Wi-Fi, then a direct connection with Iroh.")
+                        TextField("Tailscale fallback (optional)", text: $address, prompt: Text("your-mac.your-tailnet.ts.net"))
+                        Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download")!)
                     } else if provider == "tailscale" {
                         Text("Connect both devices to Tailscale, then enter this Mac’s Tailscale IP or MagicDNS name.")
                         Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download")!)
@@ -44,7 +46,7 @@ struct OrbitConnectionsView: View {
                 } else if ready {
                     Label("Selected: \(providerName(activeProvider))", systemImage: "checkmark.circle.fill")
                     if activeProvider == "dumbpipe" {
-                        Text(relayReady ? "Mac relay connected." : "Waiting for the Mac relay…")
+                        Text(relayReady ? "Iroh discovery is online." : "Connecting to Iroh discovery…")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     if activeProvider != "local" {

@@ -19,6 +19,10 @@ public enum OrbitPeerAddress: Hashable, Sendable, Codable, CustomStringConvertib
         case "dumbpipe":
             guard let id = url.host, id.count == 64, id.allSatisfy({ $0.isHexDigit }) else { return nil }
             self = .dumbpipe(endpoint: id)
+        case "tailscale":
+            guard let host = url.host, !host.isEmpty,
+                  let port = UInt16(exactly: url.port ?? 49210), port > 0 else { return nil }
+            self = .tailscale(host: host, port: port)
         case "tcp", "tcp4", "tcp6":
             guard let host = url.host, !host.isEmpty,
                   let port = UInt16(exactly: url.port ?? 22000), port > 0 else { return nil }
@@ -50,6 +54,14 @@ public enum OrbitPeerAddress: Hashable, Sendable, Codable, CustomStringConvertib
         case .tailscale, .dumbpipe: return 0
         case .relay: return 2
         }
+    }
+
+    public var isTailnetIP: Bool {
+        guard case let .tcp(host, _) = self else { return false }
+        if host.lowercased().hasPrefix("fd7a:115c:a1e0:") { return true }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 4 && parts.first == "100" && parts.allSatisfy { UInt8($0) != nil }
+            && UInt8(parts[1]).map { (64...127).contains($0) } == true
     }
 
     static func isPrivateHost(_ host: String) -> Bool {

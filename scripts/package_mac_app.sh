@@ -11,6 +11,7 @@ export SDKROOT="$(/usr/bin/xcrun --sdk macosx --show-sdk-path)"
 export SWIFT_EXEC="$(/usr/bin/xcrun --find swiftc)"
 SWIFT="$(/usr/bin/xcrun --find swift)"
 [[ -d Vendor/OrbitNet.xcframework ]] || ./scripts/build_transport.sh
+./scripts/iroh/build_iroh_direct.sh "$ROOT/Vendor/IrohDirect"
 # Both app paths use the user's ignored identity; never build sample identifiers.
 PREFIX="$(python3 scripts/local_identity.py --field prefix)"
 PHONE_ID="$(python3 scripts/local_identity.py --field phone)"

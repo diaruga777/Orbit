@@ -3,6 +3,7 @@
 DerivedData/
 dist/
 Vendor/*.xcframework/
+Vendor/IrohDirect/
 Config/Local.xcconfig
 *.xcuserstate
 xcuserdata/
