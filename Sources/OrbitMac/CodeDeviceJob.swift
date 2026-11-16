@@ -8,7 +8,7 @@ extension CodeJobs {
             let phones = try await CodeDeviceSupport.devices(root: root)
             guard phones.contains(where: { $0.id == options.deviceID }) else { throw CodeFailure("The selected phone is not connected. Connect it to your Mac by cable or on the same network, unlock it, then try again.") }
         }
-        stage(job.id, "Creating isolated checkout…", from: 0.10, to: 0.15, seconds: 15)
+        stage(job.id, "Preparing build source…", from: 0.10, to: 0.15, seconds: 15)
         let checkout = try await CodeDeviceCheckout.create(project: project, branch: options.branch, root: root,
             name: job.id, process: process)
         do {
@@ -29,7 +29,7 @@ extension CodeJobs {
             try CodeOrbitIdentity.verify(bundleID: bundle, project: buildProject,
                 phoneBundleID: phoneBundleID, monitorBundleID: options.monitorBundleID)
             var localApp: [String: String]?
-            if CodeDeviceSigning.team(app) == nil {
+            if checkout.revision != nil, CodeDeviceSigning.team(app) == nil {
                 // Git worktrees omit ignored local signing configuration. Resolve
                 // only the team from the original project; source still builds
                 // from the selected committed revision in the detached checkout.
@@ -59,7 +59,7 @@ extension CodeJobs {
             if let target = options.artifactTarget {
                 guard plist?["CFBundleVersion"] as? String == artifactBuildNumber else { throw CodeFailure("The app’s Info.plist must use CURRENT_PROJECT_VERSION so overnight updates can be verified.") }
                 let store = try CodeArtifactStore(root: root.appendingPathComponent("Artifacts"))
-                let artifact = try await store.retain(app: appURL, jobID: job.id, target: target, commit: checkout.revision, process: process)
+                let artifact = try await store.retain(app: appURL, jobID: job.id, target: target, commit: checkout.revision ?? "", process: process)
                 try recordArtifact(job.id, artifact: artifact)
             } else {
             if options.requiresInstallHandoff(for: bundle) {
@@ -93,8 +93,10 @@ extension CodeJobs {
             await checkout.remove(root: root)
             throw error
         }
-        stage(job.id, "Cleaning up checkout…", from: 0.97, to: 0.99, seconds: 10)
-        await checkout.remove(root: root)
+        if checkout.revision != nil {
+            stage(job.id, "Cleaning up checkout…", from: 0.97, to: 0.99, seconds: 10)
+            await checkout.remove(root: root)
+        }
     }
     private func command(_ executable: String, _ arguments: [String], directory: String, process: CodeProcess, log: URL) async throws {
         guard try await process.run(executable, arguments, directory: directory, log: log, timeout: 180) == 0 else { throw CodeFailure("The device command failed. See the Mac job log for details.") }
@@ -119,13 +121,33 @@ enum CodeDeviceSigning {
     }
 }
 
-/// A detached checkout protects the editor's branch, index and unsaved Mac files.
+/// Git sources build in a detached checkout. Plain local folders build in place.
 struct CodeDeviceCheckout {
-    var directory: URL
-    var revision: String
-    var repository: String
-    var project: CodeProject
+    let directory: URL
+    let revision: String?
+    private let repository: String?
+    let project: CodeProject
+
+    static func usesProjectFolder(project: CodeProject, branch: String) -> Bool {
+        // Orbit self-builds and fetched GitHub refs always require committed source.
+        guard !branch.hasPrefix("refs/remotes/"), !CodeOrbitIdentity.isOrbit(project),
+              FileManager.default.fileExists(atPath: project.path) else { return false }
+        var folder = URL(fileURLWithPath: project.path).resolvingSymlinksInPath().deletingLastPathComponent()
+        while true {
+            // A .git file may point at a linked worktree. Keep Git errors visible
+            // even when the marker's contents or symlink target are invalid.
+            let marker = folder.appendingPathComponent(".git")
+            if (try? FileManager.default.attributesOfItem(atPath: marker.path)) != nil { return false }
+            let parent = folder.deletingLastPathComponent()
+            if parent.path == folder.path { return true }
+            folder = parent
+        }
+    }
+
     static func create(project: CodeProject, branch: String, root: URL, name: String, process: CodeProcess = CodeProcess()) async throws -> Self {
+        if usesProjectFolder(project: project, branch: branch) {
+            return Self(directory: URL(fileURLWithPath: project.root), revision: nil, repository: nil, project: project)
+        }
         let repository = try await CodeDeviceSupport.git(["rev-parse", "--show-toplevel"], directory: project.root, root: root, process: process)
         let source = URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path
         let repo = URL(fileURLWithPath: repository).resolvingSymlinksInPath().path
@@ -164,6 +186,7 @@ struct CodeDeviceCheckout {
         return Self(directory: directory, revision: revision, repository: repo, project: selected)
     }
     func remove(root: URL) async {
+        guard let repository else { return }
         _ = try? await CodeDeviceSupport.git(["worktree", "remove", "--force", directory.path], directory: repository, root: root)
     }
 }

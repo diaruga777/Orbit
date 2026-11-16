@@ -55,6 +55,7 @@ public struct CodeBuildArtifact: Codable, Equatable, Sendable {
     public var bundleID: String
     public var version: String
     public var build: String
+    /// Empty for builds from a local folder without Git.
     public var commit: String
     public var digest: String
     public var signingAuthority: String

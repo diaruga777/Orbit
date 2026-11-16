@@ -208,7 +208,7 @@ replays a mutation after an interrupted exchange. Correlation IDs link the phone
 and Mac event journals without retaining request bodies. Concurrent catalog
 starts for one target are serialized across suspension points. Installation streams use their separate LCDF protocol and phone-key proof.
 
-The Mac checks its schedule every minute. Success means a confirmed installation, not just compilation. Submission IDs and pending requests are persisted before dispatch; jobs, logs, artifacts and install evidence survive restart. Builds use a detached checkout of the configured committed branch. GitHub-managed targets fetch their configured branch; local targets never pull or rewrite the user's checkout.
+The Mac checks its schedule every minute. Success means a confirmed installation, not just compilation. Submission IDs and pending requests are persisted before dispatch; jobs, logs, artifacts and install evidence survive restart. Git-backed builds use a detached checkout of the configured committed branch. Local iOS projects without Git build in the original project folder with separate DerivedData and no commit hash. A fresh request can rebuild a plain folder after a definitive install failure. Pending artifacts and uncertain installs keep their existing reconciliation path. GitHub-managed targets fetch their configured branch. Orbit self-builds require committed source.
 
 App targets retain the configured Xcode app-icon thumbnail discovered at registration and send it to both clients' Apps lists. Older catalogs fill missing icons on listing without building or installing an app. Unavailable projects and missing icons keep their entries with a placeholder; failed icon lookups retry after five minutes rather than on every poll.
 
@@ -375,7 +375,7 @@ Refresh setup on iOS presents the next incomplete step with numbered progress. S
 
 ## Local project discovery
 
-Host `projects_detect` scans configured project roots and the Mac home folder using filesystem metadata only. It skips hidden folders, symlinks, caches, dependencies and package contents, deduplicates paths and bounds results to 500 projects and 100,000 entries. Inaccessible folders are skipped; Choose Project on Mac uses NSOpenPanel for other locations. Trusted paired phones can request the same scan. `project_apps` requires explicit source trust before invoking the existing Xcode runnable-iOS-app validation. Both clients select schemes from that response; registration revalidates the selection and existing committed-worktree build rules apply. Discovery does not build, install or fetch repositories.
+Host `projects_detect` scans configured project roots and the Mac home folder using filesystem metadata only. It skips hidden folders, symlinks, caches, dependencies and package contents, deduplicates paths and bounds results to 500 projects and 100,000 entries. Inaccessible folders are skipped; Choose Project on Mac uses NSOpenPanel for other locations. Trusted paired phones can request the same scan. `project_apps` requires explicit source trust before invoking the existing Xcode runnable-iOS-app validation. Both clients select schemes from that response; registration revalidates the selection and the normal local-folder or Git build rules apply. Discovery does not build, install or fetch repositories.
 
 
 Mac Add App prewarms inert project previews at Host startup and stores snapshots

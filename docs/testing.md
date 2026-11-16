@@ -64,6 +64,11 @@ Home Screen/Dock acceptance, public notarization or marketplace listing was done
 
 Swift tests cover document version/conflict handling, SourceKit jobs, detached checkouts, target cadence/restart persistence, trust, framing, exact device readback and retained installation evidence. Python tests exercise the stdio tool contract and real fragmented Unix-socket replies. Go tests exercise TLS identity, framing, relay protocol and synthetic Apple installation exchanges. Optional integration tests skip unless their fixture tools are explicitly supplied.
 
+`CodeBuildCatalogTests` checks that a local iOS workspace without Git uses its
+original path, preserves local files on cleanup, and records no commit. It also
+checks that a malformed Git worktree marker fails and that a dirty editor branch
+still builds the selected commit in a detached worktree.
+
 `OrbitHostTests.testTargetIconsBackfillOlderCatalogAndSurviveRestart` covers legacy target icon migration, wire encoding, persistence and throttled lookup failures. `CodeEditorUITests.testTargetListDisplaysIconsAndMissingImageFallbacks` exercises the actual Apps controller with a thumbnail, absent image and invalid image; its screenshot attachment supports visual review without pairing a phone.
 
 Build-catalog tests cover legacy install-only defaults and per-scheme launch

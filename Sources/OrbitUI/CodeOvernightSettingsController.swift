@@ -74,7 +74,10 @@ import OrbitCore
             else {
                 let job = jobs[indexPath.row]
                 cell.textLabel?.text = job.target.project.scheme + " · " + label(job.state.rawValue)
-                cell.detailTextLabel?.text = [job.error?.recovery, job.artifact.map { "Build \($0.build) · \($0.commit.prefix(8))" }, job.installs.last?.connectionDescription].compactMap { $0 }.joined(separator: "\n")
+                let build = job.artifact.map { artifact in
+                    artifact.commit.isEmpty ? "Build \(artifact.build)" : "Build \(artifact.build) · \(artifact.commit.prefix(8))"
+                }
+                cell.detailTextLabel?.text = [job.error?.recovery, build, job.installs.last?.connectionDescription].compactMap { $0 }.joined(separator: "\n")
                 cell.accessoryType = .disclosureIndicator
             }
         }

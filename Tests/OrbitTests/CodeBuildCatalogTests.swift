@@ -190,6 +190,37 @@ final class CodeBuildCatalogTests: XCTestCase {
         _ = try await process.run("/bin/echo", ["second"], directory: "/tmp", log: log)
         XCTAssertEqual(try String(contentsOf: log, encoding: .utf8), "first\nsecond\n")
     }
+    func testDeviceBuildUsesPlainProjectFolderAndPreservesItsFiles() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Source")
+        let projectURL = folder.appendingPathComponent("Example.xcworkspace")
+        let state = root.appendingPathComponent("State")
+        try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+        let localFile = folder.appendingPathComponent("Local.xcconfig")
+        try Data("local settings".utf8).write(to: localFile)
+        let project = CodeProject(path: projectURL.path, scheme: "Example")
+
+        let checkout = try await CodeDeviceCheckout.create(project: project, branch: "main", root: state, name: "plain")
+        XCTAssertEqual(checkout.directory.path, folder.path)
+        XCTAssertEqual(checkout.project, project)
+        XCTAssertNil(checkout.revision)
+        await checkout.remove(root: state)
+        XCTAssertEqual(try String(contentsOf: localFile, encoding: .utf8), "local settings")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: state.path), [])
+        XCTAssertFalse(CodeDeviceCheckout.usesProjectFolder(project: project, branch: "refs/remotes/origin/main"))
+
+        // A broken Git worktree marker still makes this a Git build.
+        try Data("gitdir: missing".utf8).write(to: root.appendingPathComponent(".git"))
+        do {
+            _ = try await CodeDeviceCheckout.create(project: project, branch: "main", root: state, name: "broken")
+            XCTFail("Broken Git metadata must not fall back to the working files")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.hasPrefix("Git:"))
+        }
+    }
+
     func testMainCheckoutPreservesDirtyEditorBranchAndCleansUp() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -55,8 +55,9 @@ public actor CodeOvernightService {
             [.accepted, .building].contains($0.state) || ($0.hasActionableArtifact && $0.state != .failed) || $0.needsInstallReconciliation
         }) { return existing }
         let failed = matching.filter { $0.state == .failed && $0.artifact != nil }
+        let usesProjectFolder = CodeDeviceCheckout.usesProjectFolder(project: submission.target.project, branch: submission.target.branch)
         let revision: String?
-        if failed.contains(where: { !Self.canReplaceFailedArtifact($0) }) {
+        if !usesProjectFolder, failed.contains(where: { !Self.canReplaceFailedArtifact($0) }) {
             revision = try? await CodeDeviceSupport.git(["rev-parse", "--verify", "--end-of-options", submission.target.branch + "^{commit}"],
                                                        directory: submission.target.project.root, root: store.root)
             // Resolving the ref suspends this actor. Another caller may have
@@ -66,7 +67,7 @@ public actor CodeOvernightService {
             }
         } else { revision = nil }
         for var old in failed {
-            guard Self.canReplaceFailedArtifact(old) || revision.map({ $0 != old.artifact?.commit }) == true else { return old }
+            guard usesProjectFolder || Self.canReplaceFailedArtifact(old) || revision.map({ $0 != old.artifact?.commit }) == true else { return old }
             old.state = .cancelled; old.revision += 1; try store.save(old)
         }
         var job = CodeOvernightJob(requestID: request.id, invocationID: submission.invocationID, target: submission.target)
