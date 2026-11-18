@@ -40,14 +40,19 @@ private struct StandaloneAppletRoot: View {
         NavigationStack {
             if let script, approved { OrbitAppletView(script: script, store: store) }
             else if let script {
-                VStack(spacing: 20) {
-                    Text(script.definition.name).font(.largeTitle.bold())
-                    Text(script.definition.domains.isEmpty ? "No network access." : "Websites: " + script.definition.domains.joined(separator: ", "))
-                    if let consent = try? OrbitAppletDefinition.parse(script.source).pollingConsent { Text(consent) }
-                    Text("This applet can save its own data on your phone. Only open code you trust.")
-                    Button("Open Applet") { approve(script) }.buttonStyle(.borderedProminent)
-                    if let failure { Text(failure).foregroundStyle(.red) }
-                }.padding()
+                VStack(spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text(script.definition.name).font(.largeTitle.bold())
+                            Text(script.definition.domains.isEmpty ? "No network access." : "Websites: " + script.definition.domains.joined(separator: ", "))
+                            if let consent = try? OrbitAppletDefinition.parse(script.source).pollingConsent { Text(consent) }
+                            Text("This applet can save its own data on your phone. Only open code you trust.")
+                            if let failure { Text(failure).foregroundStyle(.red) }
+                        }.padding().frame(maxWidth: 560, alignment: .leading)
+                    }
+                    Button("Open Applet") { approve(script) }
+                        .buttonStyle(.borderedProminent).padding()
+                }
             } else { Text(failure ?? "Loading…").padding() }
         }.task {
             do {
