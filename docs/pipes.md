@@ -89,8 +89,8 @@ setup and path coordination. All Orbit requests, source, artifacts and Apple
 installation traffic require a direct path. A direct path that drops closes
 that stream.
 
-For fallback, connect both devices to Tailscale, enter the Mac’s Tailscale IP or
-MagicDNS name in **Tailscale fallback**, and apply the settings. Open Orbit on
+For fallback, connect both devices to Tailscale, and choose **Automatic**. Orbit detects the Mac’s tailnet IP. To override it,
+enter its IP or MagicDNS name in **Tailscale fallback**. Open Orbit on
 the paired iPhone over a working connection so it saves the fallback. Tailscale
 chooses its own route, including its DERP relays where necessary.
 

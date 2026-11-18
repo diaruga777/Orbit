@@ -1223,3 +1223,8 @@ passed in both directions. All 253 Swift checks completed without failures
 bundled installer tests passed. All 48 Python checks, both Go race suites and
 helper vet passed. The iOS Simulator client and signed Mac review app built.
 Live tailnet routing and physical-device installation remain manual checks.
+
+The Orbit connection tests exercise recovery after an initial listener failure and
+selection of a detected tailnet IP when Automatic has no explicit fallback.
+To check the optional login agent, quit Orbit Mac while logged in and verify the
+same installed copy reopens with its TCP listener within about 30 seconds.

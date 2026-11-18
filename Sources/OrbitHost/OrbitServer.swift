@@ -10,7 +10,7 @@ public actor OrbitServer {
     public var approve: @Sendable (String) async -> Bool = { _ in false }
     private var dumbpipeID: DeviceID?
     private let root: URL
-    private var listeners: [OrbitGoListener] = []
+    private var localListener: OrbitGoListener?
     private var remoteListener: OrbitGoListener?
     private var remoteRelay: String?
     private var remoteTask: Task<Void, Never>?
@@ -25,17 +25,24 @@ public actor OrbitServer {
         Task { while !Task.isCancelled { await host.tick(); try? await Task.sleep(for: .seconds(60)) } }
         Task { while !Task.isCancelled { await host.scanScripts(); try? await Task.sleep(for: .seconds(2)) } }
         Task { while !Task.isCancelled { await host.collectAppDiagnostics(); try? await Task.sleep(for: .seconds(10)) } }
-        let config = await host.configuration
-        let listener = try await transport.listen(bindAddress: config.listen)
-        listeners.append(listener)
-        Task { await accept(listener) }
         await host.installConnectionHandler { [self] config in try await self.applyConnections(config) }
+        Task {
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                await host.refreshConnectionRoutes()
+            }
+        }
     }
     private func applyConnections(_ config: OrbitConfiguration) async throws -> [String] {
         guard !applying else { throw CodeFailure("Connection setup is already running.") }
         applying = true
         defer { applying = false }
         try config.validateConnection(requireAddress: true)
+        if localListener == nil {
+            let listener = try await transport.listen(bindAddress: config.listen)
+            localListener = listener
+            Task { await accept(listener) }
+        }
         // Start the replacement before dropping the old listener. Failure keeps the old route usable.
         var relay: OrbitGoListener?
         if config.provider == "syncthing", let address = config.relay {
@@ -56,14 +63,20 @@ public actor OrbitServer {
         if let remoteID {
             dumbpipeID = remoteID
             if remoteTask == nil {
-                remoteTask = Task { try? await OrbitDumbpipe.shared.accept { await self.serve($0, pairingAllowed: true) } }
+                remoteTask = Task {
+                    try? await OrbitDumbpipe.shared.accept { await self.serve($0, pairingAllowed: true) }
+                    guard !Task.isCancelled else { return }
+                    remoteTask = nil
+                    dumbpipeID = nil
+                    try? await OrbitDumbpipe.shared.stop()
+                }
             }
         } else if dumbpipeID != nil {
             remoteTask?.cancel(); remoteTask = nil; dumbpipeID = nil
             try await OrbitDumbpipe.shared.stop()
         }
         let identity = try transport.identity()
-        let local = await listeners.first?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
+        let local = await localListener?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
         var codes: [String] = []
         if let remoteID {
             codes.append(await irohCode(remoteID))
@@ -75,7 +88,7 @@ public actor OrbitServer {
     public func pairingCode() async throws -> String {
         let config = await host.configuration
         if let dumbpipeID { return try await irohPairingCode(dumbpipeID) }
-        let local = await listeners.first?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
+        let local = await localListener?.announcedAddresses.compactMap(OrbitPeerAddress.init(syncthingURL:)) ?? []
         return config.tcpPairingCode(deviceID: try transport.identity(), localAddresses: local).text
     }
     private func irohPairingCode(_ id: DeviceID) async throws -> String {
@@ -94,7 +107,11 @@ public actor OrbitServer {
                 let peer = try await listener.accept()
                 Task { await self.serve(peer, pairingAllowed: pairingAllowed) }
             }
-        } catch { /* The app owns listeners; closing one cancels its accept. */ }
+        } catch {
+            if listener === localListener { localListener = nil }
+            if listener === remoteListener { remoteListener = nil; remoteRelay = nil }
+            listener.close()
+        }
     }
     private func serve(_ peer: OrbitAcceptedPeer, pairingAllowed: Bool) async {
         let stream = peer.stream

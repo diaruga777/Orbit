@@ -100,7 +100,7 @@ extension OrbitConfiguration {
         let tailnet = provider == "tailscale" ? tailscaleRoute : nil
         let relayRoute = provider == "syncthing" ? relay.flatMap(OrbitPeerAddress.init(syncthingURL:)) : nil
         let fallback: OrbitPeerAddress?
-        if provider == "dumbpipe", case let .tcp(host, port)? = tailscaleRoute {
+        if provider == "dumbpipe", case let .tcp(host, port)? = tailscaleRoute ?? localAddresses.first(where: \.isTailnetIP) {
             fallback = .tailscale(host: host, port: port)
         } else { fallback = nil }
         let lan = provider == "dumbpipe" ? localAddresses.filter {

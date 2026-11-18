@@ -26,8 +26,8 @@ struct OrbitConnectionsView: View {
                         Text("Private Syncthing relay").tag("syncthing")
                     }
                     if provider == "dumbpipe" {
-                        Text("Tries local Wi-Fi, then a direct connection with Iroh.")
-                        TextField("Tailscale fallback (optional)", text: $address, prompt: Text("your-mac.your-tailnet.ts.net"))
+                        Text("Tries local Wi-Fi, Iroh, then Tailscale if available.")
+                        TextField("Tailscale fallback (optional)", text: $address, prompt: Text("Auto-detect"))
                         Link("Get Tailscale", destination: URL(string: "https://tailscale.com/download")!)
                     } else if provider == "tailscale" {
                         Text("Connect both devices to Tailscale, then enter this Mac’s Tailscale IP or MagicDNS name.")

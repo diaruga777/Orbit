@@ -19,8 +19,14 @@ else:
  if not executable.is_file(): p.error('Build and install Orbit Mac first')
  subprocess.run(['launchctl','bootout',domain,str(plist)],check=False,stderr=subprocess.DEVNULL)
  plist.parent.mkdir(parents=True,exist_ok=True)
- config={'Label':label,'ProgramArguments':[str(executable)],'RunAtLoad':True,'KeepAlive':True,'ProcessType':'Interactive','LimitLoadToSessionType':'Aqua'}
- if 'ORBIT_HOME' in os.environ: config['EnvironmentVariables']={'ORBIT_HOME':os.environ['ORBIT_HOME']}
+ # Launch Services reuses a copy already running in this login session.
+ # -W holds the job until exit. The next interval also covers a crash or update.
+ args = ['/usr/bin/caffeinate', '-s', '/usr/bin/open', '-gjW']
+ if 'ORBIT_HOME' in os.environ:
+  args.extend(['--env', 'ORBIT_HOME=' + os.environ['ORBIT_HOME']])
+ args.append(str(executable.parents[2]))
+ config = {'Label': label, 'ProgramArguments': args, 'RunAtLoad': True,
+           'StartInterval': 30, 'LimitLoadToSessionType': 'Aqua'}
  plist.write_bytes(plistlib.dumps(config)); plist.chmod(0o600)
  subprocess.run(['launchctl','bootstrap',domain,str(plist)],check=True)
  print(f'Orbit will start at login. Schedules run while you are logged in and the Mac is awake. {plist}')

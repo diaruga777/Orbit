@@ -13,7 +13,18 @@ public actor OrbitHost {
     private var syncedPeers: Set<String> = []
     public func installConnectionHandler(_ handler: @escaping @Sendable (OrbitConfiguration) async throws -> [String]) async {
         applyConnections = handler
-        do { connectionCodes = try await handler(configuration); connectionError = nil }
+        await refreshConnectionRoutes()
+    }
+    func refreshConnectionRoutes() async {
+        guard !configuringConnections, let applyConnections else { return }
+        configuringConnections = true
+        defer { configuringConnections = false }
+        do {
+            let codes = try await applyConnections(configuration)
+            if codes != connectionCodes { syncedPeers.removeAll() }
+            connectionCodes = codes
+            connectionError = nil
+        }
         catch { connectionError = error.localizedDescription }
     }
     private func refreshIrohRelay() async -> Bool {

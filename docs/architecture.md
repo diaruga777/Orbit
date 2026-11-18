@@ -99,7 +99,7 @@ external clients and the Mac’s configured tailnet address, with the same pinne
 TLS identity as local Wi-Fi. Tailscale’s address is tried before LAN fallback.
 
 Automatic mode orders pinned LAN, direct Iroh and optional Tailscale routes.
-Share the fallback address during the normal authenticated route sync. The Iroh
+The host refreshes listener bindings and advertised addresses every 30 seconds. Automatic mode uses the detected tailnet address when no override is set. The phone learns the fallback through authenticated route sync. The Iroh
 1.0.2 / noq 1.0.1 native build permits encrypted QUIC setup and path control
 on the relay but excludes STREAM and DATAGRAM frames on synthetic Iroh
 addresses, including retransmissions and changes of selected path. The Swift

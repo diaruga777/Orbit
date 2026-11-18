@@ -200,6 +200,32 @@ final class OrbitConnectionTests: XCTestCase {
         XCTAssertEqual(routes.map { $0.code.deviceID }, [tls, iroh, tls])
     }
 
+    func testAutomaticLearnsTailnetAddressWhenNoOverrideIsSet() throws {
+        var config = OrbitConfiguration()
+        config.provider = "dumbpipe"
+        let lan = OrbitPeerAddress.tcp(host: "192.168.1.2", port: 49210)
+        let vpn = OrbitPeerAddress.tcp(host: "100.99.1.2", port: 49210)
+        let code = config.tcpPairingCode(deviceID: try identity(1), localAddresses: [lan, vpn])
+        XCTAssertEqual(Set(code.addresses), [lan, .tailscale(host: "100.99.1.2", port: 49210)])
+    }
+
+    func testRefreshRestoresListenerAfterFailedStartup() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let host = try OrbitHost(root: root)
+        let calls = ConnectionCalls()
+        await host.installConnectionHandler { config in
+            await calls.record(config.provider)
+            if await calls.providers.count == 1 { throw CodeFailure("Port busy") }
+            return ["restored"]
+        }
+        let first = try await request(host, "connection_status")
+        XCTAssertEqual((first["result"] as? [String: Any])?["ready"] as? Bool, false)
+        await host.refreshConnectionRoutes()
+        let next = try await request(host, "connection_status")
+        XCTAssertEqual((next["result"] as? [String: Any])?["ready"] as? Bool, true)
+    }
+
     func testIrohRelayHintSurvivesPairingCodeAndKeepsTheSamePin() throws {
         let mac = try identity(9)
         let endpoint = mac.bytes.map { String(format: "%02x", $0) }.joined()
