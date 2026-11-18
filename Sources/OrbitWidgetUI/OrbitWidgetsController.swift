@@ -49,22 +49,32 @@ import OrbitAppletUI
     }
     public override func numberOfSections(in tableView: UITableView) -> Int { 2 }
     public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        section == 0 ? (pending.isEmpty ? nil : "From Mac · Review to Add") : nil
+        section == 0 ? (pending.isEmpty ? nil : "From Mac") : nil
     }
     public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? pending.count : max(1, scripts.count) }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.textLabel?.numberOfLines = 0
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.textLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         if indexPath.section == 0 {
             let script = pending[indexPath.row]
             cell.textLabel?.text = script.definition.name
-            cell.detailTextLabel?.text = scripts.contains(where: { $0.id == script.id }) ? "Update ready · Tap to review" : "Tap to review"
+            cell.detailTextLabel?.text = scripts.contains(where: { $0.id == script.id }) ? "Review update" : "Review to add"
             cell.imageView?.image = UIImage(systemName: "arrow.down.circle"); cell.accessoryType = .disclosureIndicator
             return cell
         }
-        guard !scripts.isEmpty else { cell.textLabel?.text = applets ? "Add Your First Applet" : "Add Your First Widget"; cell.detailTextLabel?.text = "Import a JavaScript file or copy a prompt to make one."; cell.detailTextLabel?.numberOfLines = 0; return cell }
+        guard !scripts.isEmpty else {
+            cell.textLabel?.text = applets ? "Import an applet" : "Import a widget"
+            cell.imageView?.image = UIImage(systemName: "doc.badge.plus")
+            cell.detailTextLabel?.text = "Choose a JavaScript file"
+            cell.accessoryType = .disclosureIndicator
+            return cell
+        }
         let script = scripts[indexPath.row]
         cell.textLabel?.text = script.definition.name
-        cell.detailTextLabel?.text = applets ? ((try? OrbitAppletDefinition.parse(script.source).pollingConsent) ?? "Tap to open") : "Requests updates every \(script.definition.refreshMinutes) minutes"
+        cell.detailTextLabel?.text = applets ? (try? OrbitAppletDefinition.parse(script.source).pollingConsent) : "Requests updates every \(script.definition.refreshMinutes) minutes"
         cell.detailTextLabel?.numberOfLines = 0
         cell.imageView?.image = UIImage(systemName: "square.grid.2x2"); cell.accessoryType = .disclosureIndicator; return cell
     }
@@ -81,6 +91,9 @@ import OrbitAppletUI
         }
         guard !scripts.isEmpty else { return }
         do { try store.remove(scripts[indexPath.row].id); WidgetCenter.shared.reloadAllTimelines(); reload() } catch { show(error.localizedDescription) }
+    }
+    public override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+        indexPath.section == 0 || !scripts.isEmpty
     }
     private func importFile() { let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.javaScript, .plainText]); picker.delegate = self; present(picker, animated: true) }
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
@@ -171,11 +184,23 @@ import OrbitAppletUI
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = .systemGroupedBackground
         stack.axis = .vertical; stack.spacing = 20; stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24), stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24)])
+        let scroll = UIScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scroll); scroll.addSubview(stack)
+        let safe = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: safe.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: safe.topAnchor), scroll.bottomAnchor.constraint(equalTo: safe.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -16),
+            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -32)
+        ])
         family.selectedSegmentIndex = 1; family.addAction(UIAction { [weak self] _ in self?.refresh() }, for: .valueChanged); stack.addArrangedSubview(family)
         status.numberOfLines = 0; status.font = .preferredFont(forTextStyle: .footnote); status.textColor = .secondaryLabel; stack.addArrangedSubview(status)
         let help = UILabel(); help.numberOfLines = 0; help.font = .preferredFont(forTextStyle: .body)
+        status.adjustsFontForContentSizeCategory = true; help.adjustsFontForContentSizeCategory = true
         help.text = "Add an Orbit widget to your Home Screen or Lock Screen, then choose this widget in its settings. iOS decides when updates run."
         stack.addArrangedSubview(help)
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .refresh, primaryAction: UIAction { [weak self] _ in self?.refresh() }); refresh()

@@ -8,7 +8,7 @@ struct OrbitSetupView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 22) {
-                Label("Orbit", systemImage: "sparkles").font(.title2.bold()).padding(.bottom, 12)
+                Text("Orbit").font(.title2.bold()).padding(.bottom, 12)
                 ForEach(OrbitSetupStep.allCases, id: \.self) { step in
                     Label(step.title, systemImage: step.symbol)
                         .font(.callout.weight(step == setup.state.step ? .semibold : .regular))
@@ -18,20 +18,30 @@ struct OrbitSetupView: View {
                 Spacer()
             }.padding(28).frame(width: 215).background(.ultraThinMaterial)
             VStack(alignment: .leading, spacing: 22) {
-                Image(systemName: setup.state.step.symbol).font(.system(size: 42, weight: .light)).foregroundStyle(.tint)
                 Text(setup.state.step.title).font(.largeTitle.bold())
-                ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
-                if setup.busy { ProgressView().controlSize(.small) }
-                if !setup.message.isEmpty { Text(setup.message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        content
+                        if setup.busy { ProgressView().controlSize(.small) }
+                        if !setup.message.isEmpty {
+                            Text(setup.message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.id(setup.state.step)
                 HStack {
                     if setup.state.step != .welcome { Button("Back", action: setup.back).disabled(setup.busy) }
                     Spacer()
                     if setup.state.step == .phone && setup.busy { Button("Cancel") { setup.cancelInstall(model) } }
-                    Button(setup.state.step == .complete ? "Open Orbit" : "Continue", action: setup.next)
-                        .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(!setup.canContinue || setup.busy)
+                    if setup.state.step == .access && setup.state.folderApproved != true {
+                        Button("Use This Folder") { setup.allowFolder(model) }
+                            .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(setup.busy)
+                    } else {
+                        Button(setup.state.step == .complete ? "Open Orbit" : "Continue", action: setup.next)
+                            .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(!setup.canContinue || setup.busy)
+                    }
                 }
-            }.padding(36).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }.frame(minWidth: 850, minHeight: 660)
+            }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }.frame(minWidth: 760, minHeight: 540)
         .task(id: setup.state.step) {
             if setup.state.step == .phone && !setup.state.installed { setup.listPhones(model) }
             if setup.state.step == .account { setup.checkAccounts() }
@@ -44,44 +54,40 @@ struct OrbitSetupView: View {
         VStack(alignment: .leading, spacing: 18) {
             switch setup.state.step {
             case .welcome:
-                Text("Your ideas. On your iPhone.").font(.title2.weight(.medium))
-                Text("Build apps on your Mac and make widgets for your iPhone.")
-                Text("We’ll set up your Mac and install Orbit on your iPhone. Keep both on the same Wi-Fi to get started.").foregroundStyle(.secondary)
+                Text("To install Orbit, you’ll need your Apple Account and a cable for your iPhone.")
+                Text("Connect your Mac and iPhone to the same Wi-Fi.").foregroundStyle(.secondary)
                 if Bundle.main.bundleURL.path.hasPrefix("/Volumes/") { Button("Install Orbit Mac") { setup.installMac() }.buttonStyle(.borderedProminent) }
             case .tools:
-                Text("Orbit will install Xcode and the tools it needs for you.")
                 readiness("Xcode", ready: setup.tools.xcode)
                 readiness("Xcode setup", ready: setup.tools.firstLaunch)
                 readiness("iPhone build tools", ready: setup.tools.iOSSDK)
                 readiness("Local tools", ready: setup.tools.python)
-                OrbitToolInstallerView(installer: setup.installer, install: setup.installTools, check: setup.checkTools)
-                Text("Apple may ask for your account, a verification code, or your Mac password. Reply below when asked. Downloads can take a while.").font(.callout).foregroundStyle(.secondary)
-            case .access:
-                Text("Your apps will live here. You can choose another folder anytime.")
-                if let folder = setup.state.folder { Text(folder).font(.callout.monospaced()).textSelection(.enabled) }
-                HStack {
-                    Button("Use This Folder") { setup.allowFolder(model) }
-                    Button("Choose Another Folder") { setup.chooseFolder(model) }
+                if !setup.tools.ready {
+                    OrbitToolInstallerView(installer: setup.installer, install: setup.installTools, check: setup.checkTools)
                 }
-                Text("Allow folder and local-network access if macOS asks. Orbit’s local tools start whenever Orbit is open; there’s no separate AI setup.").font(.callout).foregroundStyle(.secondary)
+            case .access:
+                Text("Choose where Orbit looks for your projects.")
+                if let folder = setup.state.folder { Text(folder).font(.callout.monospaced()).textSelection(.enabled) }
+                Button("Choose Folder…") { setup.chooseFolder() }.disabled(setup.busy)
+                Text("Allow folder and local network access if macOS asks.").font(.callout).foregroundStyle(.secondary)
                 Button("Local Network Settings") { open("x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") }
                 Toggle("Open Orbit when I log in", isOn: Binding(get: { setup.loginItem }, set: { setup.changeLoginItem($0) }))
-                Text("Keep your Mac awake and Orbit running while building apps. Phone-only refresh won’t need the Mac after setup.").font(.callout).foregroundStyle(.secondary)
+                Text("Keep your Mac awake and Orbit open for scheduled builds.").font(.callout).foregroundStyle(.secondary)
             case .account:
-                Text("Use your Apple Account to put Orbit on your iPhone. A free account works.")
+                Text("A free Apple Account works for installing Orbit.")
                 if setup.teams.isEmpty {
-                    Text("Add your account in Xcode → Settings → Accounts. Then come back here; Orbit will find it.").foregroundStyle(.secondary)
+                    Text("Add your account in Xcode → Settings → Accounts, then return here.").foregroundStyle(.secondary)
                 } else {
-                    Picker("Apple Account", selection: $setup.state.teamID) {
-                        Text("Choose Account").tag("")
+                    Picker("Signing team", selection: $setup.state.teamID) {
+                        Text("Choose a team").tag("")
                         ForEach(setup.teams) { team in Text(team.name).tag(team.id) }
                         if !setup.state.teamID.isEmpty && !setup.teams.contains(where: { $0.id == setup.state.teamID }) {
-                            Text("Previously Selected Account").tag(setup.state.teamID)
+                            Text("Previously selected team").tag(setup.state.teamID)
                         }
                     }.disabled(setup.state.installed || setup.state.installJobID != nil).onChange(of: setup.state.teamID) { setup.persist() }
                 }
                 HStack { Button("Open Xcode", action: setup.openXcode); Button("Check Account", action: setup.checkAccounts) }
-                Text("Orbit handles the app’s identifiers. Xcode keeps your signing account and keys in your Mac’s Keychain.").font(.callout).foregroundStyle(.secondary)
+                Text("Xcode keeps your signing keys in your Mac’s Keychain.").font(.callout).foregroundStyle(.secondary)
             case .phone:
                 if !setup.state.installed {
                     Text("Connect your iPhone by cable, unlock it, and tap Trust if asked.")
@@ -97,7 +103,10 @@ struct OrbitSetupView: View {
                     Text("On iPhone, turn on Settings → Privacy & Security → Developer Mode, restart, and tap Turn On. Keep it unlocked for installation.").font(.callout).foregroundStyle(.secondary)
                     Button(setup.state.installJobID == nil ? "Install Orbit on iPhone" : "Resume Installation") { setup.install(model) }
                         .buttonStyle(.borderedProminent).disabled(setup.busy || setup.state.deviceID.isEmpty)
-                    Text("If Developer Mode is missing, open Xcode → Window → Devices and Simulators. If asked to trust your developer account, use Settings → General → VPN & Device Management on iPhone.").font(.callout).foregroundStyle(.secondary)
+                    DisclosureGroup("Developer Mode and trust settings") {
+                        Text("If Developer Mode is missing, open Xcode → Window → Devices and Simulators. To trust your developer account on iPhone, open Settings → General → VPN & Device Management.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
                 } else {
                     Label("Orbit is installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Text("Open Orbit on your iPhone. In More → Mac → Connect a Mac, paste this code. Compare the phone ID before approving here.")
@@ -108,16 +117,14 @@ struct OrbitSetupView: View {
                     }
                     if !model.pairing.isEmpty { Text(model.pairing).font(.caption.monospaced()).textSelection(.enabled) }
                     if setup.paired { Label("Your iPhone is connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
-                    Text("You can also connect later from More → Mac in Orbit.").font(.callout).foregroundStyle(.secondary)
+                    if !setup.paired { Text("You can connect later in More → Mac.").font(.callout).foregroundStyle(.secondary) }
 
                 }
                 if !setup.log.isEmpty { DisclosureGroup("Installation Log") { ScrollView { Text(setup.log).font(.caption.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 150) } }
             case .agents, .install, .connect, .refresh:
                 EmptyView() // Migrated to the current steps when loading saved setup.
             case .complete:
-                Text("Orbit is ready.").font(.title2)
-                Text("Your Mac is ready to build apps. You can set up phone-only refresh later in More → Phone-only refresh in Orbit.")
-                Text("Add a JavaScript file in Widgets, or copy the prompt there to make one with your favorite AI app.").foregroundStyle(.secondary)
+                Text("Choose Add App to build your first Xcode project, or drop a .js file into Orbit for an applet or widget.")
             }
         }
     }

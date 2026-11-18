@@ -93,6 +93,8 @@ ORBIT_TEST_RELAY_BINARY=/tmp/orbit-strelaysrv tools/apple-adapter/integration/ru
 
 The runner starts a private loopback relay with public pools, NAT traversal and status disabled, then connects the production TLS/stream broker and pinned helper to a synthetic Apple service. It checks successful readback, lost replies, wrong UDID and wrong certificate. It never reads real pairing records or installs an app on a phone.
 
+For client layout checks, inspect the Mac setup fixture at its default size and the smallest supported window. On iPhone check the widget preview and build status in landscape and with larger text. In the share extension, import a script requesting several websites and verify that the review scrolls while Add and Cancel stay visible. In More, check both the animated navigation to Refresh and the direct route from a notification.
+
 ## Mock Mac setup screenshots
 
 Run `scripts/capture_setup_screenshots.sh` to capture the complete Mac wizard

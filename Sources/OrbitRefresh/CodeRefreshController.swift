@@ -67,25 +67,22 @@ import OrbitCore
     }
     private func updateSetupHeader() {
         guard let step = nextStep, !reviewingSetup else { tableView.tableHeaderView = nil; return }
-        let heading = UILabel()
-        heading.text = "Refresh on this iPhone"
-        heading.font = .preferredFont(forTextStyle: .largeTitle)
         let detail = UILabel()
         detail.text = [
-            "Keep your apps ready when your Mac is away. First, sign in to the Apple Account you use for your apps.",
-            "Next, import this iPhone’s pairing file from your Mac. It lets Orbit connect to Apple’s installation service on this phone.",
-            "Create a signing certificate to renew your apps. Already have one? You can import it in Setup details.",
-            "Save a copy of Orbit’s installed build. Future code changes still need your Mac.",
-            "Last, connect to Wi-Fi and turn on LocalDevVPN. Then check the connection before your first refresh."
+            "Sign in with the Apple Account that signs your apps.",
+            "In Orbit Mac, choose Phone & Remote Setup and export the pairing file for this iPhone.",
+            "Create a certificate for this iPhone, or import an existing .p12 file in Setup details.",
+            "Cache the installed version of Orbit while your Mac is connected.",
+            "Connect to Wi-Fi and turn on LocalDevVPN before checking the connection."
         ][step]
         detail.font = .preferredFont(forTextStyle: .body)
         detail.textColor = .secondaryLabel
-        for label in [heading, detail] { label.numberOfLines = 0; label.adjustsFontForContentSizeCategory = true }
+        detail.numberOfLines = 0; detail.adjustsFontForContentSizeCategory = true
         let progress = UIProgressView(progressViewStyle: .default)
         progress.progress = Float(step) / Float(keys.count)
         progress.accessibilityLabel = "Setup progress"
         progress.accessibilityValue = "Step \(step + 1) of \(keys.count)"
-        let stack = UIStackView(arrangedSubviews: [heading, detail, progress])
+        let stack = UIStackView(arrangedSubviews: [detail, progress])
         stack.axis = .vertical
         stack.spacing = 20
         stack.isLayoutMarginsRelativeArrangement = true
@@ -98,7 +95,7 @@ import OrbitCore
     public override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? setupRows.count : apps.count }
     public override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? (nextStep.map { "Step \($0 + 1) of 5" } ?? "Refresh settings") : "Cached Builds" }
     public override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        section == 0 ? "Connect to Wi-Fi and LocalDevVPN to refresh. iOS decides when automatic refresh can run; open Orbit before your apps expire." : nil
+        section == 0 && (nextStep == nil || reviewingSetup) ? "Use Wi-Fi and LocalDevVPN to refresh. iOS schedules automatic refreshes. Open Orbit before your apps expire." : nil
     }
     public override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil); cell.accessoryType = .disclosureIndicator
@@ -113,6 +110,7 @@ import OrbitCore
             let row = setupRows[indexPath.row]
             cell.textLabel?.text = ["Apple Account", "Pairing File", "Signing Certificate", "Create Signing Certificate", "Cache Orbit", "Import Build", "Check Refresh Connection", "Sign Out"][row]
             cell.detailTextLabel?.text = [team ?? "Sign in", pairing ? "Saved on this phone" : "Import from your computer", certificate ? "Saved on this phone" : "Import a .p12 file", "Create a certificate for this phone", "Save Orbit so you can renew it away from your Mac", "Add an .ipa file", "Turn on LocalDevVPN, then tap to check", "Remove your saved Apple account"][row]
+            if nextStep != nil && !reviewingSetup { cell.detailTextLabel?.text = nil }
         } else {
             let app = apps[indexPath.row]
             cell.textLabel?.text = app.name

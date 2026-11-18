@@ -43,6 +43,9 @@ import OrbitCore
     func next() {
         OrbitDiagnostics.shared.record("action", "setup_next")
         guard canContinue, !busy else { return }
+        advance()
+    }
+    private func advance() {
         if state.step == .complete { state.finished = true; persist(); return }
         let steps = OrbitSetupStep.allCases
         if let index = steps.firstIndex(of: state.step), index + 1 < steps.count { state.step = steps[index + 1]; persist(); message = "" }
@@ -79,7 +82,6 @@ import OrbitCore
         perform {
             self.teams = await self.setup.signingTeams()
             self.selectDetectedTeam()
-            self.message = self.teams.isEmpty ? "Add your Apple Account in Xcode → Settings → Accounts, then check again." : "Your Apple Account is ready."
         }
     }
     func openXcode() {
@@ -87,13 +89,12 @@ import OrbitCore
         let url = URL(fileURLWithPath: tools.developerDirectory).deletingLastPathComponent().deletingLastPathComponent()
         NSWorkspace.shared.openApplication(at: url, configuration: .init()) { _, _ in }
     }
-    func chooseFolder(_ model: OrbitMacModel) {
+    func chooseFolder() {
         OrbitDiagnostics.shared.record("action", "setup_chooseFolder")
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.prompt = "Use Folder"
         panel.directoryURL = URL(fileURLWithPath: state.folder ?? OrbitSetupState.defaultFolder.path)
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        state.folder = url.path; state.folderApproved = false
-        allowFolder(model)
+        state.folder = url.path; state.folderApproved = false; persist()
     }
     func allowFolder(_ model: OrbitMacModel) {
         OrbitDiagnostics.shared.record("action", "setup_allowFolder")
@@ -103,8 +104,8 @@ import OrbitCore
             // Exercise access now so macOS can request Desktop/folder consent.
             _ = try FileManager.default.contentsOfDirectory(atPath: url.path)
             _ = try await model.rpc("setup_folder", ["path": url.path])
-            self.state.folder = url.path; self.state.folderApproved = true; self.persist()
-            self.message = "Projects folder is ready. Orbit’s local tools run while Orbit is open."
+            self.state.folder = url.path; self.state.folderApproved = true
+            self.advance()
         }
     }
     func changeLoginItem(_ enabled: Bool) {
@@ -162,7 +163,7 @@ import OrbitCore
                 self.log = job["log"] as? String ?? ""
                 let status = job["state"] as? String ?? "building"
                 self.message = ["waitingForPhone": "Waiting for your iPhone. Keep it unlocked and connected.", "installing": "Installing Orbit…", "building": "Building Orbit for your iPhone…"][status] ?? status
-                if status == "succeeded" { self.state.installed = true; self.persist(); self.message = "Orbit is installed. Open it on your iPhone to connect."; model.pair(); return }
+                if status == "succeeded" { self.state.installed = true; self.persist(); self.message = ""; model.pair(); return }
                 if ["failed", "cancelled"].contains(status) {
                     self.state.installJobID = nil; self.persist()
                     throw CodeFailure((job["error"] as? [String: Any])?["recovery"] as? String ?? "Installation stopped. Check the log, fix the issue, then try again.")
@@ -191,7 +192,7 @@ import OrbitCore
             let status = try await model.rpc("status") as? [String: Any] ?? [:]
             let config = status["configuration"] as? [String: Any] ?? [:]
             self.paired = !(config["trustedPeers"] as? [String] ?? []).isEmpty
-            self.message = self.paired ? "Your iPhone is connected." : "Open Orbit on your iPhone and connect it using this pairing code."
+            self.message = self.paired ? "" : "Open Orbit on your iPhone and connect it using this pairing code."
         }
     }
     func installMac() {

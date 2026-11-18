@@ -670,6 +670,7 @@ import OrbitCore
     private let status = UILabel()
     private let detail = UILabel()
     private let console = UIButton(type: .system)
+    private let summaryScroll = UIScrollView()
     private var summary: UIStackView!
     private var job: CodeJob
     private var showConsole: Bool
@@ -717,10 +718,24 @@ import OrbitCore
             guard let self else { return }; self.showConsole.toggle(); self.update(self.job)
         }, for: .touchUpInside)
         console.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(summary); view.addSubview(text); view.addSubview(console)
+        summaryScroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(summaryScroll); summaryScroll.addSubview(summary)
+        view.addSubview(text); view.addSubview(console)
+        let content = summaryScroll.contentLayoutGuide
+        let frame = summaryScroll.frameLayoutGuide
+        let fitHeight = content.heightAnchor.constraint(equalTo: frame.heightAnchor)
+        fitHeight.priority = .defaultLow
         NSLayoutConstraint.activate([
-            summary.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
-            summary.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28), summary.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            summaryScroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            summaryScroll.bottomAnchor.constraint(equalTo: console.topAnchor, constant: -12),
+            summaryScroll.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            summaryScroll.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            content.widthAnchor.constraint(equalTo: frame.widthAnchor),
+            content.heightAnchor.constraint(greaterThanOrEqualTo: frame.heightAnchor), fitHeight,
+            summary.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            summary.topAnchor.constraint(greaterThanOrEqualTo: content.topAnchor, constant: 16),
+            summary.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 28),
+            summary.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -28),
             console.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16), console.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             text.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor), text.bottomAnchor.constraint(equalTo: console.topAnchor, constant: -12),
             text.leadingAnchor.constraint(equalTo: view.leadingAnchor), text.trailingAnchor.constraint(equalTo: view.trailingAnchor)
@@ -742,8 +757,9 @@ import OrbitCore
             title = value.title; actionTitle.text = nil
         }
         appTitle.text = title; actionTitle.isHidden = actionTitle.text == nil
-        text.isHidden = !showConsole; summary.isHidden = showConsole
-        text.text = value.log.isEmpty ? "Starting on your Mac…" : value.log
+        text.isHidden = !showConsole; summaryScroll.isHidden = showConsole
+        let output = value.log.isEmpty ? "Starting on your Mac…" : value.log
+        if text.text != output { text.text = output }
         console.setTitle(showConsole ? "Hide Console" : "Show Console", for: .normal)
         progress.update(value)
         work.text = value.progressDetail; work.isHidden = value.progressDetail == nil

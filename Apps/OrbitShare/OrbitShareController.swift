@@ -12,14 +12,38 @@ import OrbitWidgets
         super.viewDidLoad(); view.backgroundColor = .systemBackground
         preferredContentSize = CGSize(width: 420, height: 320)
         let title = UILabel(); title.text = "Import to Orbit"; title.font = .preferredFont(forTextStyle: .title2)
+        title.numberOfLines = 0; title.adjustsFontForContentSizeCategory = true
+        status.font = .preferredFont(forTextStyle: .body); status.adjustsFontForContentSizeCategory = true
         status.numberOfLines = 0; status.text = "Reading JavaScript…"
         add.setTitle("Add", for: .normal); add.isEnabled = false
         add.addAction(UIAction { [weak self] _ in self?.install() }, for: .touchUpInside)
         let cancel = UIButton(type: .system); cancel.setTitle("Cancel", for: .normal)
         cancel.addAction(UIAction { [weak self] _ in self?.extensionContext?.completeRequest(returningItems: nil) }, for: .touchUpInside)
-        let stack = UIStackView(arrangedSubviews: [title, status, add, cancel]); stack.axis = .vertical; stack.spacing = 18; stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24), stack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24), stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24)])
+        let scroll = UIScrollView()
+        let stack = UIStackView(arrangedSubviews: [title, status])
+        stack.axis = .vertical; stack.spacing = 12
+        let actions = UIStackView(arrangedSubviews: [cancel, add])
+        actions.axis = .horizontal; actions.distribution = .fillEqually; actions.spacing = 12
+        add.configuration = .filled()
+        cancel.configuration = .bordered()
+        view.addSubview(scroll); scroll.addSubview(stack); view.addSubview(actions)
+        for child in [scroll, stack, actions] { child.translatesAutoresizingMaskIntoConstraints = false }
+        let safe = view.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 20),
+            scroll.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -20),
+            scroll.topAnchor.constraint(equalTo: safe.topAnchor, constant: 16),
+            scroll.bottomAnchor.constraint(equalTo: actions.topAnchor, constant: -12),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
+            actions.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
+            actions.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
+            actions.bottomAnchor.constraint(equalTo: safe.bottomAnchor, constant: -12),
+            actions.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        ])
         loadFile()
     }
     private func loadFile() {

@@ -32,7 +32,7 @@ struct ScreenshotPhone { var id: String; var name: String }
     func checkAccounts() {}
     func openXcode() {}
     func allowFolder(_ model: OrbitMacModel) {}
-    func chooseFolder(_ model: OrbitMacModel) {}
+    func chooseFolder() {}
     func changeLoginItem(_ enabled: Bool) {}
     func listPhones(_ model: OrbitMacModel) {}
     func checkPhone() {}
@@ -86,7 +86,7 @@ struct OrbitSigningTeam: Identifiable { var id: String; var name: String }
             let model = OrbitMacModel()
             setup.state.step = step
             setup.state.folder = "/Users/demo/Desktop/Orbit"
-            setup.state.folderApproved = true
+            setup.state.folderApproved = step != .access
             setup.state.teamID = "DEMO123456"
             setup.state.bundlePrefix = "org.example.orbit.demo"
             setup.state.deviceID = "screenshot-phone"
@@ -111,9 +111,8 @@ struct OrbitSigningTeam: Identifiable { var id: String; var name: String }
                     setup.tools = OrbitToolReadiness()
                     setup.installer.running = true
                     setup.installer.output = "Installing Xcode with xcodes…\nApple ID: demo@example.invalid\nEnter the verification code sent to your device:"
-                } else { setup.message = "Xcode and iOS 26.2 tools are ready." }
+                }
             }
-            if step == .phone { setup.message = "Developer Mode is on. Your iPhone is ready." }
             if step == .account && variant == "detected" { setup.teams = [.init(id: "DEMO123456", name: "Demo (Personal Team)")] }
             if step == .phone && ["building", "verified"].contains(variant) {
                 setup.state.installJobID = "screenshot-job"
@@ -124,7 +123,6 @@ struct OrbitSigningTeam: Identifiable { var id: String; var name: String }
                 } else {
                     setup.state.installed = true
                     model.pairing = "ORBIT-DEMO-PAIRING-CODE (mock preview)"
-                    setup.message = "Orbit is installed. Open it on your iPhone to connect."
                 }
             }
             let view = NSHostingView(rootView: OrbitSetupView(setup: setup, model: model)

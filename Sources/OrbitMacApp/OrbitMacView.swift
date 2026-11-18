@@ -7,6 +7,7 @@ struct OrbitMacView: View {
     @ObservedObject var setup: OrbitSetupModel
     @AppStorage("Orbit.dismissedExtraSetup") private var dismissedExtraSetup = false
     @State private var showExtraSetup = false
+    @State private var buildLog: BuildLog?
     var body: some View {
         VStack(spacing: 0) {
             if !dismissedExtraSetup {
@@ -34,13 +35,13 @@ struct OrbitMacView: View {
                     Text("Apps").font(.title2)
                     if !model.addedName.isEmpty {
                         HStack {
-                            Label("\(model.addedName) added. You’re ready to build.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                            Label("Added \(model.addedName)", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                             Spacer()
                             Button { model.addedName = "" } label: { Image(systemName: "xmark") }.buttonStyle(.plain).help("Dismiss")
                         }.padding().background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
                     }
                     if model.targets.isEmpty {
-                        ContentUnavailableView { Label("Your apps go here", systemImage: "apps.iphone") } description: {
+                        ContentUnavailableView { Label("No apps yet", systemImage: "apps.iphone") } description: {
                             Text("Add a project to build it for your phone or Mac.")
                         } actions: { Button("Add App") { model.selectedTab = "add" } }
                     }
@@ -70,8 +71,7 @@ struct OrbitMacView: View {
                                 if let job = (app["jobID"] ?? app["lastJobID"]) as? String {
                                     Button("Show Log") { Task { do {
                                         let result = try await model.rpc("job", ["id": job]) as? [String: Any] ?? [:]
-                                        let alert = NSAlert(); alert.messageText = result["state"] as? String ?? "Build"
-                                        alert.informativeText = result["log"] as? String ?? ""; alert.runModal()
+                                        buildLog = BuildLog(id: job, name: app["name"] as? String ?? "App", text: result["log"] as? String ?? "")
                                     } catch { model.status = error.localizedDescription } } }
                                 }
                             }
@@ -84,6 +84,25 @@ struct OrbitMacView: View {
         }
         .toolbar { Button("Phone & Remote Setup") { showExtraSetup = true } }
         .sheet(isPresented: $showExtraSetup) { OrbitExtraSetupView(setup: setup, model: model) }
+        .sheet(item: $buildLog) { log in
+            VStack(alignment: .leading, spacing: 16) {
+                Text("\(log.name) build log").font(.title2.bold())
+                ScrollView {
+                    Text(verbatim: log.text.isEmpty ? "No log output yet." : log.text)
+                        .font(.callout.monospaced()).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack {
+                    Spacer()
+                    Button("Done") { buildLog = nil }.keyboardShortcut(.defaultAction)
+                }
+            }.padding(24).frame(width: 580, height: 400)
+        }
+    }
+    private struct BuildLog: Identifiable {
+        let id: String
+        let name: String
+        let text: String
     }
     private func appIcon(_ app: [String: Any]) -> some View {
         Group {

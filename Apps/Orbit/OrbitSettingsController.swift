@@ -54,7 +54,7 @@ import OrbitWire
     }
     override func numberOfSections(in tableView: UITableView) -> Int { 2 }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { section == 0 ? 2 : 1 }
-    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? "Take Orbit with you" : "Connection" }
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { section == 0 ? "Optional setup" : "Connection" }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.accessoryType = .disclosureIndicator
@@ -64,14 +64,14 @@ import OrbitWire
         cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
         if indexPath.section == 1 {
             cell.textLabel?.text = "Mac"
-            cell.detailTextLabel?.text = connection.connectionName ?? "Connect and manage your Mac"
+            cell.detailTextLabel?.text = connection.connectionName
             cell.imageView?.image = UIImage(systemName: "desktopcomputer")
             cell.accessibilityIdentifier = "settings.mac"
         } else {
             let refresh = indexPath.row == 0
             let complete = refresh ? status.refresh : status.remote
             cell.textLabel?.text = refresh ? "Phone-only refresh" : "Remote builds"
-            cell.detailTextLabel?.text = complete ? "Ready" : (refresh ? "Refresh without your Mac" : "Build away from home")
+            cell.detailTextLabel?.text = complete ? "Ready" : (refresh ? "Renew installed apps without your Mac" : "Build away from home")
             cell.imageView?.image = UIImage(systemName: refresh ? "arrow.clockwise" : "network")
             cell.accessibilityIdentifier = refresh ? "settings.refresh" : "settings.remote"
             cell.accessibilityValue = complete ? "Ready" : "Setup needed"
@@ -94,7 +94,7 @@ import OrbitWire
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         if indexPath.section == 1 { openMac() }
-        else if indexPath.row == 0 { openRefreshSetup() }
+        else if indexPath.row == 0 { navigationController?.pushViewController(refreshController, animated: true) }
         else { showRemoteSetup() }
     }
     func openRefreshSetup() {
@@ -109,8 +109,8 @@ import OrbitWire
         let message = status.remote
             ? "Remote connections are set up. \(connection.connectionName.map { "Saved connection: \($0). " } ?? "")To switch, open Orbit Mac → Settings."
             : "Choose Automatic (iroh), Tailscale, or a private relay in Orbit Mac → Settings. Keep Orbit open on this iPhone to sync the change."
-        let alert = UIAlertController(title: "Build away from home", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Open Mac Settings", style: .default) { [weak self] _ in self?.openMac() })
+        let alert = UIAlertController(title: "Remote builds", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "View Mac Connection", style: .default) { [weak self] _ in self?.openMac() })
         alert.addAction(UIAlertAction(title: "Done", style: .cancel))
         present(alert, animated: true)
     }

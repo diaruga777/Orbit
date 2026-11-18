@@ -50,7 +50,7 @@ final class OrbitAppletsUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Approved received applet"].exists)
         app.terminate(); app.launchArguments = ["--reset-connection"]; app.launch()
         app.tabBars.buttons["Applets"].tap()
-        let pending = app.cells.containing(.staticText, identifier: "Tap to review").firstMatch
+        let pending = app.cells.containing(.staticText, identifier: "Review to add").firstMatch
         XCTAssertTrue(pending.waitForExistence(timeout: 5)); pending.tap()
         XCTAssertTrue(app.alerts.buttons["Add Applet"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Approved received applet"].exists)

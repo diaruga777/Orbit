@@ -20,16 +20,19 @@ struct OrbitMacAppletsView: View {
                 Button("Add JavaScript", action: add).buttonStyle(.borderedProminent)
             }
             OrbitScriptFolderView(model: model, applets: true)
-            if scripts.isEmpty { ContentUnavailableView("Your Little Apps", systemImage: "curlybraces.square", description: Text("Import a .js file or copy a prompt to make one.")) }
-            List(Array(scripts.enumerated()), id: \.offset) { _, script in
-                HStack {
-                    VStack(alignment: .leading) { Text(script["name"] ?? "Applet").font(.headline); Text("Ready for your iPhone").foregroundStyle(.secondary) }
-                    Spacer()
-                    Button("Make Standalone App") { export = AppletExportChoice(path: script["id"]) }
-                    Button("Remove") { Task { do { _ = try await model.rpc("applet_remove", ["id": script["id"] ?? ""]); await reload() } catch { message = error.localizedDescription } } }
-                }.padding(.vertical, 8)
+            if scripts.isEmpty {
+                ContentUnavailableView("No applets yet", systemImage: "curlybraces.square")
+            } else {
+                List(scripts, id: \.["id"]) { script in
+                    HStack {
+                        Text(script["name"] ?? "Applet").font(.headline)
+                        Spacer()
+                        Button("Make Standalone App") { export = AppletExportChoice(path: script["id"]) }
+                        Button("Remove") { Task { do { _ = try await model.rpc("applet_remove", ["id": script["id"] ?? ""]); await reload() } catch { message = error.localizedDescription } } }
+                    }.padding(.vertical, 8)
+                }
             }
-            Text("Files sync when Orbit is open on your connected iPhone. Review new files and updates in Applets. Standalone apps use an Apple app slot.").foregroundStyle(.secondary)
+            Text("Open Orbit on your paired iPhone to review new applets and updates.").font(.callout).foregroundStyle(.secondary)
             if !model.scriptMessage.isEmpty { Text(model.scriptMessage).font(.callout).textSelection(.enabled) }
             if !model.scriptIssues.isEmpty { Text(model.scriptIssues.joined(separator: "\n")).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
             if !message.isEmpty { Text(message).textSelection(.enabled) }
@@ -82,7 +85,7 @@ private struct OrbitAppletExportSheet: View {
                     }
                     if icon != nil { Button("Use Default") { icon = nil } }
                 }
-                Text("Use a square image. The default is a simple JS icon.").foregroundStyle(.secondary)
+                Text("A standalone app uses one app slot on your iPhone. Use a square image for its icon.").foregroundStyle(.secondary)
                 HStack { Button("Cancel") { dismiss() }; Button("Create Project…", action: create).buttonStyle(.borderedProminent).disabled(bundleID.isEmpty || busy) }
             }
             if busy { ProgressView() }

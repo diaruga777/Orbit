@@ -14,17 +14,18 @@ struct OrbitMacWidgetsView: View {
                 Button("Add JavaScript", action: add).buttonStyle(.borderedProminent)
             }
             OrbitScriptFolderView(model: model, applets: false)
-            if scripts.isEmpty { ContentUnavailableView("Make It Yours", systemImage: "square.grid.2x2", description: Text("Add a JavaScript widget, then approve it in Orbit on your iPhone.")) }
-            else {
-                List(Array(scripts.enumerated()), id: \.offset) { _, script in
+            if scripts.isEmpty {
+                ContentUnavailableView("No widgets yet", systemImage: "square.grid.2x2")
+            } else {
+                List(scripts, id: \.["id"]) { script in
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) { Text(script["name"] ?? "Widget").font(.headline); Text("Ready for your iPhone").foregroundStyle(.secondary) }
+                        Text(script["name"] ?? "Widget").font(.headline)
                         Spacer()
                         Button("Remove") { Task { do { _ = try await model.rpc("widget_remove", ["id": script["id"] ?? ""]); await reload() } catch { message = error.localizedDescription } } }
                     }.padding(.vertical, 8)
                 }
             }
-            Text("Files sync when Orbit is open on your connected iPhone. Review new files and updates in Widgets. Updating JavaScript doesn’t rebuild the app.").foregroundStyle(.secondary)
+            Text("Open Orbit on your paired iPhone to review new widgets and updates.").font(.callout).foregroundStyle(.secondary)
             if !model.scriptMessage.isEmpty { Text(model.scriptMessage).font(.callout).textSelection(.enabled) }
             if !model.scriptIssues.isEmpty { Text(model.scriptIssues.joined(separator: "\n")).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
             if !message.isEmpty { Text(message).font(.callout).textSelection(.enabled) }

@@ -11,10 +11,7 @@ struct OrbitAddAppView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Add an app").font(.largeTitle.bold())
-                    Text("Pick a project. Make it yours.").foregroundStyle(.secondary)
-                }
+                Text("Add an app").font(.largeTitle.bold())
                 Picker("Build for", selection: $model.addPlatform) {
                     Text("iPhone").tag("iOS")
                     Text("This Mac").tag("macOS")
@@ -75,9 +72,9 @@ struct OrbitAddAppView: View {
                         Text(model.adding ? "Adding app…" : "Add App").frame(minWidth: 100)
                     }.buttonStyle(.borderedProminent).controlSize(.large).disabled(!model.canAdd)
                     if model.adding { ProgressView().controlSize(.small) }
-                    else { Text(model.scheduled ? "Refreshes every \(model.hours == "144" ? "6 days" : model.hours + " hours")." : "Build whenever you’re ready.").font(.callout).foregroundStyle(.secondary) }
+                    else { Text(model.scheduled ? "Refreshes every \(model.hours == "144" ? "6 days" : model.hours + " hours")." : "Manual builds").font(.callout).foregroundStyle(.secondary) }
                 }
-                if model.adding { Text("Checking the app with Xcode. This can take a minute on first use.").font(.callout).foregroundStyle(.secondary) }
+                if model.adding { Text("Checking the project with Xcode…").font(.callout).foregroundStyle(.secondary) }
             }.padding(32).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
                 .disabled(model.adding)
         }
@@ -97,14 +94,20 @@ struct OrbitAddAppView: View {
                     .help("Look for projects again").disabled(model.detecting)
                 Button("Choose Project…", action: model.chooseProject)
             }
-            TextField("Filter projects", text: $filter).textFieldStyle(.roundedBorder)
+            if !model.detectedProjects.isEmpty {
+                TextField("Filter projects", text: $filter).textFieldStyle(.roundedBorder)
+            }
             if model.detectedProjects.isEmpty {
-                Text(model.detecting ? "Looking for projects in the background…" : "Choose an Xcode project to get started.")
+                Text(model.detecting ? "Looking for projects…" : "No projects found in your projects folder.")
                     .foregroundStyle(.secondary).padding(.vertical, 20)
             } else {
+                let matches = model.detectedProjects.filter { filter.isEmpty || $0.localizedCaseInsensitiveContains(filter) }
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(model.detectedProjects.filter { filter.isEmpty || $0.localizedCaseInsensitiveContains(filter) }, id: \.self) { path in
+                        if matches.isEmpty {
+                            Text("No matching projects").foregroundStyle(.secondary).padding()
+                        }
+                        ForEach(matches, id: \.self) { path in
                             projectRow(path)
                         }
                     }
@@ -148,7 +151,7 @@ struct OrbitAddAppView: View {
                     }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else if !model.readingSchemes {
-                Text("No iPhone apps in the preview. Some projects need Xcode to read their settings.").foregroundStyle(.secondary)
+                Text("No iPhone apps found in the project preview.").foregroundStyle(.secondary)
                 Button("Check with Xcode…", action: model.inspectWithXcode)
             }
         }

@@ -24,7 +24,7 @@ import OrbitCore
                     }
                     throw CodeFailure("Couldn’t verify this iPhone. Connect it to your Mac, unlock it, and try again.")
                 }
-                let alert = UIAlertController(title: "This iPhone is authorized", message: "Your Mac has verified this phone.", preferredStyle: .actionSheet)
+                let alert = UIAlertController(title: "This iPhone is authorized", message: nil, preferredStyle: .actionSheet)
                 for binding in mine {
                     alert.addAction(UIAlertAction(title: "Remove This Phone’s Authorization", style: .destructive) { _ in
                         Task {

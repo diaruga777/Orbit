@@ -288,9 +288,10 @@ import OrbitWire
         super.viewWillAppear(animated)
         tableView.reloadData()
     }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 4 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { connection.pairingCode.isEmpty ? 1 : 4 }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        "Change connection type in Orbit Mac → Settings. Changes sync while Orbit is open."
+        if connection.pairingCode.isEmpty { return "On your Mac, open Orbit → Apps → Connect a Phone to get a pairing code." }
+        return "Change the connection type in Orbit Mac → Settings."
             + (connection.localID.isEmpty ? "" : "\n\nThis phone: " + connection.localID)
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -299,14 +300,15 @@ import OrbitWire
         if indexPath.row == 0, connection.peerID != "unpaired" {
             cell.detailTextLabel?.text = connection.connectionName ?? "Mac saved"
         }
-        cell.accessoryType = .disclosureIndicator; return cell
+        if indexPath.row == 3 { cell.textLabel?.textColor = .systemRed }
+        return cell
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         OrbitDiagnostics.shared.record("action", "connection_action", ["row": String(indexPath.row)])
         switch indexPath.row {
         case 0:
-            let alert = UIAlertController(title: "Connect Your Mac", message: "In Orbit Mac, choose Connect a Phone and copy its pairing code.", preferredStyle: .alert)
+            let alert = UIAlertController(title: "Connect Your Mac", message: "Paste the pairing code from Orbit Mac.", preferredStyle: .alert)
             alert.addTextField { $0.placeholder = "orbit://pair?device=…"; $0.autocapitalizationType = .none; $0.autocorrectionType = .no; $0.text = self.connection.pairingCode }
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: "Connect", style: .default) { _ in
@@ -328,7 +330,13 @@ import OrbitWire
             } catch { message(error.localizedDescription) }
         }
         case 2: CodePhoneAuthorization.choose(client: connection.client, from: self) { [weak self] text in self?.message(text) }
-        default: connection.pairingCode = ""; tableView.reloadData()
+        default:
+            let alert = UIAlertController(title: "Forget this Mac?", message: "You’ll need a new pairing code to reconnect.", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Forget Mac", style: .destructive) { _ in
+                self.connection.pairingCode = ""; self.tableView.reloadData()
+            })
+            present(alert, animated: true)
         }
     }
     func message(_ text: String) { let alert = UIAlertController(title: "Orbit", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true) }

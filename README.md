@@ -42,6 +42,8 @@ Orbit uses the selected full Xcode for phone discovery and builds. If Command
 Line Tools or a removed Xcode is selected, it uses the open or installed Xcode
 without changing your Mac’s system selection.
 
+Choosing **Use This Folder** checks access and advances setup. If you have multiple signing teams, choose one on the Apple Account page.
+
 Phone selection, Developer Mode guidance, build/install and connection code share
 one page. Installation is complete only after installed-revision readback;
 pairing can also be finished later. On iPhone, **More → Phone-only refresh**
