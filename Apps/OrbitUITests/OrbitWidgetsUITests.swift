@@ -19,5 +19,14 @@ final class OrbitWidgetsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Hello from JavaScript"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.navigationBars["UI Test Widget"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = "JavaScript Widget Preview"; attachment.lifetime = .keepAlways; add(attachment)
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.segmentedControls.buttons["Large"].tap()
+        let help = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Add an Orbit widget")).firstMatch
+        let scroll = app.scrollViews.firstMatch
+        XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+        scroll.swipeUp()
+        XCTAssertTrue(help.isHittable)
     }
 }

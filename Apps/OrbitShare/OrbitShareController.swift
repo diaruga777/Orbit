@@ -7,6 +7,7 @@ import OrbitWidgets
 @MainActor final class OrbitShareController: UIViewController {
     private let status = UILabel()
     private let add = UIButton(type: .system)
+    private let actions = UIStackView()
     private var file: OrbitJavaScriptFile?
     override func viewDidLoad() {
         super.viewDidLoad(); view.backgroundColor = .systemBackground
@@ -22,7 +23,7 @@ import OrbitWidgets
         let scroll = UIScrollView()
         let stack = UIStackView(arrangedSubviews: [title, status])
         stack.axis = .vertical; stack.spacing = 12
-        let actions = UIStackView(arrangedSubviews: [cancel, add])
+        actions.addArrangedSubview(cancel); actions.addArrangedSubview(add)
         actions.axis = .horizontal; actions.distribution = .fillEqually; actions.spacing = 12
         add.configuration = .filled()
         cancel.configuration = .bordered()
@@ -45,6 +46,11 @@ import OrbitWidgets
             actions.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
         ])
         loadFile()
+    }
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        let narrow = view.safeAreaLayoutGuide.layoutFrame.width < 600
+        actions.axis = narrow && traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
     }
     private func loadFile() {
         let attachments = (extensionContext?.inputItems as? [NSExtensionItem] ?? []).flatMap { $0.attachments ?? [] }

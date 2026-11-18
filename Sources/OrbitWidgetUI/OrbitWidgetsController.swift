@@ -215,8 +215,18 @@ import OrbitAppletUI
                 try Task.checkCancellation(); try store.save(output, script: script, family: name); WidgetCenter.shared.reloadAllTimelines()
                 guard let entry = output.entries.first else { return }
                 preview?.willMove(toParent: nil); preview?.view.removeFromSuperview(); preview?.removeFromParent()
-                let host = UIHostingController(rootView: AnyView(OrbitWidgetView(node: entry.view).padding().frame(maxWidth: .infinity, alignment: .leading).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))))
-                addChild(host); stack.insertArrangedSubview(host.view, at: 1); host.view.heightAnchor.constraint(equalToConstant: name == "large" ? 300 : 170).isActive = true; host.didMove(toParent: self); preview = host
+                let narrow = name == "small" || name == "rectangular"
+                let height: CGFloat = name == "rectangular" ? 76 : (name == "large" ? 340 : 160)
+                let sample = OrbitWidgetView(node: entry.view)
+                    .padding()
+                    .frame(maxWidth: narrow ? 160 : 340, maxHeight: .infinity, alignment: .leading)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: name == "rectangular" ? 14 : 22))
+                let host = UIHostingController(rootView: AnyView(sample))
+                host.view.backgroundColor = .clear
+                addChild(host); stack.insertArrangedSubview(host.view, at: 1)
+                host.view.heightAnchor.constraint(equalToConstant: height).isActive = true
+                host.didMove(toParent: self); preview = host
                 status.text = "Updated " + output.updatedAt.formatted(date: .omitted, time: .shortened)
             } catch is CancellationError { } catch { status.text = error.localizedDescription }
         }
