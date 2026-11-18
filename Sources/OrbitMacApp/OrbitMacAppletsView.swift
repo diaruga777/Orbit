@@ -22,6 +22,7 @@ struct OrbitMacAppletsView: View {
             OrbitScriptFolderView(model: model, applets: true)
             if scripts.isEmpty {
                 ContentUnavailableView("No applets yet", systemImage: "curlybraces.square")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(scripts, id: \.["id"]) { script in
                     HStack {

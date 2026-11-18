@@ -32,7 +32,13 @@ struct OrbitSetupView: View {
                     if setup.state.step != .welcome { Button("Back", action: setup.back).disabled(setup.busy) }
                     Spacer()
                     if setup.state.step == .phone && setup.busy { Button("Cancel") { setup.cancelInstall(model) } }
-                    if setup.state.step == .access && setup.state.folderApproved != true {
+                    if setup.state.step == .welcome && Bundle.main.bundleURL.path.hasPrefix("/Volumes/") {
+                        Button("Install Orbit Mac", action: setup.installMac)
+                            .buttonStyle(.borderedProminent).disabled(setup.busy)
+                    } else if setup.state.step == .phone && !setup.state.installed {
+                        Button(setup.state.installJobID == nil ? "Install Orbit on iPhone" : "Resume Installation") { setup.install(model) }
+                            .buttonStyle(.borderedProminent).disabled(setup.busy || setup.state.deviceID.isEmpty)
+                    } else if setup.state.step == .access && setup.state.folderApproved != true {
                         Button("Use This Folder") { setup.allowFolder(model) }
                             .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(setup.busy)
                     } else {
@@ -56,7 +62,6 @@ struct OrbitSetupView: View {
             case .welcome:
                 Text("To install Orbit, you’ll need your Apple Account and a cable for your iPhone.")
                 Text("Connect your Mac and iPhone to the same Wi-Fi.").foregroundStyle(.secondary)
-                if Bundle.main.bundleURL.path.hasPrefix("/Volumes/") { Button("Install Orbit Mac") { setup.installMac() }.buttonStyle(.borderedProminent) }
             case .tools:
                 readiness("Xcode", ready: setup.tools.xcode)
                 readiness("Xcode setup", ready: setup.tools.firstLaunch)
@@ -101,22 +106,20 @@ struct OrbitSetupView: View {
                         .onChange(of: setup.state.deviceID) { setup.phoneReady = false; setup.persist() }
                     Button("Find iPhones") { setup.listPhones(model) }.disabled(setup.busy)
                     Text("On iPhone, turn on Settings → Privacy & Security → Developer Mode, restart, and tap Turn On. Keep it unlocked for installation.").font(.callout).foregroundStyle(.secondary)
-                    Button(setup.state.installJobID == nil ? "Install Orbit on iPhone" : "Resume Installation") { setup.install(model) }
-                        .buttonStyle(.borderedProminent).disabled(setup.busy || setup.state.deviceID.isEmpty)
                     DisclosureGroup("Developer Mode and trust settings") {
                         Text("If Developer Mode is missing, open Xcode → Window → Devices and Simulators. To trust your developer account on iPhone, open Settings → General → VPN & Device Management.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                 } else {
                     Label("Orbit is installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                    Text("Open Orbit on your iPhone. In More → Mac → Connect a Mac, paste this code. Compare the phone ID before approving here.")
+                    Text("To pair this iPhone, paste the code in More → Mac → Connect a Mac. Compare the phone ID before approving on your Mac.")
                     HStack {
                         Button(model.pairing.isEmpty ? "Create Connection Code" : "New Code", action: model.pair)
                         Button("Copy Code") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(model.pairing, forType: .string) }.disabled(model.pairing.isEmpty)
                         Button("Check Connection") { setup.checkConnection(model) }
                     }
                     if !model.pairing.isEmpty { Text(model.pairing).font(.caption.monospaced()).textSelection(.enabled) }
-                    if setup.paired { Label("Your iPhone is connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
+                    if setup.paired { Label("A phone is paired with this Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
                     if !setup.paired { Text("You can connect later in More → Mac.").font(.callout).foregroundStyle(.secondary) }
 
                 }
@@ -141,9 +144,13 @@ private struct OrbitToolInstallerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Button("Install Mac Tools", action: install).disabled(installer.running)
-                Button("Check Again", action: check).disabled(installer.running)
-                if installer.running { ProgressView().controlSize(.small); Button("Cancel", action: installer.cancel) }
+                if installer.running {
+                    ProgressView("Installing tools…").controlSize(.small)
+                    Button("Cancel", action: installer.cancel)
+                } else {
+                    Button("Install Mac Tools", action: install)
+                    Button("Check Again", action: check)
+                }
             }
             if !installer.output.isEmpty {
                 ScrollViewReader { proxy in
