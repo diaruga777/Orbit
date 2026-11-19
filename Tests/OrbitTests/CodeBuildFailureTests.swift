@@ -61,6 +61,20 @@ final class CodeBuildFailureTests: XCTestCase {
         XCTAssertFalse(CodeBuildFailure.message(output: accountError).contains("saved signing session"))
     }
 
+    func testSiriProfileFailureNamesTheCapabilityOnceBeforeAccountGuidance() {
+        let capability = "/private/checkout/App.xcodeproj: error: Provisioning profile \"iOS Team Provisioning Profile: test.app\" doesn't include the Siri capability. (in target 'PrivateMusic' from project 'Private')"
+        let entitlement = "error: Provisioning profile doesn't include the com.apple.developer.siri entitlement."
+        let message = CodeBuildFailure.message(output: [warning, accountError, capability, entitlement].joined(separator: "\n"))
+        XCTAssertTrue(message.hasPrefix("The app’s provisioning profile is missing Siri."))
+        XCTAssertEqual(message.components(separatedBy: "missing Siri").count, 2)
+        XCTAssertTrue(message.contains("saved signing session"))
+        XCTAssertFalse(message.contains("PrivateMusic"))
+        XCTAssertFalse(message.contains("developer@example.test"))
+        for error in [capability, entitlement] {
+            XCTAssertTrue(CodeBuildFailure.message(output: error).contains("missing Siri"))
+        }
+    }
+
     func testMultipleCapabilityFailuresAreKeptAndWarningsDoNotNameCapabilities() {
         let groups = "error: Provisioning profile doesn't include the App Groups capability."
         let message = CodeBuildFailure.message(output: groups + "\n" + capabilityError)

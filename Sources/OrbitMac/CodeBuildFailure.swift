@@ -37,7 +37,7 @@ enum CodeBuildFailure {
     static func message(output: String) -> String {
         if let message = packageMessage(output: output) { return message + " Check the build console for details." }
         let errors = output.lowercased().components(separatedBy: .newlines).filter { $0.contains("error:") }
-        let profileMismatch = errors.contains {
+        let profileErrors = errors.filter {
             $0.contains("provisioning profile") &&
             ($0.contains("doesn't include") || $0.contains("does not include") || $0.contains("doesn't support"))
         }
@@ -49,13 +49,15 @@ enum CodeBuildFailure {
         var messages: [String] = []
         // Lead with the concrete provisioning failure. “No Accounts” can mean
         // xcodebuild cannot provision a target, even with an account in Xcode.
-        if profileMismatch {
-            let profileErrors = errors.filter { $0.contains("provisioning profile") }
+        if !profileErrors.isEmpty {
             if profileErrors.contains(where: { $0.contains("app groups") || $0.contains("com.apple.security.application-groups") }) {
                 messages.append("The app or an extension needs an App Groups provisioning profile. On your Mac, open its Signing & Capabilities in Xcode and refresh automatic signing for the selected team.")
             }
             if profileErrors.contains(where: { $0.contains("time sensitive notifications") || $0.contains("com.apple.developer.usernotifications.time-sensitive") }) {
                 messages.append("The app’s provisioning profile is missing Time Sensitive Notifications. On your Mac, refresh its automatic signing in Xcode → Signing & Capabilities.")
+            }
+            if profileErrors.contains(where: { $0.contains("the siri capability") || $0.contains("com.apple.developer.siri entitlement") }) {
+                messages.append("The app’s provisioning profile is missing Siri. On your Mac, refresh its automatic signing in Xcode → Signing & Capabilities.")
             }
             if messages.isEmpty {
                 messages.append("The app or an extension has a provisioning profile that’s missing a required capability. On your Mac, check its team and refresh signing in Xcode → Signing & Capabilities.")

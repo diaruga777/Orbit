@@ -955,6 +955,8 @@ marketplace listing was performed by these checks.
 with a wildcard profile and simultaneous `No Accounts`/missing-token diagnostics.
 It verifies capability-first guidance, no inferred sign-out, explicit expired-session
 recovery, multiple missing capabilities, ignored warnings and private-detail exclusion.
+The LunaMusic Siri fixture checks that capability and entitlement diagnostics
+produce a single Siri message ahead of the signing-session guidance.
 Fixtures use synthetic logs and never access credentials, profiles or devices.
 A signed build with the correct profile remains separate from these diagnostics tests.
 
