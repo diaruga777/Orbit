@@ -19,7 +19,7 @@ public final class CodeProcess: @unchecked Sendable {
         else { process.interrupt(); process.terminate() }
     }
     public func run(_ executable: String, _ arguments: [String], directory: String,
-                    log: URL, timeout: TimeInterval = 3600, onTick: (@Sendable () async -> Void)? = nil) async throws -> Int32 {
+                    log: URL, timeout: TimeInterval = 3600, useXcode: Bool = false, onTick: (@Sendable () async -> Void)? = nil) async throws -> Int32 {
         try await withTaskCancellationHandler {
             try await Task.detached { [self] in
                 if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil, attributes: [.posixPermissions: 0o600]) }
@@ -31,7 +31,7 @@ public final class CodeProcess: @unchecked Sendable {
                 // Isolate the command tree so Cancel also stops xcodebuild and
                 // upload subprocesses launched by asc, without affecting Xcode.
                 p.arguments = ["-c", "import os,sys; os.setsid() if os.getpgrp() != os.getpid() else None; os.execv(sys.argv[1], sys.argv[1:])", executable] + arguments; p.currentDirectoryURL = URL(fileURLWithPath: directory)
-                var environment = try CodeXcodeTools.environment(for: executable)
+                var environment = try CodeXcodeTools.environment(for: useXcode ? "/usr/bin/xcodebuild" : executable)
                 environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:" + (environment["PATH"] ?? "")
                 p.environment = environment; p.standardOutput = output; p.standardError = output
                 try lock.withCriticalScope {

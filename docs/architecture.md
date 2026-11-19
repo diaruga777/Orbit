@@ -212,6 +212,15 @@ starts for one target are serialized across suspension points. Installation stre
 
 The Mac checks its schedule every minute. Success means a confirmed installation, not just compilation. Submission IDs and pending requests are persisted before dispatch; jobs, logs, artifacts and install evidence survive restart. Git-backed builds use a detached checkout of the configured committed branch. Local iOS projects without Git build in the original project folder with separate DerivedData and no commit hash. A fresh request can rebuild a plain folder after a definitive install failure. Pending artifacts and uncertain installs keep their existing reconciliation path. GitHub-managed targets fetch their configured branch. Orbit self-builds require committed source.
 
+Detached iOS builds run the selected revision’s executable
+`.orbit/prepare-build` from the repository root when present. This happens
+after source checkout and before Xcode destination or build-settings queries.
+It uses the chosen Xcode environment, shares job cancellation and the private
+console, and has a 15-minute timeout. Preparation runs only during a build of
+trusted source. Discovery, registration and plain local folders use their
+existing project files. A failed step removes the worktree. Package-resolution
+failures have their own summary, with failed Xcode query output in the job log.
+
 App targets retain the configured Xcode app-icon thumbnail discovered at registration and send it to both clients' Apps lists. Older catalogs fill missing icons on listing without building or installing an app. Unavailable projects and missing icons keep their entries with a placeholder; failed icon lookups retry after five minutes rather than on every poll.
 
 The iOS Builds tab stores `launchAfterInstall` per paired Mac, project path and

@@ -22,7 +22,20 @@ enum CodeBuildFailure {
         return message(output: String(decoding: data, as: UTF8.self))
     }
 
+    static func packageMessage(output: String) -> String? {
+        let diagnostic = output.lowercased()
+        guard diagnostic.contains("could not resolve package dependencies") else { return nil }
+        if diagnostic.contains("the package at '"), diagnostic.contains("cannot be accessed") {
+            if diagnostic.contains("doesn't exist") || diagnostic.contains("no such file") {
+                return "A local Swift package is missing."
+            }
+            return "Xcode couldn’t open a local Swift package."
+        }
+        return "Xcode couldn’t resolve the project’s Swift packages."
+    }
+
     static func message(output: String) -> String {
+        if let message = packageMessage(output: output) { return message + " Check the build console for details." }
         let errors = output.lowercased().components(separatedBy: .newlines).filter { $0.contains("error:") }
         let profileMismatch = errors.contains {
             $0.contains("provisioning profile") &&

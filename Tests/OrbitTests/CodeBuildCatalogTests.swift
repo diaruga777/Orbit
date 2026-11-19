@@ -260,6 +260,84 @@ final class CodeBuildCatalogTests: XCTestCase {
         } catch {}
     }
 
+    func testDetachedCheckoutPreparesIgnoredPackageFromCommittedHook() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let repo = root.appendingPathComponent("Repo")
+        let state = root.appendingPathComponent("State")
+        let project = repo.appendingPathComponent("App.xcodeproj")
+        let hooks = repo.appendingPathComponent(".orbit")
+        let hook = hooks.appendingPathComponent("prepare-build")
+        let recipe = repo.appendingPathComponent("PackageRecipe")
+        let files = FileManager.default
+        defer { try? files.removeItem(at: root) }
+        for folder in [project, hooks, state] {
+            try files.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        func git(_ args: [String]) async throws -> String {
+            try await CodeDeviceSupport.git(args, directory: repo.path, root: state)
+        }
+        _ = try await git(["init", "-b", "main"])
+        _ = try await git(["config", "user.name", "Orbit Tests"])
+        _ = try await git(["config", "user.email", "orbit@example.invalid"])
+        try Data("project".utf8).write(to: project.appendingPathComponent("project.pbxproj"))
+        try Data("Modules/Vendor/".utf8).write(to: repo.appendingPathComponent(".gitignore"))
+        try Data("committed recipe".utf8).write(to: recipe)
+        try Data("""
+        #!/bin/sh
+        set -eu
+        mkdir -p Modules/Vendor/Local
+        cp PackageRecipe Modules/Vendor/Local/Package.swift
+        echo 'Prepared the local package'
+        """.utf8).write(to: hook)
+        try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
+        _ = try await git(["add", "."])
+        _ = try await git(["commit", "-m", "Prepare a generated package"])
+        _ = try await git(["checkout", "-b", "editor"])
+        try Data("dirty recipe".utf8).write(to: recipe)
+        try Data("#!/bin/sh\necho 'Hook diagnostic' >&2\nexit 1\n".utf8).write(to: hook)
+        _ = try await git(["add", ".orbit/prepare-build"])
+        _ = try await git(["commit", "-m", "Fail preparation on editor branch"])
+
+        let source = CodeProject(path: project.path, scheme: "App")
+        let checkout = try await CodeDeviceCheckout.create(project: source, branch: "main", root: state, name: "prepared")
+        let relativePath = "Modules/Vendor/Local/Package.swift"
+        XCTAssertEqual(try String(contentsOf: checkout.directory.appendingPathComponent(relativePath), encoding: .utf8), "committed recipe")
+        XCTAssertFalse(files.fileExists(atPath: repo.appendingPathComponent(relativePath).path))
+        XCTAssertTrue(try String(contentsOf: state.appendingPathComponent("prepared.log"), encoding: .utf8).contains("Prepared the local package"))
+        await checkout.remove(root: state)
+
+        do {
+            _ = try await CodeDeviceCheckout.create(project: source, branch: "editor", root: state, name: "failed")
+            XCTFail("A failed hook must stop before Xcode runs")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("Project setup failed"))
+            XCTAssertFalse(error.localizedDescription.contains("Hook diagnostic"))
+        }
+        XCTAssertFalse(files.fileExists(atPath: state.appendingPathComponent("Checkout-failed").path))
+        XCTAssertTrue(try String(contentsOf: state.appendingPathComponent("failed.log"), encoding: .utf8).contains("Hook diagnostic"))
+    }
+
+    func testXcodePackageFailureKeepsPathInConsole() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let console = root.appendingPathComponent("job.log")
+        let path = "/private/Checkout/Modules/Vendor/Local"
+        let diagnostic = """
+        xcodebuild: error: Could not resolve package dependencies:
+          the package at '\(path)' cannot be accessed (\(path) doesn't exist in file system)
+        """
+        do {
+            _ = try await CodeDeviceSupport.json("/bin/sh", ["-c", "printf '%s\n' \"$1\" >&2; exit 74", "fixture", diagnostic],
+                                                 directory: root.path, root: root, diagnosticLog: console)
+            XCTFail("A missing package must fail the Xcode query")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "A local Swift package is missing. Check the build console for details.")
+        }
+        XCTAssertTrue(try String(contentsOf: console, encoding: .utf8).contains(diagnostic))
+        XCTAssertEqual(CodeBuildFailure.message(output: diagnostic), "A local Swift package is missing. Check the build console for details.")
+    }
+
     func testXcodeJSONIgnoresWarningBracketsAndPackageProgress() throws {
         let output = Data("2026-10-16 [MT] warning: no destinations\nResolved packages: Support\n[{\"buildSettings\":{\"PRODUCT_TYPE\":\"app\"}}]\n".utf8)
         let parsed = try CodeDeviceSupport.parseJSONOutput(output) as? [[String: Any]]

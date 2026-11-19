@@ -10,17 +10,17 @@ extension CodeJobs {
         }
         stage(job.id, "Preparing build source…", from: 0.10, to: 0.15, seconds: 15)
         let checkout = try await CodeDeviceCheckout.create(project: project, branch: options.branch, root: root,
-            name: job.id, process: process)
+            name: job.id, process: process, log: log)
         do {
             stage(job.id, "Checking destination and signing…", from: 0.15, to: 0.25, seconds: 45)
             let buildProject = checkout.project
             if options.installOnly != true {
-                try await CodeDeviceSupport.validateDestination(buildProject, deviceID: options.deviceID, root: root, process: process)
+                try await CodeDeviceSupport.validateDestination(buildProject, deviceID: options.deviceID, root: root, process: process, diagnosticLog: log)
             }
             // Install-only builds must not wait on a live Xcode destination if
             // the phone locks after submission. CoreDevice connects at install.
             let destination = options.installOnly == true ? "generic/platform=iOS" : "platform=iOS,id=" + options.deviceID
-            let settings = try await CodeDeviceSupport.settings(buildProject, root: root, process: process, destination: destination)
+            let settings = try await CodeDeviceSupport.settings(buildProject, root: root, process: process, destination: destination, diagnosticLog: log)
             guard let app = try CodeDeviceSupport.primarySettings(settings, project: buildProject), CodeDeviceSupport.isApp(app),
                   let bundle = app["PRODUCT_BUNDLE_IDENTIFIER"], !bundle.lowercased().contains("webdriveragent"),
                   let product = app["FULL_PRODUCT_NAME"], product.hasSuffix(".app") else {
@@ -33,7 +33,7 @@ extension CodeJobs {
                 // Git worktrees omit ignored local signing configuration. Resolve
                 // only the team from the original project; source still builds
                 // from the selected committed revision in the detached checkout.
-                let localSettings = try await CodeDeviceSupport.settings(project, root: root, process: process, destination: destination)
+                let localSettings = try await CodeDeviceSupport.settings(project, root: root, process: process, destination: destination, diagnosticLog: log)
                 localApp = try CodeDeviceSupport.primarySettings(localSettings, project: project)
             }
             let signing = try CodeDeviceSigning.arguments(checkout: app, local: localApp)
@@ -144,7 +144,7 @@ struct CodeDeviceCheckout {
         }
     }
 
-    static func create(project: CodeProject, branch: String, root: URL, name: String, process: CodeProcess = CodeProcess()) async throws -> Self {
+    static func create(project: CodeProject, branch: String, root: URL, name: String, process: CodeProcess = CodeProcess(), log: URL? = nil) async throws -> Self {
         if usesProjectFolder(project: project, branch: branch) {
             return Self(directory: URL(fileURLWithPath: project.root), revision: nil, repository: nil, project: project)
         }
@@ -179,12 +179,30 @@ struct CodeDeviceCheckout {
                     }
                 }
             }
+            try await prepare(directory: directory, process: process, log: log ?? root.appendingPathComponent(name + ".log"))
         } catch {
             _ = try? await CodeDeviceSupport.git(["worktree", "remove", "--force", directory.path], directory: repo, root: root)
             throw error
         }
         return Self(directory: directory, revision: revision, repository: repo, project: selected)
     }
+    private static func prepare(directory: URL, process: CodeProcess, log: URL) async throws {
+        let hook = directory.appendingPathComponent(".orbit/prepare-build")
+        let files = FileManager.default
+        guard let attributes = try? files.attributesOfItem(atPath: hook.path) else { return }
+        let expected = directory.resolvingSymlinksInPath().appendingPathComponent(".orbit/prepare-build")
+        guard attributes[.type] as? FileAttributeType == .typeRegular,
+              hook.resolvingSymlinksInPath().path == expected.path,
+              files.isExecutableFile(atPath: hook.path) else {
+            throw CodeFailure("Make .orbit/prepare-build a regular executable file in your Git repo, then retry.")
+        }
+        let status = try await process.run(hook.path, [], directory: directory.path,
+                                           log: log, timeout: 900, useXcode: true)
+        guard status == 0 else {
+            throw CodeFailure("Project setup failed. See the build console for .orbit/prepare-build output.")
+        }
+    }
+
     func remove(root: URL) async {
         guard let repository else { return }
         _ = try? await CodeDeviceSupport.git(["worktree", "remove", "--force", directory.path], directory: repository, root: root)

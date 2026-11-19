@@ -4,38 +4,66 @@ import OrbitCore
 /// Xcode/CoreDevice commands only. No UI automation agent is installed on phones.
 enum CodeDeviceSupport {
     static func json(_ executable: String, _ arguments: [String], directory: String, root: URL,
-                     process: CodeProcess = CodeProcess(), timeout: TimeInterval = 120, nonBuildableScheme: String? = nil) async throws -> Any {
+                     process: CodeProcess = CodeProcess(), timeout: TimeInterval = 120, nonBuildableScheme: String? = nil,
+                     diagnosticLog: URL? = nil) async throws -> Any {
         let log = root.appendingPathComponent(UUID().uuidString + ".json")
         defer { try? FileManager.default.removeItem(at: log) }
         let status = try await process.run(executable, arguments, directory: directory, log: log, timeout: timeout)
         let data = try Data(contentsOf: log)
-        return try queryResult(data, status: status, nonBuildableScheme: nonBuildableScheme)
+        do {
+            return try queryResult(data, status: status, nonBuildableScheme: nonBuildableScheme,
+                                   includeDetails: diagnosticLog == nil)
+        } catch {
+            if let diagnosticLog { try? appendDiagnostics(data, to: diagnosticLog) }
+            throw error
+        }
     }
-    static func queryResult(_ data: Data, status: Int32, nonBuildableScheme: String? = nil) throws -> Any {
+    static func queryResult(_ data: Data, status: Int32, nonBuildableScheme: String? = nil,
+                            includeDetails: Bool = true) throws -> Any {
         // Package schemes can appear in -list even though they have no Build
         // action. They are not failed app queries and must not abort discovery.
         if status != 0, let scheme = nonBuildableScheme,
            String(decoding: data, as: UTF8.self).contains("xcodebuild: error: Scheme " + scheme + " is not currently configured for the build action.") {
             return [[String: Any]]()
         }
-        guard status == 0 else { throw CodeFailure("Xcode could not read project details. Open the project on the Mac to resolve packages and signing.\n" + String(decoding: data.suffix(2000), as: UTF8.self)) }
-        return try parseJSONOutput(data)
+        guard status == 0 else {
+            let message = CodeBuildFailure.packageMessage(output: String(decoding: data, as: UTF8.self))
+                ?? "Xcode couldn’t inspect the project."
+            throw queryFailure(message, data: data, includeDetails: includeDetails)
+        }
+        return try parseJSONOutput(data, includeDetails: includeDetails)
     }
-    static func parseJSONOutput(_ data: Data) throws -> Any {
+    private static func queryFailure(_ message: String, data: Data, includeDetails: Bool) -> CodeFailure {
+        if includeDetails { return CodeFailure(message + "\n" + String(decoding: data.suffix(2000), as: UTF8.self)) }
+        return CodeFailure(message + " Check the build console for details.")
+    }
+    private static func appendDiagnostics(_ data: Data, to log: URL) throws {
+        if !FileManager.default.fileExists(atPath: log.path) {
+            FileManager.default.createFile(atPath: log.path, contents: nil, attributes: [.posixPermissions: 0o600])
+        }
+        let output = try FileHandle(forWritingTo: log)
+        defer { try? output.close() }
+        try output.seekToEnd()
+        try output.write(contentsOf: Data("\nXcode project check:\n".utf8))
+        try output.write(contentsOf: data)
+    }
+    static func parseJSONOutput(_ data: Data, includeDetails: Bool = true) throws -> Any {
         // Xcode can prepend timestamped warnings containing [MT] or package
         // progress. Find the complete JSON document rather than its first bracket.
         for start in data.indices where data[start] == 123 || data[start] == 91 {
             if let object = try? JSONSerialization.jsonObject(with: data.suffix(from: start)) { return object }
         }
-        throw CodeFailure("Xcode returned no readable project details.\n" + String(decoding: data.suffix(2000), as: UTF8.self))
+        throw queryFailure("Xcode returned unreadable output.",
+                           data: data, includeDetails: includeDetails)
     }
     static func schemes(path: String, root: URL) async throws -> [String] {
         let object = try await json("/usr/bin/xcodebuild", [path.hasSuffix(".xcworkspace") ? "-workspace" : "-project", path, "-list", "-json"], directory: (path as NSString).deletingLastPathComponent, root: root) as? [String: Any]
         let project = object?["workspace"] as? [String: Any] ?? object?["project"] as? [String: Any]
         return project?["schemes"] as? [String] ?? []
     }
-    static func settings(_ project: CodeProject, root: URL, process: CodeProcess = CodeProcess(), destination: String? = nil) async throws -> [[String: String]] {
-        let rows = try await json("/usr/bin/xcodebuild", project.xcodeArguments + ["-configuration", "Debug"] + (destination.map { ["-destination", $0] } ?? []) + ["-showBuildSettings", "-json"], directory: project.root, root: root, process: process, nonBuildableScheme: project.scheme) as? [[String: Any]] ?? []
+    static func settings(_ project: CodeProject, root: URL, process: CodeProcess = CodeProcess(), destination: String? = nil,
+                         diagnosticLog: URL? = nil) async throws -> [[String: String]] {
+        let rows = try await json("/usr/bin/xcodebuild", project.xcodeArguments + ["-configuration", "Debug"] + (destination.map { ["-destination", $0] } ?? []) + ["-showBuildSettings", "-json"], directory: project.root, root: root, process: process, nonBuildableScheme: project.scheme, diagnosticLog: diagnosticLog) as? [[String: Any]] ?? []
         return rows.compactMap { $0["buildSettings"] as? [String: String] }
     }
     static func isApp(_ settings: [String: String]) -> Bool {
@@ -128,11 +156,16 @@ enum CodeDeviceSupport {
             return CodeDevice(id: id, name: name)
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
-    static func validateDestination(_ project: CodeProject, deviceID: String, root: URL, process: CodeProcess) async throws {
+    static func validateDestination(_ project: CodeProject, deviceID: String, root: URL, process: CodeProcess, diagnosticLog: URL) async throws {
         let log = root.appendingPathComponent(UUID().uuidString + ".destinations")
         defer { try? FileManager.default.removeItem(at: log) }
         let status = try await process.run("/usr/bin/xcodebuild", project.xcodeArguments + ["-showdestinations", "-destination-timeout", "10"], directory: project.root, log: log, timeout: 45)
-        let output = String(decoding: try Data(contentsOf: log), as: UTF8.self)
+        let data = try Data(contentsOf: log)
+        let output = String(decoding: data, as: UTF8.self)
+        if status != 0, let message = CodeBuildFailure.packageMessage(output: output) {
+            try? appendDiagnostics(data, to: diagnosticLog)
+            throw queryFailure(message, data: data, includeDetails: false)
+        }
         guard status == 0, destinationIsEligible(output, deviceID: deviceID) else {
             throw CodeFailure("This phone is not available for \(project.scheme). Connect it to your Mac by cable or on the same network and unlock it. In Xcode’s Devices and Simulators, check pairing, Developer Mode, iOS support and the scheme’s deployment target.")
         }

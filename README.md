@@ -368,6 +368,13 @@ If a build reports **No Accounts**, check the selected team for the app and its 
 
 Local iOS projects without Git build from the files saved in their folder on the Mac. For Git projects, commit the source you want to install. Orbit builds the selected branch in a detached worktree. Targets cloned by Orbit fetch the chosen GitHub branch before each fresh build without changing the checkout’s active branch.
 
+If your app needs generated files for Xcode to resolve packages, commit an
+executable `.orbit/prepare-build` script at the repository root. Orbit runs it
+from the detached checkout before asking Xcode for build settings. Use it to
+generate files inside that checkout from pinned inputs. Set up the original
+project separately before adding it. If setup or package resolution fails,
+open the build console for the script output or missing package path.
+
 In iOS **Apps**, **Build and Install** opens live progress with the current operation, live completed/running task counts and a console. Xcode does not provide a reliable total task count, so running builds show an activity indicator instead of an estimated percentage. Close it to keep watching progress in the app tile or Project tab. The system build Live Activity continues monitoring while iOS permits background processing; reconnect status appears if the Mac goes away. The activity starts after the Mac accepts a job. If iOS stops monitoring, check progress in Orbit; reopening does not create a second activity for that job. Self-updates finish that activity before replacing Orbit, and installation is complete only after the Mac verifies it. If the update cannot start installing, the progress screen shows the recovery message.
 
 On iOS, Play defaults to **Build & Install**. Enable **Launch After Install** in a

@@ -67,7 +67,11 @@ Swift tests cover document version/conflict handling, SourceKit jobs, detached c
 `CodeBuildCatalogTests` checks that a local iOS workspace without Git uses its
 original path, preserves local files on cleanup, and records no commit. It also
 checks that a malformed Git worktree marker fails and that a dirty editor branch
-still builds the selected commit in a detached worktree.
+still builds the selected commit in a detached worktree. A generated-package
+fixture prepares an ignored nested Swift package before Xcode would run,
+verifies the committed recipe wins over editor changes, and checks cleanup and
+console output on hook failure. A replay of Xcode's missing-package diagnostic
+checks the short summary and the full path in the job console.
 
 `OrbitHostTests.testTargetIconsBackfillOlderCatalogAndSurviveRestart` covers legacy target icon migration, wire encoding, persistence and throttled lookup failures. `CodeEditorUITests.testTargetListDisplaysIconsAndMissingImageFallbacks` exercises the actual Apps controller with a thumbnail, absent image and invalid image; its screenshot attachment supports visual review without pairing a phone.
 
