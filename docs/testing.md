@@ -1174,10 +1174,12 @@ or marketplace acceptance was performed.
 
 ## Remote build result and monitoring expiration
 
-The Simulator monitor suite reproduces expiration during Luna Reader-style
-installation, then a confirmed successful install. It checks that the ended
-monitoring session says **Build monitoring paused**, never changes the Mac job
-to success/failure, completes once and does not restart on subsequent polls.
+The Simulator monitor suite checks the system progress fraction through compilation,
+repeated snapshots and installation. It exercises success, failure and cancellation
+during the final status check at expiration. A stalled reply must release the
+activity within the deadline. If installation is still pending after compilation,
+the activity says **App built** and foreground polling can later confirm the result
+without starting another activity.
 Other cases check explicit completed/failed activity titles, failure taking
 precedence over a retained handoff, and ending monitoring on a peer change.
 `testAppsBuildShowsLiveProgressConsoleAndCompletion` also checks a centered app

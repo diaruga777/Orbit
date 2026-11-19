@@ -150,9 +150,9 @@ iOS update, Orbit keeps the signed build and waits for the phone. Open the phone
 in a compatible Xcode, then use the same build job to finish installation. An interrupted build reply asks you
 to check Apps before retrying, since the Mac may already be building.
 
-If iOS ends live build monitoring, the activity says **Build monitoring paused**.
-Open Orbit to get the Mac’s result; the build can continue there. Only a confirmed
-failed or cancelled job uses a failed activity. The progress sheet centers the app
+The Live Activity shows **Build completed** once your Mac confirms success. If
+iOS ends monitoring, Orbit briefly checks the job for a final result. If only
+compilation is confirmed, it shows **App built**. Otherwise, open Orbit to check the latest status. The progress sheet centers the app
 name and shows the build action separately above it.
 
 ## Quick path with an agent

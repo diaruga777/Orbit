@@ -431,18 +431,19 @@ attempt across catalog polls, foreground transitions and relaunch. System
 expiration or a rejected submission stops background monitoring without failing
 the Mac job or automatically creating a replacement activity. Late launches use
 the latest confirmed terminal/handoff state, and stale expiration callbacks
-cannot stop a newer activity. The monitoring task ends successfully with an explicit **Build monitoring paused**
-title on expiration or a peer change. Its completed units describe the ended
-monitoring session, not compilation or installation; the Mac job remains running
-until confirmed otherwise. Only confirmed failed/cancelled jobs finish the task
-unsuccessfully. Terminal activity titles replace stale installation-stage text,
-and a failed job takes precedence over any retained self-install handoff.
+cannot stop a newer activity. On expiration the monitor reuses an outstanding
+status read or starts one final read. A one-second deadline releases the system
+task even if the transport stalls. A terminal reply received within that window
+sets the activity’s result. Otherwise the final title reports **App built** when
+the Mac has recorded a build date, or **Check build in Orbit**. A peer change
+ends monitoring immediately. Only a confirmed failure or cancellation completes
+the system task unsuccessfully. The scheduler cancels pending requests only.
 The progress sheet uses a bounded, centered two-line navigation heading with the
 action above the app name. The launch handler attaches the task and its
 expiration handler synchronously on the scheduler's main queue. Private
 `build_activity` diagnostics distinguish submitted, started, expired and finished
 monitoring from Mac build transitions. Handoff clears the expiration handler and finishes
-indeterminate progress with explicit completed units before acknowledging install.
+the system task before acknowledging install.
 Scheduled retained jobs expose their compilation snapshot alongside their durable
 installation state, translated by `CodeJob.targetStatus` for the same UI.
 Retained artifacts remain available for phone refresh, retries and reconciliation.
@@ -452,7 +453,11 @@ command sections open/close to update running/completed counts and the operation
 The stream does not supply a reliable total task count. Orbit therefore shows
 live work counts with an indeterminate indicator during builds; it does not divide
 by a previous build's workload or advance progress based on elapsed time. Apps,
-Project, the console summary and the system activity share this behavior. Legacy
+Project and the console summary share this behavior. The continued-processing
+activity reports measurable progress to iOS by counting acceptance, discovered
+Xcode commands, the built artifact and a final unit reserved for the Mac result.
+Its denominator grows as Xcode discovers work. Compilation counts carry forward
+into installation, even when install snapshots omit them. Legacy
 companions without events show the last stage and wait for updates. Internal
 stage markers advance only at confirmed boundaries. Only confirmed job success
 shows 100% in Orbit’s build screen; ending a monitoring session does not change

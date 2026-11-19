@@ -18,6 +18,76 @@ import OrbitCore
         CodeBuildMonitor(client: CodeClient { _ in throw CodeFailure("No transport in this test") },
             defaults: defaults, peerID: peer, background: scheduler, isActive: { true }, pollAutomatically: false)
     }
+    private func expire(_ task: BackgroundTask) async throws {
+        let completed = expectation(description: "Expiration finishes the monitoring task")
+        task.onComplete = { completed.fulfill() }
+        try XCTUnwrap(task.expirationHandler)()
+        await fulfillment(of: [completed], timeout: 3)
+    }
+
+    func testActivityCountsObservedWorkThroughCompilationAndInstallation() {
+        let scheduler = Scheduler(), monitor = monitor(scheduler)
+        var job = CodeJob(id: "reader", title: "Build & Install · Reader")
+        job.progress = CodeJobProgress(stage: "Compiling", start: 0.1, end: 0.7, estimatedSeconds: 100)
+        job.progress?.activeTasks = 4
+        monitor.observe(job)
+        let task = scheduler.launch()
+        let initialFraction = task.progress.fractionCompleted
+        job.progress?.completedTasks = 3
+        job.progress?.activeTasks = 1
+        monitor.accept(job)
+        let compiling = task.progress.completedUnitCount
+        XCTAssertGreaterThan(task.progress.fractionCompleted, initialFraction)
+        monitor.accept(job)
+        XCTAssertEqual(task.progress.completedUnitCount, compiling)
+        job.builtAt = Date()
+        job.progress = CodeJobProgress(stage: "Installing", start: 0.8, end: 0.93, estimatedSeconds: 40)
+        monitor.accept(job)
+        XCTAssertGreaterThan(task.progress.completedUnitCount, compiling)
+        XCTAssertLessThan(task.progress.fractionCompleted, 1)
+        job.state = .succeeded
+        monitor.accept(job)
+        XCTAssertEqual(task.title, "Build completed")
+        XCTAssertEqual(task.progress.fractionCompleted, 1)
+        XCTAssertEqual(scheduler.cancellations, 0)
+    }
+
+    func testExpirationReconcilesTheMacResultWhileBackgrounded() async throws {
+        for state in [CodeJob.State.succeeded, .failed, .cancelled] {
+            let scheduler = Scheduler()
+            var foreground = true
+            let monitor = CodeBuildMonitor(client: CodeClient { _ in throw CodeFailure("Unexpected request") },
+                defaults: defaults, peerID: { "mac" }, status: { id in
+                    CodeJob(id: id, title: "Build", state: state)
+                }, background: scheduler, isActive: { foreground }, pollAutomatically: false)
+            monitor.observe(CodeJob(id: state.rawValue, title: "Build"))
+            let task = scheduler.launch()
+            foreground = false
+            try await expire(task)
+            XCTAssertEqual(task.completions, [state == .succeeded])
+            XCTAssertEqual(task.title, state == .succeeded ? "Build completed" : state == .failed ? "Build failed" : "Build cancelled")
+            XCTAssertEqual(monitor.job?.state, state)
+        }
+    }
+
+    func testUnresponsiveStatusReadCannotHoldExpiredTaskOpen() async throws {
+        var reply: CheckedContinuation<CodeJob, Never>?
+        let scheduler = Scheduler()
+        let monitor = CodeBuildMonitor(client: CodeClient { _ in throw CodeFailure("Unexpected request") },
+            defaults: defaults, peerID: { "mac" }, status: { _ in await withCheckedContinuation { reply = $0 } },
+            background: scheduler, isActive: { true }, pollAutomatically: false)
+        let job = CodeJob(id: "slow", title: "Build")
+        monitor.observe(job)
+        let task = scheduler.launch()
+        try await expire(task)
+        XCTAssertEqual(task.title, "Check build in Orbit")
+        XCTAssertEqual(monitor.job?.state, .running)
+        let successor = CodeJob(id: job.id, title: job.title, state: .succeeded)
+        try XCTUnwrap(reply).resume(returning: successor)
+        await Task.yield()
+        XCTAssertEqual(task.completions, [true])
+    }
+
     func testStartupCreatesNoActivityUntilTheMacAcceptsAJob() throws {
         let scheduler = Scheduler(), monitor = monitor(scheduler)
         try monitor.begin(title: "Build Orbit")
@@ -43,16 +113,15 @@ import OrbitCore
         XCTAssertTrue(task.completions.isEmpty)
         XCTAssertEqual(monitor.job?.state, .running)
     }
-    func testExpirationDoesNotRestartActivityOnPollingForegroundOrRelaunch() async {
+    func testExpirationDoesNotRestartActivityOnPollingForegroundOrRelaunch() async throws {
         let scheduler = Scheduler(), monitor = monitor(scheduler)
         let job = CodeJob(id: "running", title: "Build Orbit")
         monitor.observe(job)
         let task = scheduler.launch()
-        task.expirationHandler?()
-        await Task.yield()
+        try await expire(task)
         XCTAssertEqual(task.completions, [true], "Ending phone monitoring must not announce a failed Mac build")
-        XCTAssertEqual(task.title, "Build monitoring paused")
-        XCTAssertEqual(task.subtitle, "Open Orbit to check your Mac’s result.")
+        XCTAssertEqual(task.title, "Check build in Orbit")
+        XCTAssertEqual(task.subtitle, "Your Mac has the latest status.")
         XCTAssertNil(task.expirationHandler)
         for _ in 0..<3 { monitor.activated(); monitor.observe(job) }
         XCTAssertEqual(scheduler.submissions, 1)
@@ -64,16 +133,17 @@ import OrbitCore
         XCTAssertEqual(restored.job?.state, .running)
         XCTAssertTrue(restored.backgroundMessage.contains("Come back to check progress"))
     }
-    func testConfirmedInstallAfterExpirationDoesNotLeaveAFailedActivityOrRestartMonitoring() async {
+    func testConfirmedInstallAfterExpirationDoesNotLeaveAFailedActivityOrRestartMonitoring() async throws {
         let scheduler = Scheduler(), monitor = monitor(scheduler)
         var job = CodeJob(id: "reader", title: "Build & Install · LunaReader")
+        job.builtAt = Date()
         job.progress = CodeJobProgress(stage: "Installing on your phone…", start: 0.80, end: 0.93, estimatedSeconds: 40)
         monitor.observe(job)
         let task = scheduler.launch()
-        task.expirationHandler?(); await Task.yield()
+        try await expire(task)
         XCTAssertEqual(monitor.job?.state, .running)
         XCTAssertEqual(task.completions, [true])
-        XCTAssertEqual(task.title, "Build monitoring paused")
+        XCTAssertEqual(task.title, "App built")
         job.state = .succeeded; monitor.accept(job)
         XCTAssertEqual(monitor.job?.state, .succeeded)
         XCTAssertEqual(monitor.fraction, 1)
@@ -83,14 +153,14 @@ import OrbitCore
     func testConfirmedSuccessReplacesTheLastInstallingStageInActivity() {
         let scheduler = Scheduler(), monitor = monitor(scheduler)
         var job = CodeJob(id: "reader", title: "Build & Install · LunaReader")
+        job.builtAt = Date()
         job.progress = CodeJobProgress(stage: "Installing on your phone…", start: 0.80, end: 0.93, estimatedSeconds: 40)
         monitor.observe(job)
         let task = scheduler.launch()
         job.state = .succeeded; monitor.accept(job)
         XCTAssertEqual(task.completions, [true])
         XCTAssertEqual(task.title, "Build completed")
-        XCTAssertEqual(task.progress.totalUnitCount, 1)
-        XCTAssertEqual(task.progress.completedUnitCount, 1)
+        XCTAssertEqual(task.progress.fractionCompleted, 1)
     }
     func testLateFailedJobWithAnOldHandoffIsStillAFailure() {
         let scheduler = Scheduler(), monitor = monitor(scheduler)
@@ -117,8 +187,7 @@ import OrbitCore
         job.state = .succeeded; monitor.accept(job)
         let task = scheduler.launch()
         XCTAssertEqual(task.completions, [true])
-        XCTAssertEqual(task.progress.totalUnitCount, 1)
-        XCTAssertEqual(task.progress.completedUnitCount, 1)
+        XCTAssertEqual(task.progress.fractionCompleted, 1)
     }
     func testSelfInstallFinishesUnknownProgressBeforeAcknowledgementAndNeverRestarts() async {
         let scheduler = Scheduler()
@@ -126,14 +195,13 @@ import OrbitCore
         let monitor = CodeBuildMonitor(client: CodeClient { _ in
             await MainActor.run {
                 XCTAssertEqual(task.completions, [true])
-                XCTAssertEqual(task.progress.totalUnitCount, 1)
-                XCTAssertEqual(task.progress.completedUnitCount, 1)
+                XCTAssertEqual(task.progress.fractionCompleted, 1)
             }
             throw CodeFailure("Lost acknowledgement reply")
         }, defaults: defaults, peerID: { "mac" }, background: scheduler, isActive: { true }, pollAutomatically: false)
         var job = CodeJob(id: "self", title: "Build Orbit")
         monitor.observe(job); task = scheduler.launch()
-        XCTAssertEqual(task.progress.totalUnitCount, -1)
+        XCTAssertLessThan(task.progress.fractionCompleted, 1)
         job.installHandoff = CodeInstallHandoff()
         monitor.accept(job)
         XCTAssertEqual(task.completions, [true])
@@ -154,8 +222,7 @@ import OrbitCore
         monitor.accept(job)
         let task = scheduler.launch()
         XCTAssertEqual(task.completions, [true])
-        XCTAssertEqual(task.progress.totalUnitCount, 1)
-        XCTAssertEqual(task.progress.completedUnitCount, 1)
+        XCTAssertEqual(task.progress.fractionCompleted, 1)
         XCTAssertNil(task.expirationHandler)
         monitor.activated(); monitor.observe(job)
         XCTAssertEqual(scheduler.submissions, 1)
@@ -199,7 +266,7 @@ import OrbitCore
         let oldTask = scheduler.launch()
         peer = "mac-two"; monitor.activated()
         XCTAssertEqual(oldTask.completions, [true])
-        XCTAssertEqual(oldTask.title, "Build monitoring paused")
+        XCTAssertEqual(oldTask.title, "Check build in Orbit")
         monitor.observe(CodeJob(id: "same-id", title: "Build"))
         XCTAssertEqual(scheduler.submissions, 2)
     }
@@ -208,21 +275,23 @@ import OrbitCore
 @MainActor private final class Scheduler: CodeBuildBackgroundScheduling {
     var handler: (@MainActor (any CodeBuildBackgroundTask) -> Void)?
     var submissions = 0
+    var cancellations = 0
     var reject = false
     func register(identifier: String, handler: @escaping @MainActor (any CodeBuildBackgroundTask) -> Void) { self.handler = handler }
     func submit(identifier: String, title: String) throws {
         submissions += 1
         if reject { throw CodeFailure("Scheduler busy") }
     }
-    func cancel(identifier: String) {}
+    func cancel(identifier: String) { cancellations += 1 }
     func launch() -> BackgroundTask { let task = BackgroundTask(); handler?(task); return task }
 }
 @MainActor private final class BackgroundTask: CodeBuildBackgroundTask {
     let progress = Progress(totalUnitCount: 1000)
     var expirationHandler: (() -> Void)?
     var completions: [Bool] = []
+    var onComplete: (() -> Void)?
     var title = ""
     var subtitle = ""
     func updateTitle(_ title: String, subtitle: String) { self.title = title; self.subtitle = subtitle }
-    func setTaskCompleted(success: Bool) { completions.append(success) }
+    func setTaskCompleted(success: Bool) { completions.append(success); onComplete?() }
 }

@@ -17,6 +17,8 @@ import OrbitCore
     private var installLease: UIBackgroundTaskIdentifier = .invalid
     private var lease: UIBackgroundTaskIdentifier = .invalid
     private var continued: (any CodeBuildBackgroundTask)?
+    private var completedCommands = 0
+    private var expirationDeadline: Task<Void, Never>?
     private let background: any CodeBuildBackgroundScheduling
     private let isActive: @MainActor () -> Bool
     private var requested = false
@@ -64,12 +66,13 @@ import OrbitCore
             guard self.job?.shouldMonitorInBackground == true, !self.monitoringStopped else {
                 self.finish(task, outcome: .monitoringStopped); return
             }
+            self.completedCommands = 0
             self.continued = task
             OrbitDiagnostics.shared.record("build_activity", "started", ["job": self.job?.id ?? ""])
             task.expirationHandler = { [weak self, weak task] in
                 Task { @MainActor in
                     guard let self, let task, self.continued === task else { return }
-                    self.stopBackgroundMonitoring()
+                    self.reconcileExpiration(of: task)
                 }
             }
             self.publish()
@@ -141,7 +144,7 @@ import OrbitCore
     }
     @objc public func activated() {
         if peer != peerID() {
-            if let continued { finish(continued, outcome: .monitoringStopped) }; continued = nil
+            endBackgroundActivity(.monitoringStopped)
             job = nil; isStarting = false; complete(success: false); peer = peerID()
         }
         requestBackgroundMonitoring()
@@ -162,11 +165,18 @@ import OrbitCore
         if !disconnected { publish() }
         guard let job, job.state == .running, !polling,
               isActive() || continued != nil || acknowledgingInstall else { return }
-        polling = true; defer { polling = false }
+        let polledTask = continued
+        polling = true
+        defer {
+            polling = false
+            if expirationDeadline != nil, let polledTask, continued === polledTask {
+                stopBackgroundMonitoring()
+            }
+        }
         let origin = peer
         do {
             let value = try await loadStatus(job.id)
-            guard origin == peerID(), self.job?.id == value.id else { return }
+            guard origin == peerID(), self.job?.id == job.id, value.id == job.id else { return }
             accept(value)
         } catch {
             guard origin == peerID(), self.job?.id == job.id else { return }
@@ -188,13 +198,26 @@ import OrbitCore
     private func publish() {
         if !disconnected {
             reportedFraction = job?.progressFraction() ?? 0
-            // An unknown denominator is indeterminate, including in the system activity.
-            continued?.progress.totalUnitCount = job?.state == .succeeded ? 1 : -1
-            continued?.progress.completedUnitCount = job?.state == .succeeded ? 1 : Int64(job?.progress?.completedTasks ?? 0)
+            if let task = continued, let job, job.state == .running {
+                updateActivityProgress(task.progress, job: job)
+            }
             let detail = job?.progressDetail.map { $0 + " · " } ?? ""
             continued?.updateTitle(title, subtitle: String("\(detail)\(stage)".prefix(180)))
         }
         NotificationCenter.default.post(name: Self.changed, object: self)
+    }
+    private func updateActivityProgress(_ progress: Progress, job: CodeJob) {
+        // Count discovered Xcode commands and reserve the last unit for the Mac's
+        // result. Install snapshots can omit the preceding compilation counts.
+        // One unit for acceptance, one for a built artifact when reported, and
+        // one pending final result. Bound wire counts before adding them.
+        let limit = Int.max / 4
+        completedCommands = max(completedCommands, min(limit, job.progress?.completedTasks ?? 0))
+        let active = min(limit, max(0, job.progress?.activeTasks ?? 0))
+        let completed = max(progress.completedUnitCount, Int64(1 + completedCommands + (job.builtAt == nil ? 0 : 1)))
+        let total = completed + Int64(active) + 1
+        if progress.totalUnitCount != total { progress.totalUnitCount = total }
+        if completed > progress.completedUnitCount { progress.completedUnitCount = completed }
     }
     private func prepareForInstall(_ value: CodeJob) {
         guard let handoff = value.installHandoff else { return }
@@ -202,8 +225,7 @@ import OrbitCore
         // Persist before acknowledging. Relaunch must never create another
         // continued-processing activity for the installation that replaces us.
         defaults.set(id, forKey: handoffKey)
-        if let continued { finish(continued, outcome: .handoff) }; continued = nil
-        background.cancel(identifier: identifier); requested = false
+        endBackgroundActivity(.handoff)
         if handoff.acknowledged { if !acknowledgingInstall { becameIdle?() }; return }
         guard !acknowledgingInstall else { return }
         acknowledgingInstall = true
@@ -230,16 +252,35 @@ import OrbitCore
     private func endLease() {
         if lease != .invalid { UIApplication.shared.endBackgroundTask(lease); lease = .invalid }
     }
+    private func reconcileExpiration(of task: any CodeBuildBackgroundTask) {
+        guard expirationDeadline == nil else { return }
+        guard peer == peerID() else { stopBackgroundMonitoring(); return }
+        // A terminal reply can race expiration. Give one status read a short
+        // window, even when the transport is disconnected or ignores cancellation.
+        expirationDeadline = Task { @MainActor [weak self, weak task] in
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            guard let self, let task, self.continued === task else { return }
+            self.stopBackgroundMonitoring()
+        }
+        if !polling {
+            Task { @MainActor [weak self, weak task] in
+                guard let self, let task, self.continued === task else { return }
+                await self.tick()
+            }
+        }
+    }
     private func stopBackgroundMonitoring() {
         // Expiration may mean system resource pressure or user dismissal. The Mac
         // owns accepted work; stopping phone monitoring must not kill that build.
         monitoringStopped = true
         OrbitDiagnostics.shared.record("build_activity", "expired", ["job": job?.id ?? ""])
-        if let continued { finish(continued, outcome: .monitoringStopped) }; continued = nil; requested = false
+        endBackgroundActivity(.monitoringStopped)
         endLease(); publish(); becameIdle?()
     }
     private enum BackgroundOutcome: String { case succeeded, failed, cancelled, handoff, monitoringStopped }
     private func finish(_ task: any CodeBuildBackgroundTask, outcome: BackgroundOutcome) {
+        expirationDeadline?.cancel()
+        expirationDeadline = nil
         task.expirationHandler = nil
         let success = outcome != .failed && outcome != .cancelled
         switch outcome {
@@ -250,18 +291,31 @@ import OrbitCore
         case .monitoringStopped:
             // This task owns phone monitoring, not the Mac job. End that session
             // without presenting an unconfirmed remote build as a failed build.
-            task.updateTitle("Build monitoring paused", subtitle: "Open Orbit to check your Mac’s result.")
+            if job?.builtAt != nil {
+                task.updateTitle("App built", subtitle: "Open Orbit to check the final result.")
+            } else {
+                task.updateTitle("Check build in Orbit", subtitle: "Your Mac has the latest status.")
+            }
         }
         if success {
-            // Running progress has an unknown total. Never complete it with -1 units.
-            task.progress.totalUnitCount = 1; task.progress.completedUnitCount = 1
+            let total = max(1, task.progress.totalUnitCount)
+            task.progress.totalUnitCount = total
+            task.progress.completedUnitCount = total
         }
         task.setTaskCompleted(success: success)
         OrbitDiagnostics.shared.record("build_activity", "finished", ["job": job?.id ?? "", "success": String(success), "outcome": outcome.rawValue])
     }
+    private func endBackgroundActivity(_ outcome: BackgroundOutcome) {
+        if let continued {
+            finish(continued, outcome: outcome)
+            self.continued = nil
+        } else if requested {
+            background.cancel(identifier: identifier)
+        }
+        requested = false
+    }
     private func complete(success: Bool) {
-        if let continued { finish(continued, outcome: success ? .succeeded : job?.state == .cancelled ? .cancelled : .failed) }; continued = nil
-        background.cancel(identifier: identifier); requested = false
+        endBackgroundActivity(success ? .succeeded : job?.state == .cancelled ? .cancelled : .failed)
         endLease()
         if job?.state != .running { defaults.removeObject(forKey: "Code.activeJob." + peer); defaults.removeObject(forKey: handoffKey) }
         becameIdle?()
