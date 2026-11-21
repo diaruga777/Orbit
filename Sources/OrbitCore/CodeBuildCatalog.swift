@@ -28,6 +28,17 @@ public struct CodeBuildApp: Codable, Equatable, Sendable {
         self.project = project; self.name = name; self.bundleID = bundleID; self.branch = branch; self.deviceID = deviceID
     }
 }
+public struct OrbitProjectSummary: Codable, Sendable {
+    public let path: String
+    public let name: String
+    public let iconPNG: Data?
+
+    public init(path: String, name: String? = nil, iconPNG: Data? = nil) {
+        self.path = path
+        self.name = name ?? URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+        self.iconPNG = iconPNG
+    }
+}
 public struct CodeDeviceBuild: Codable, Equatable, Sendable {
     public var branch: String
     public var deviceID: String

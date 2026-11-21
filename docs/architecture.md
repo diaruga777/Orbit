@@ -386,15 +386,21 @@ Refresh setup on iOS presents the next incomplete step with numbered progress. S
 
 ## Local project discovery
 
-Host `projects_detect` scans configured project roots and the Mac home folder using filesystem metadata only. It skips hidden folders, symlinks, caches, dependencies and package contents, deduplicates paths and bounds results to 500 projects and 100,000 entries. Inaccessible folders are skipped; Choose Project on Mac uses NSOpenPanel for other locations. Trusted paired phones can request the same scan. `project_apps` requires explicit source trust before invoking the existing Xcode runnable-iOS-app validation. Both clients select schemes from that response; registration revalidates the selection and the normal local-folder or Git build rules apply. Discovery does not build, install or fetch repositories.
+Host `projects_detect` scans configured project roots and the Mac home folder using filesystem metadata only. It skips hidden folders, symlinks, caches, dependencies and package contents, deduplicates paths and bounds results to 500 projects and 100,000 entries. Inaccessible folders are skipped; Choose Project on Mac uses NSOpenPanel for other locations. Trusted paired phones can request the same scan. Discovery does not build, install or fetch repositories. The iPhone shows its peer-scoped paths and thumbnails while this scan runs. It requests inert `project_summaries` only for paths outside that snapshot, in bounded batches.
 
 
 Mac Add App prewarms inert project previews at Host startup and stores snapshots
 in user-owned `project-previews-v1.json`. `project_preview` reads bounded pbxproj
 and scheme/workspace XML plus icon assets; it never invokes Xcode, resolves
 packages or executes source. Cached rows appear immediately while startup or
-manual discovery refreshes them. Registration still requires explicit source
-trust and Xcode validation. Automatic schemes must match their own target name,
+manual discovery refreshes them. iPhone project selection reads `project_preview`
+immediately. If the inert preview is empty, an explicit Trust & Read with Xcode
+action can request `project_apps`. The scheme picker explains that tapping a
+scheme trusts the source. Registration requires this trust and Xcode validation.
+For phone-originated registration with no explicit destination, Host prefers
+that peer’s authorized phone, then the Mac’s configured phone, then a single Xcode
+phone. The iPhone waits for the durable catalog row and merges it before popping
+back to Apps. Catalog revisions keep older polls from overwriting that merge. Automatic schemes must match their own target name,
 so an app dependency cannot turn a library scheme into an app choice.
 GitHub download (`repo_prepare`) is separate from app selection and registration;
 retries reuse only a checkout whose origin matches, and never reset working files.
@@ -639,6 +645,11 @@ card receives the same catalog/monitor updates as the grid, and errors preserve
 the text's scroll position when its contents have not changed. Build progress,
 logs and action alerts present from the expanded controller when it is open.
 Removal requires confirmation and peer/catalog changes dismiss stale details.
+Host blocks new submissions for a target being removed, resolves an in-flight
+durable submission, then cancels its active or queued build before removing the
+row. A stale job reference can be removed directly. Job journals stay available
+by ID after removal, including native installations awaiting readback. A Mac
+app replacement already in its installation or launch phase stays protected.
 
 Registered Mac apps use the installed bundle’s `CFBundleIconFile` for 132px catalog thumbnails. Registration and background catalog polling populate missing icons and refresh changed artwork at most once every five minutes. The same persisted PNG travels to Orbit Mac and iOS; missing or unreadable icons leave the target available.
 

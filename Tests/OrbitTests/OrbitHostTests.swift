@@ -108,6 +108,56 @@ final class OrbitHostTests: XCTestCase {
         XCTAssertNotNil(restored[0].failure)
         XCTAssertEqual(restored[0].mac?.certificate, target.mac?.certificate)
     }
+    func testRemovalCancelsDurablePendingAndRetainedBuildsAndIgnoresStaleJobs() async throws {
+        let root = temporary()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try CodeOvernightStore(root: root.appendingPathComponent("Builds/Overnight"))
+        let project = CodeProject(path: "/unused/App.xcodeproj", scheme: "App")
+        var queued = OrbitTarget(name: "Queued", project: project, deviceID: "phone", enabled: true)
+        let identity = CodeOvernightTarget(peerID: "orbit-mac", deviceID: queued.deviceID, project: project, branch: "main", generation: queued.id)
+        let accepted = CodeOvernightJob(requestID: "pending", invocationID: "pending", target: identity)
+        try store.save(accepted)
+        var request = CodeRequest(.overnightSubmit)
+        request.id = accepted.requestID
+        request.overnight = CodeOvernightSubmission(invocationID: request.id, target: identity, localDay: "fixture")
+        queued.pendingRequest = request
+
+        var active = OrbitTarget(name: "Active", project: project, deviceID: "other-phone", enabled: true)
+        let activeIdentity = CodeOvernightTarget(peerID: "orbit-mac", deviceID: active.deviceID, project: project, branch: "main", generation: active.id)
+        var building = CodeOvernightJob(requestID: "working", invocationID: "working", target: activeIdentity)
+        building.state = .building
+        try store.save(building)
+        active.jobID = building.id
+        active.jobKind = "retained"
+
+        var failed = OrbitTarget(name: "Failed", project: project, deviceID: "third-phone")
+        var failure = CodeOvernightJob(requestID: "failed", invocationID: "failed", target: identity)
+        failure.state = .failed
+        try store.save(failure)
+        failed.jobID = failure.id
+        failed.jobKind = "retained"
+        var stale = OrbitTarget(name: "Stale", project: project, deviceID: "fourth-phone")
+        stale.jobID = UUID().uuidString
+
+        let catalog = root.appendingPathComponent("targets.json")
+        try JSONEncoder().encode([queued, active, failed, stale]).write(to: catalog)
+        let host = try OrbitHost(root: root)
+        for target in [queued, active, failed, stale, stale] {
+            let data = try JSONSerialization.data(withJSONObject: ["method": "target_remove", "params": ["id": target.id]])
+            let reply = await host.handle(data)
+            let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: reply) as? [String: Any])
+            XCTAssertEqual((object["result"] as? [String: String])?["removed"], target.id, "\(object)")
+        }
+        let persisted = try CodeOvernightStore(root: store.root).jobs()
+        XCTAssertEqual(persisted.first { $0.id == accepted.id }?.state, .cancelled)
+        XCTAssertEqual(persisted.first { $0.id == building.id }?.state, .cancelled)
+        XCTAssertEqual(persisted.first { $0.id == failure.id }?.state, .failed)
+        let job = await host.handle(try JSONSerialization.data(withJSONObject: ["method": "job", "params": ["id": building.id]]))
+        let reply = try JSONSerialization.jsonObject(with: job) as? [String: Any]
+        XCTAssertEqual((reply?["result"] as? [String: Any])?["state"] as? String, "cancelled")
+        XCTAssertTrue(try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: catalog)).isEmpty)
+    }
+
     func testMacRegistrationRequiresTrustBeforeReadingSource() async throws {
         let root = temporary(); defer { try? FileManager.default.removeItem(at: root) }
         let host = try OrbitHost(root: root)

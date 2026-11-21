@@ -37,11 +37,41 @@ import OrbitTransport
                 if ProcessInfo.processInfo.arguments.contains("--target-cache-delayed") { try await Task.sleep(for: .seconds(8)) }
                 if ProcessInfo.processInfo.arguments.contains("--target-list-retry"), await fixture.failList() { throw CodeFailure("Fixture Mac unavailable. Retry to load apps.") }
                 if ProcessInfo.processInfo.arguments.contains("--target-list-empty") { return [[String: Any]]() }
+                if ProcessInfo.processInfo.arguments.contains("--target-local-add") {
+                    let added = await fixture.addedLocalApp
+                    if !added { try await Task.sleep(for: .seconds(7)) }
+                    return added ? [Self.localTarget] : []
+                }
                 var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": await fixture.scheduled, "intervalHours": await fixture.intervalHours]
                 if await fixture.started { row["jobID"] = "fixture-job" }
                 if ProcessInfo.processInfo.arguments.contains("--target-no-wifi") { row["failure"] = "Build requests: \(await fixture.buildRequests)" }
                 if ProcessInfo.processInfo.arguments.contains("--target-long-error"), !(await fixture.started) { row["failure"] = Self.longError }
                 return await fixture.removed ? [[String: Any]]() : [row]
+            case "projects_detect":
+                let scan = await fixture.nextScan()
+                try await Task.sleep(for: .seconds(scan > 1 ? 5 : 1))
+                return scan > 1 ? [Self.localPath, Self.newPath] : [Self.localPath]
+            case "project_summaries":
+                guard let paths = params["paths"] as? [String], await fixture.claimNewProjects(paths) else {
+                    throw CodeFailure("Fixture received a repeat preview request")
+                }
+                let rows = paths.map { path in
+                    OrbitProjectSummary(path: path, name: path == Self.localPath ? "Local Notes" : "New Timer",
+                                        iconPNG: UIImage(systemName: "note.text")?.withTintColor(.systemBlue, renderingMode: .alwaysOriginal).pngData())
+                }
+                return try JSONSerialization.jsonObject(with: JSONEncoder().encode(rows))
+            case "project_preview":
+                let app = CodeBuildApp(project: CodeProject(path: Self.localPath, scheme: "Notes"), name: "Local Notes",
+                                       bundleID: "example.fixture.notes", branch: "develop")
+                return try JSONSerialization.jsonObject(with: JSONEncoder().encode([app]))
+            case "target_add":
+                guard params["project"] as? String == Self.localPath, params["scheme"] as? String == "Notes",
+                      params["branch"] as? String == "develop", params["intervalHours"] as? Int == 144,
+                      params["trust"] as? Bool == true, params["enabled"] as? Bool == true,
+                      params["deviceID"] == nil else { throw CodeFailure("Unexpected registration defaults") }
+                try await Task.sleep(for: .seconds(4))
+                await fixture.addLocalApp()
+                return Self.localTarget
             case "schedule":
                 await fixture.schedule(enabled: params["enabled"] as? Bool == true, hours: params["intervalHours"] as? Int ?? 144)
                 return ["ok": true]
@@ -59,13 +89,27 @@ import OrbitTransport
         }, defaults: defaults)
         return UINavigationController(rootViewController: controller)
     }
+    private static let localPath = "/Users/fixture/Development/Notes/Notes.xcodeproj"
+    private static let newPath = "/Users/fixture/Development/Timer/Timer.xcworkspace"
+    private static let localTarget: [String: Any] = ["id": "local-notes", "name": "Local Notes", "enabled": true, "intervalHours": 144]
     static let longError = "Fixture compilation failed.\n" + (1...80).map { "Diagnostic \($0): Check the app’s build settings and try again." }.joined(separator: "\n")
     actor Fixture {
+        private var scans = 0
+        private var summarizedProjects: Set<String> = []
+        private(set) var addedLocalApp = false
+        func nextScan() -> Int { scans += 1; return scans }
+        func claimNewProjects(_ paths: [String]) -> Bool {
+            guard summarizedProjects.isDisjoint(with: paths) else { return false }
+            summarizedProjects.formUnion(paths)
+            return true
+        }
+        func addLocalApp() { addedLocalApp = true }
         var scheduled = false
         var intervalHours = 144
         var removed = false
         func schedule(enabled: Bool, hours: Int) { scheduled = enabled; intervalHours = hours }
-        func remove() { removed = true }
+        private var stopped = false
+        func remove() { removed = true; stopped = started }
         private var macStarted: Date?
         func beginMacUpdate() { macStarted = Date() }
         func macDisconnected() -> Bool {
@@ -103,7 +147,8 @@ import OrbitTransport
             job.progress = CodeJobProgress(stage: "Compile Feature.swift", start: fraction, end: fraction, estimatedSeconds: 1, reportedFraction: fraction)
             job.progress?.completedTasks = Int(elapsed * 5); job.progress?.activeTasks = 2
             job.log = "Compile Feature.swift\nFixture build output\n"
-            if elapsed > 18 {
+            if stopped { job.state = .cancelled }
+            else if elapsed > 18 {
                 if ProcessInfo.processInfo.arguments.contains("--target-build-failure") {
                     job.state = .failed; job.failureMessage = "Fixture compilation failed. Open the console for details."
                 } else { job.state = .succeeded }

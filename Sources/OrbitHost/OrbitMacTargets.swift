@@ -41,6 +41,10 @@ actor OrbitMacTargets {
             throw error
         }
     }
+    func hasJournal(_ id: String) -> Bool {
+        guard UUID(uuidString: id) != nil else { return false }
+        return FileManager.default.fileExists(atPath: root.appendingPathComponent(id).appendingPathComponent("job.json").path)
+    }
     func job(_ id: String, cancel: Bool = false) async throws -> [String: Any] {
         guard UUID(uuidString: id) != nil else { throw CodeFailure("Invalid Mac job ID.") }
         let journal = root.appendingPathComponent(id).appendingPathComponent("job.json")

@@ -23,6 +23,9 @@ import OrbitTransport
     private var listMessage: String? = "Loading apps…"
     private let appsCache: OrbitPageCache
     private let macCache: OrbitPageCache
+    private let projectsCache: OrbitPageCache
+    private var catalogRevision = 0
+    private var removingTargets: Set<String> = []
     private var loaded = false
     private var peer = ""
     private var apps: [[String: Any]] = []
@@ -35,6 +38,7 @@ import OrbitTransport
     init(rpc: @escaping (String, [String: Any]) async throws -> Any, monitor: CodeBuildMonitor? = nil, peerID: @escaping () -> String = { "preview" }, refreshInterval: TimeInterval = 3, preparePhoneInstall: @escaping () async throws -> Void = { try await OrbitInstallNetwork.requireWiFi() }, defaults: UserDefaults = .standard) {
         appsCache = OrbitPageCache(key: "Orbit.appsSnapshot", defaults: defaults)
         macCache = OrbitPageCache(key: "Orbit.macSnapshot", defaults: defaults)
+        projectsCache = OrbitPageCache(key: "Orbit.projectsSnapshot", defaults: defaults)
         self.preparePhoneInstall = preparePhoneInstall; self.refreshInterval = refreshInterval; self.monitor = monitor; self.peerID = peerID; self.rpc = rpc; super.init(collectionViewLayout: UICollectionViewFlowLayout()); title = "Apps"
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -57,6 +61,7 @@ import OrbitTransport
             }
         }
         navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .add, primaryAction: UIAction { [weak self] _ in self?.detectProjects() })
+        navigationItem.rightBarButtonItem?.accessibilityIdentifier = "OrbitAddProject"
         collectionView.refreshControl = UIRefreshControl(); collectionView.refreshControl?.addTarget(self, action: #selector(refresh), for: .valueChanged)
     }
     override func viewWillAppear(_ animated: Bool) { super.viewWillAppear(animated); restoreCachedState(); refresh() }
@@ -68,7 +73,8 @@ import OrbitTransport
         let origin = peerID()
         guard peer != origin else { return }
         expandedTarget?.dismiss(animated: false); expandedTarget = nil
-        peer = origin; jobs = [:]; requestFailures = [:]; apps = []; macUpdate = [:]
+        peer = origin; jobs = [:]; requestFailures = [:]; apps = []; macUpdate = [:]; removingTargets.removeAll()
+        catalogRevision += 1
         startingMacUpdate = false; starting = nil; loaded = false; listMessage = "Loading apps…"
         if let data = appsCache.load(peer: origin),
            let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
@@ -92,31 +98,35 @@ import OrbitTransport
         if !loaded { listMessage = "Loading apps…" }
         updateListMessage()
         defer { refreshing = false; collectionView.refreshControl?.endRefreshing(); updateListMessage(); collectionView.reloadData(); updateExpandedTarget() }
-        let origin = peerID()
+        let origin = peerID(), revision = catalogRevision
         async let macStatus: Void = refreshMacStatus(origin: origin)
         do {
             guard let rows = try await rpc("targets", [:]) as? [[String: Any]], rows.allSatisfy({ $0["id"] is String && $0["name"] is String }) else { throw CodeFailure("Your Mac sent an invalid app list. Update Orbit Mac and retry.") }
-            guard origin == peerID() else { return }
-            appsCache.save(try JSONSerialization.data(withJSONObject: rows), peer: origin)
-            apps = rows; loaded = true; listMessage = nil; collectionView.reloadData(); updateListMessage()
+            guard origin == peerID(), revision == catalogRevision else { return }
+            updateCatalog(rows, origin: origin)
             OrbitDiagnostics.shared.record("apps", "loaded", ["count": String(rows.count)])
             for row in rows {
                 guard let id = (row["jobID"] ?? row["lastJobID"]) as? String else { continue }
                 if jobs[id]?.state != .running, jobs[id] != nil { continue }
                 do {
                     let value = try await fetchJob(id)
-                    guard origin == peerID() else { return }
+                    guard origin == peerID(), revision == catalogRevision else { return }
                     jobs[id] = value; monitor?.observe(value)
                 } catch { OrbitDiagnostics.shared.error("apps", "job_failed", error, ["job": id]) }
             }
             collectionView.reloadData()
         } catch {
-            guard origin == peerID() else { return }
+            guard origin == peerID(), revision == catalogRevision else { return }
             listMessage = error.localizedDescription
             OrbitDiagnostics.shared.error("apps", "load_failed", error)
             if showError, !apps.isEmpty, presentedViewController == nil { show(error.localizedDescription) }
         }
         await macStatus
+    }
+    private func updateCatalog(_ rows: [[String: Any]], origin: String) {
+        if let data = try? JSONSerialization.data(withJSONObject: rows) { appsCache.save(data, peer: origin) }
+        apps = rows; loaded = true; listMessage = nil
+        collectionView.reloadData(); updateListMessage()
     }
     private func refreshMacStatus(origin: String) async {
         do {
@@ -157,15 +167,17 @@ import OrbitTransport
             }
             do {
                 if row["mac"] == nil { try await preparePhoneInstall() }
-                guard origin == peerID(), UIApplication.shared.applicationState == .active else { return }
+                guard origin == peerID(), UIApplication.shared.applicationState == .active, !removingTargets.contains(id),
+                      apps.contains(where: { $0["id"] as? String == id }) else { return }
                 try monitor.begin(title: (row["mac"] == nil ? "Build & Install · " : "Build on Mac · ") + (row["name"] as? String ?? "App"))
                 requestFailures[id] = nil
                 began = true; starting = id; buildChanged()
                 let result = try await rpc("build", ["id": id, "monitorBundleID": Bundle.main.bundleIdentifier ?? ""])
                 let job = try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: result))
                 OrbitDiagnostics.shared.record("build", "accepted", ["target": id, "job": job.id])
-                guard origin == peerID() else { return }
-                if let index = apps.firstIndex(where: { $0["id"] as? String == id }) { apps[index]["jobID"] = job.id }
+                guard origin == peerID(), !removingTargets.contains(id),
+                      let index = apps.firstIndex(where: { $0["id"] as? String == id }) else { return }
+                apps[index]["jobID"] = job.id
                 jobs[job.id] = job; monitor.accept(job)
                 monitor.show(job, from: self.expandedTarget ?? self)
             } catch {
@@ -287,7 +299,9 @@ import OrbitTransport
     private func configure(_ cell: OrbitTargetCard, row: [String: Any]) {
         let id = row["id"] as? String ?? ""
         let job = ((row["jobID"] ?? row["lastJobID"]) as? String).flatMap { jobs[$0] }
-        let busy = starting == id || job?.state == .running
+        let removing = removingTargets.contains(id)
+        let activeJob = row["jobID"] is String && (job == nil || job?.state == .running)
+        let busy = removing || starting == id || activeJob || job?.state == .running
         cell.name.text = row["name"] as? String
         cell.play.accessibilityIdentifier = "OrbitTargetPlay:" + id
         cell.play.accessibilityLabel = (row["mac"] == nil ? "Build and install " : "Build and open on Mac ") + (row["name"] as? String ?? "app")
@@ -297,13 +311,14 @@ import OrbitTransport
         let schedule = (row["enabled"] as? Bool == true) ? "Refreshes every \(row["intervalHours"] ?? 144) hours" : "Manual builds"
         let failure = requestFailures[id] ?? row["failure"] as? String
         let status: String?
-        if starting == id { status = "Starting on your Mac…" }
+        if removing { status = "Removing app…" }
+        else if starting == id { status = "Starting on your Mac…" }
         else if let failure, !failure.isEmpty, !busy { status = failure }
         else if let job {
             status = job.state == .running
                 ? job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
                 : job.state == .succeeded ? (row["mac"] == nil ? "Installed on your phone" : "Installed on your Mac") : job.failureMessage ?? "Build " + job.state.rawValue
-        } else { status = nil }
+        } else { status = activeJob ? "Checking build status…" : nil }
         cell.accessibilityHint = schedule + ". Tap for app options."
         cell.accessibilityValue = busy ? status : nil
         cell.issue.isHidden = busy || !(job?.state == .failed || failure?.isEmpty == false)
@@ -318,7 +333,7 @@ import OrbitTransport
             expandedTarget?.setSchedule(schedule)
             expandedTarget?.logs.isEnabled = (row["jobID"] ?? row["lastJobID"]) is String
             expandedTarget?.cache.isEnabled = cachingTarget != id && row["mac"] == nil && (row["lastJobID"] ?? row["jobID"]) is String
-            expandedTarget?.cancel.isHidden = job?.state != .running
+            expandedTarget?.cancel.isHidden = !activeJob || removing
         }
         let built = (row["lastSuccess"] as? Double).flatMap { $0.isFinite && $0 >= Date.distantPast.timeIntervalSinceReferenceDate && $0 <= Date.distantFuture.timeIntervalSinceReferenceDate ? Date(timeIntervalSinceReferenceDate: $0) : nil }
         cell.setLastBuilt(built, id: id)
@@ -367,11 +382,11 @@ import OrbitTransport
             switch action {
             case .schedule: self.configureSchedule(row, from: detail)
             case .remove:
-                let alert = UIAlertController(title: "Remove this app?", message: "You can add it again from your Mac.", preferredStyle: .alert)
+                guard !self.removingTargets.contains(id) else { return }
+                let alert = UIAlertController(title: "Remove this app?", message: "Any active build will be cancelled.", preferredStyle: .alert)
                 alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
                 alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { _ in Task {
-                    do { _ = try await self.rpc("target_remove", ["id": id]); detail.dismiss(animated: true); self.refresh() }
-                    catch { self.show(error.localizedDescription) }
+                    await self.removeTarget(id, detail: detail)
                 } })
                 detail.present(alert, animated: true)
             case .logs:
@@ -404,6 +419,24 @@ import OrbitTransport
         }
         present(detail, animated: true)
     }
+    private func removeTarget(_ id: String, detail: OrbitTargetDetailController) async {
+        let origin = peerID()
+        guard removingTargets.insert(id).inserted else { return }
+        buildChanged()
+        defer {
+            if origin == peerID() { removingTargets.remove(id); buildChanged() }
+        }
+        do {
+            _ = try await rpc("target_remove", ["id": id])
+            guard origin == peerID() else { return }
+            catalogRevision += 1
+            updateCatalog(apps.filter { $0["id"] as? String != id }, origin: origin)
+            requestFailures[id] = nil
+            detail.dismiss(animated: true)
+        } catch {
+            if origin == peerID() { show(error.localizedDescription) }
+        }
+    }
     private func updateExpandedTarget() {
         guard let detail = expandedTarget else { return }
         guard let row = apps.first(where: { $0["id"] as? String == detail.targetID }) else {
@@ -429,12 +462,27 @@ import OrbitTransport
         detail.present(alert, animated: true)
     }
     private func detectProjects() {
-        let list = OrbitDetectedProjectsController(rpc: rpc) { [weak self] project, scheme in
-            self?.add(project: project, scheme: scheme)
+        let list = OrbitDetectedProjectsController(rpc: rpc, peerID: peerID, cache: projectsCache) { [weak self] origin, app in
+            guard let self, origin == self.peerID() else { throw CancellationError() }
+            try await self.registerLocalApp(app, origin: origin)
         }
         navigationController?.pushViewController(list, animated: true)
     }
-    private func add(repository: String? = nil, project: String? = nil, scheme: String? = nil) {
+    private func registerLocalApp(_ app: CodeBuildApp, origin: String) async throws {
+        let params: [String: Any] = ["project": app.project.path, "scheme": app.project.scheme, "branch": app.branch,
+                                     "enabled": true, "intervalHours": 144, "trust": true]
+        guard let row = try await rpc("target_add", params) as? [String: Any],
+              let id = row["id"] as? String, row["name"] is String else {
+            throw CodeFailure("Couldn’t confirm the app was added. Try again.")
+        }
+        guard origin == peerID() else { throw CancellationError() }
+        catalogRevision += 1
+        var rows = apps
+        if let index = rows.firstIndex(where: { $0["id"] as? String == id }) { rows[index] = row }
+        else { rows.append(row) }
+        updateCatalog(rows, origin: origin)
+    }
+    private func add(repository: String, project: String) {
         Task { do {
             let devices = try await rpc("devices", [:]) as? [[String: Any]] ?? []
             guard !devices.isEmpty else { show("Connect your phone to Xcode on the Mac first."); return }
@@ -443,16 +491,15 @@ import OrbitTransport
                 picker.addAction(UIAlertAction(title: device["name"] as? String, style: .default) { _ in
                     let alert = UIAlertController(title: "Add App", message: "Only add source you trust. Xcode builds can run scripts on your Mac.", preferredStyle: .alert)
                     for placeholder in ["Xcode project path", "App scheme", "Branch", "Team ID (optional)"] { alert.addTextField { $0.placeholder = placeholder; $0.autocapitalizationType = .none; $0.autocorrectionType = .no } }
-                    alert.textFields?[0].text = project; alert.textFields?[1].text = scheme; alert.textFields?[2].text = "main"
-                    if scheme != nil { alert.textFields?[0].isEnabled = false; alert.textFields?[1].isEnabled = false }
+                    alert.textFields?[0].text = project; alert.textFields?[2].text = "main"
                     alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
                     alert.addAction(UIAlertAction(title: "Add App", style: .default) { _ in Task {
                         do {
                             let fields = alert.textFields ?? []
                             var params: [String: Any] = ["project": fields[0].text ?? "", "scheme": fields[1].text ?? "", "branch": fields[2].text ?? "main", "deviceID": device["id"] ?? "", "enabled": true, "intervalHours": 144, "trust": true]
                             if let team = fields[3].text, !team.isEmpty { params["teamID"] = team }
-                            if let repository { params["repository"] = repository }
-                            _ = try await self.rpc(repository == nil ? "target_add" : "repo_add", params)
+                            params["repository"] = repository
+                            _ = try await self.rpc("repo_add", params)
                             self.search.searchBar.text = ""; self.search.isActive = false; self.refresh()
                         } catch { self.show(error.localizedDescription) }
                     } })
@@ -466,87 +513,257 @@ import OrbitTransport
 }
 
 
-/// Lists the paired Mac's projects, never the phone's local filesystem.
-@MainActor final class OrbitDetectedProjectsController: UITableViewController {
+/// Lists the paired Mac’s projects and keeps the last successful scan visible.
+@MainActor private final class OrbitDetectedProjectsController: UITableViewController {
+    private struct Snapshot: Codable {
+        var paths: [String] = []
+        var summaries: [String: OrbitProjectSummary] = [:]
+    }
+
     private let rpc: (String, [String: Any]) async throws -> Any
-    private let selected: (String, String) -> Void
-    private var projects: [String] = []
-    private var schemes: [String] = []
-    private var project: String?
-    private var loading = false
-    init(rpc: @escaping (String, [String: Any]) async throws -> Any, selected: @escaping (String, String) -> Void) {
-        self.rpc = rpc; self.selected = selected
-        super.init(style: .insetGrouped); title = "Projects on Your Mac"
+    private let peerID: () -> String
+    private let cache: OrbitPageCache
+    private let register: (String, CodeBuildApp) async throws -> Void
+    private var snapshot = Snapshot()
+    private var origin = ""
+    private var scanTask: Task<Void, Never>?
+    private var scanError: String?
+    private let spinner = UIActivityIndicatorView(style: .medium)
+
+    init(rpc: @escaping (String, [String: Any]) async throws -> Any, peerID: @escaping () -> String,
+         cache: OrbitPageCache, register: @escaping (String, CodeBuildApp) async throws -> Void) {
+        self.rpc = rpc; self.peerID = peerID; self.cache = cache; self.register = register
+        super.init(style: .insetGrouped)
+        title = "Projects on Your Mac"
     }
     required init?(coder: NSCoder) { fatalError() }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        origin = peerID()
+        if let cached = cache.load(peer: origin), let value = try? JSONDecoder().decode(Snapshot.self, from: cached) {
+            snapshot = value
+        }
+        spinner.accessibilityLabel = "Looking for new projects"
+        spinner.accessibilityIdentifier = "OrbitProjectScanProgress"
+        spinner.isAccessibilityElement = true
         refreshControl = UIRefreshControl()
         refreshControl?.addTarget(self, action: #selector(scan), for: .valueChanged)
         scan()
     }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isMovingFromParent || navigationController == nil { scanTask?.cancel() }
+    }
+
     @objc private func scan() {
-        guard !loading else { return }
-        project = nil; schemes = []; projects = []; loading = true
-        title = "Projects on Your Mac"; tableView.reloadData()
-        tableView.backgroundView = message("Looking for projects on your Mac…")
-        Task {
-            defer { loading = false; refreshControl?.endRefreshing() }
+        guard scanTask == nil, origin == peerID() else { return }
+        spinner.startAnimating()
+        navigationItem.rightBarButtonItem = UIBarButtonItem(customView: spinner)
+        if snapshot.paths.isEmpty { tableView.backgroundView = projectMessage("Looking for projects on your Mac…") }
+        scanTask = Task {
+            defer {
+                scanTask = nil
+                navigationItem.rightBarButtonItem = nil
+                spinner.stopAnimating()
+                refreshControl?.endRefreshing()
+                if snapshot.paths.isEmpty {
+                    tableView.backgroundView = projectMessage(scanError ?? "No projects found. Add a project on your Mac, or pull to scan again.")
+                }
+            }
             do {
-                projects = try await rpc("projects_detect", [:]) as? [String] ?? []
-                tableView.backgroundView = projects.isEmpty ? message("No projects found. Choose a project in Orbit on your Mac, or pull to scan again.") : nil
+                guard let paths = try await rpc("projects_detect", [:]) as? [String] else {
+                    throw CodeFailure("Couldn’t read the project list. Pull to try again.")
+                }
+                guard !Task.isCancelled, origin == peerID() else { return }
+                let discovered = Set(paths)
+                snapshot.paths = discovered.sorted()
+                snapshot.summaries = snapshot.summaries.filter { discovered.contains($0.key) }
+                scanError = nil
+                if !snapshot.paths.isEmpty { tableView.backgroundView = nil }
+                saveSnapshot()
                 tableView.reloadData()
-            } catch { tableView.backgroundView = message(error.localizedDescription) }
+                let unpreviewed = snapshot.paths.filter { snapshot.summaries[$0] == nil }
+                for offset in stride(from: 0, to: unpreviewed.count, by: 24) {
+                    let batch = Array(unpreviewed.dropFirst(offset).prefix(24))
+                    let value = try await rpc("project_summaries", ["paths": batch])
+                    guard !Task.isCancelled, origin == peerID() else { return }
+                    let summaries = try JSONDecoder().decode([OrbitProjectSummary].self, from: JSONSerialization.data(withJSONObject: value))
+                    for summary in summaries where batch.contains(summary.path) { snapshot.summaries[summary.path] = summary }
+                    saveSnapshot()
+                    tableView.reloadData()
+                }
+            } catch {
+                guard !Task.isCancelled, origin == peerID() else { return }
+                scanError = error.localizedDescription
+                if !snapshot.paths.isEmpty { tableView.reloadData() }
+            }
         }
     }
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { project == nil ? projects.count : schemes.count }
+
+    private func saveSnapshot() {
+        if let data = try? JSONEncoder().encode(snapshot) { cache.save(data, peer: origin) }
+    }
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { snapshot.paths.count }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        if project == nil {
-            let path = projects[indexPath.row]
-            cell.textLabel?.text = URL(fileURLWithPath: path).lastPathComponent
-            cell.detailTextLabel?.text = path; cell.detailTextLabel?.numberOfLines = 2
-        } else { cell.textLabel?.text = schemes[indexPath.row] }
-        cell.accessoryType = .disclosureIndicator
-        return cell
+        let path = snapshot.paths[indexPath.row]
+        let row = snapshot.summaries[path] ?? OrbitProjectSummary(path: path)
+        return projectCell(name: row.name, subtitle: row.path, iconPNG: row.iconPNG)
+    }
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        snapshot.paths.isEmpty ? nil : scanError
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard !loading else { return }
-        if let project {
-            let scheme = schemes[indexPath.row]
-            navigationController?.popViewController(animated: false)
-            selected(project, scheme)
-            return
-        }
-        let path = projects[indexPath.row]
-        let alert = UIAlertController(title: "Read App Schemes?", message: "Only open source you trust. Xcode can run project code on your Mac.", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.addAction(UIAlertAction(title: "Read Schemes", style: .default) { _ in
-            self.loading = true; self.title = "Reading App Schemes…"
-            self.tableView.backgroundView = self.message("Reading app schemes…")
-            Task {
-                defer { self.loading = false }
-                do {
-                    let rows = try await self.rpc("project_apps", ["project": path, "trust": true]) as? [[String: Any]] ?? []
-                    self.schemes = rows.compactMap { ($0["project"] as? [String: Any])?["scheme"] as? String }
-                    self.project = path; self.title = "Choose an iOS App"
-                    self.tableView.backgroundView = self.schemes.isEmpty ? self.message("No runnable iOS app schemes found. Pull to scan again.") : nil
-                    self.tableView.reloadData()
-                } catch {
-                    self.title = "Projects on Your Mac"; self.tableView.backgroundView = nil
-                    let errorAlert = UIAlertController(title: "Couldn’t Read Schemes", message: error.localizedDescription, preferredStyle: .alert)
-                    errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
-                    self.present(errorAlert, animated: true)
-                }
+        guard origin == peerID(), snapshot.paths.indices.contains(indexPath.row) else { return }
+        let path = snapshot.paths[indexPath.row]
+        let schemes = OrbitProjectSchemesController(path: path, rpc: rpc, isCurrentPeer: { [peerID, origin] in peerID() == origin },
+                                                    register: { [register, origin] app in try await register(origin, app) })
+        navigationController?.pushViewController(schemes, animated: true)
+    }
+}
+
+@MainActor private final class OrbitProjectSchemesController: UITableViewController {
+    private let path: String
+    private let rpc: (String, [String: Any]) async throws -> Any
+    private let isCurrentPeer: () -> Bool
+    private let register: (CodeBuildApp) async throws -> Void
+    private var schemes: [CodeBuildApp] = []
+    private var working = false
+    private var readTask: Task<Void, Never>?
+    private var canInspectWithXcode = false
+
+    init(path: String, rpc: @escaping (String, [String: Any]) async throws -> Any, isCurrentPeer: @escaping () -> Bool,
+         register: @escaping (CodeBuildApp) async throws -> Void) {
+        self.path = path; self.rpc = rpc; self.isCurrentPeer = isCurrentPeer; self.register = register
+        super.init(style: .insetGrouped)
+        title = "Choose an iOS App"
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        readSchemes()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isMovingFromParent || navigationController == nil { readTask?.cancel() }
+    }
+
+    private func readSchemes(useXcode: Bool = false) {
+        guard !working else { return }
+        working = true
+        tableView.backgroundView = projectMessage("Reading app schemes…", loading: true)
+        tableView.reloadData()
+        readTask = Task {
+            defer { working = false; tableView.reloadData() }
+            do {
+                var params: [String: Any] = ["project": path]
+                if useXcode { params["trust"] = true }
+                let value = try await rpc(useXcode ? "project_apps" : "project_preview", params)
+                guard !Task.isCancelled, isCurrentPeer() else { return }
+                let apps = try JSONDecoder().decode([CodeBuildApp].self, from: JSONSerialization.data(withJSONObject: value))
+                var seen = Set<String>()
+                schemes = apps.filter { seen.insert($0.project.scheme).inserted }
+                canInspectWithXcode = schemes.isEmpty && !useXcode
+                tableView.backgroundView = schemes.isEmpty && !canInspectWithXcode ? projectMessage("No runnable iOS app schemes found.") : nil
+            } catch {
+                guard !Task.isCancelled, isCurrentPeer() else { return }
+                canInspectWithXcode = !useXcode
+                tableView.backgroundView = canInspectWithXcode ? nil : projectMessage(error.localizedDescription)
             }
-        })
-        present(alert, animated: true)
+        }
     }
-    private func message(_ text: String) -> UILabel {
-        let label = UILabel(); label.text = text; label.numberOfLines = 0; label.textAlignment = .center; label.textColor = .secondaryLabel
-        return label
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        working ? 0 : (canInspectWithXcode ? 1 : schemes.count)
     }
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if canInspectWithXcode {
+            return projectCell(name: "Trust & Read with Xcode", subtitle: nil, iconPNG: nil)
+        }
+        let app = schemes[indexPath.row]
+        return projectCell(name: app.name, subtitle: app.project.scheme == app.name ? nil : app.project.scheme, iconPNG: app.iconPNG)
+    }
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard !working else { return nil }
+        if canInspectWithXcode { return "To read more schemes, let Xcode open this project. Only continue if you trust its source." }
+        return schemes.isEmpty ? nil : "Choose an app to trust and add it. Xcode can run scripts from its source."
+    }
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard !working, isCurrentPeer() else { return }
+        if canInspectWithXcode { readSchemes(useXcode: true); return }
+        let app = schemes[indexPath.row]
+        working = true
+        navigationItem.hidesBackButton = true
+        tableView.backgroundView = projectMessage("Adding \(app.name)…", loading: true)
+        tableView.reloadData()
+        Task {
+            defer {
+                working = false
+                navigationItem.hidesBackButton = false
+                tableView.backgroundView = nil
+                tableView.reloadData()
+            }
+            do {
+                try await register(app)
+                navigationController?.popToRootViewController(animated: true)
+            } catch is CancellationError {
+                navigationController?.popToRootViewController(animated: true)
+            } catch {
+                let alert = UIAlertController(title: "Couldn’t Add App", message: error.localizedDescription, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                present(alert, animated: true)
+            }
+        }
+    }
+}
+
+@MainActor private func projectCell(name: String, subtitle: String?, iconPNG: Data?) -> UITableViewCell {
+    let cell = UITableViewCell()
+    var content = cell.defaultContentConfiguration()
+    content.text = name
+    content.secondaryText = subtitle
+    content.secondaryTextProperties.numberOfLines = 0
+    content.imageProperties.maximumSize = CGSize(width: 36, height: 36)
+    content.imageProperties.cornerRadius = 8
+    content.image = iconPNG.flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
+    cell.contentConfiguration = content
+    cell.accessoryType = .disclosureIndicator
+    return cell
+}
+
+@MainActor private func projectMessage(_ text: String, loading: Bool = false) -> UIView {
+    let container = UIView()
+    let label = UILabel()
+    label.text = text
+    label.font = .preferredFont(forTextStyle: .body)
+    label.adjustsFontForContentSizeCategory = true
+    label.numberOfLines = 0
+    label.textAlignment = .center
+    label.textColor = .secondaryLabel
+    let stack = UIStackView()
+    stack.axis = .vertical; stack.alignment = .center; stack.spacing = 12
+    if loading {
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.accessibilityIdentifier = "OrbitProjectActivity"
+        spinner.isAccessibilityElement = true
+        spinner.startAnimating()
+        stack.addArrangedSubview(spinner)
+    }
+    stack.addArrangedSubview(label)
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(stack)
+    NSLayoutConstraint.activate([
+        stack.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        stack.leadingAnchor.constraint(equalTo: container.layoutMarginsGuide.leadingAnchor),
+        stack.trailingAnchor.constraint(equalTo: container.layoutMarginsGuide.trailingAnchor)
+    ])
+    return container
 }
 
 /// Absolute grid geometry never depends on text, errors or build state.

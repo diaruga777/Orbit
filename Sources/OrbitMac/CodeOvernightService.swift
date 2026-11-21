@@ -102,19 +102,35 @@ public actor CodeOvernightService {
         _ = try await installGate.acknowledge(id, token: token)
         return job.monitoring()
     }
+    func catalogJob(id: String?, request: CodeRequest?) -> CodeOvernightJob? {
+        let jobs = store.jobs()
+        if let id, let job = jobs.first(where: { $0.id == id }) { return job }
+        guard let request else { return nil }
+        if let job = jobs.first(where: { $0.requestID == request.id }) { return job }
+        // Submit can reuse a previous durable job if the reply was interrupted.
+        guard let target = request.overnight?.target else { return nil }
+        return jobs.first { $0.target.generation == target.generation && Self.sameDestination($0.target, target) &&
+            ([.accepted, .building].contains($0.state) || $0.hasActionableArtifact || $0.needsInstallReconciliation) }
+    }
     public func cancel(_ id: String) async throws -> CodeOvernightJob {
         guard var job = store.jobs().first(where: { $0.id == id }) else { throw CodeFailure("Unknown overnight job.") }
-        if let compilation = job.compilationJobID, job.state == .building { _ = try await builds.cancel(compilation) }
-        // An interrupted installer cannot safely be called a cancelled install.
+        guard ![.succeeded, .cancelled].contains(job.state),
+              job.state != .failed || job.hasActionableArtifact || job.needsInstallReconciliation else { return job }
+        // Write the outcome before awaiting another actor. The compiler and
+        // installer can finish while we wait for a subprocess to stop.
         let uncertain = job.state == .installing || job.needsInstallReconciliation
-        installProcesses[id]?.cancel(); workers[id]?.cancel()
         job.state = uncertain ? .unknownCompletion : .cancelled
         if let i = job.installs.indices.last, job.installs[i].state == .installing {
             job.installs[i].state = .unknownCompletion; job.installs[i].endedAt = Date()
         }
         job.revision += 1; try store.save(job)
+        workers[id]?.cancel()
+        installProcesses[id]?.cancel()
+        if let compilation = await builds.catalogJobID(id: job.compilationJobID, requestID: nil) {
+            _ = try await builds.cancel(compilation)
+        }
         await installGate.cancel(id)
-        return job
+        return store.jobs().first(where: { $0.id == id }) ?? job
     }
     private func recover() async throws {
         guard !recovered else { return }; recovered = true
@@ -147,6 +163,10 @@ public actor CodeOvernightService {
             var options = CodeDeviceBuild(branch: job.target.branch, deviceID: job.target.deviceID, monitorBundleID: job.monitorBundleID)
             options.installOnly = true; options.artifactTarget = job.target; request.deviceBuild = options
             let compilation = try await builds.start(request)
+            if Task.isCancelled {
+                _ = try await builds.cancel(compilation.id)
+                return
+            }
             job.compilationJobID = compilation.id; job.state = .building; job.revision += 1; try store.save(job)
             while true {
                 try Task.checkCancellation()
@@ -196,7 +216,9 @@ public actor CodeOvernightService {
             }
             try Task.checkCancellation()
             if job.monitorBundleID == artifact.bundleID, job.installHandoff?.acknowledged != true {
-                job.installHandoff = await installGate.prepare(id, restoring: job.installHandoff)
+                let handoff = await installGate.prepare(id, restoring: job.installHandoff)
+                if Task.isCancelled { await installGate.cancel(id); return }
+                job.installHandoff = handoff
                 job.revision += 1; try store.save(job)
                 do { try await installGate.wait(id) }
                 catch {

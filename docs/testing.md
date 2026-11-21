@@ -83,6 +83,15 @@ checks launch opt-in, persistence and independence between schemes sharing a
 bundle ID. The existing background/startup tests exercise default install-only
 requests after leaving Orbit. These fixtures never install on a physical phone.
 
+The Simulator local app picker fixture checks project titles and full paths,
+cached rows during a delayed rescan, preview requests for new paths only,
+immediate scheme reading, and progress until the Mac returns the new app.
+The Simulator removal fixture opens an active build’s app card and checks that
+confirming removal returns to the updated Apps catalog.
+`OrbitHostTests.testRemovalCancelsDurablePendingAndRetainedBuildsAndIgnoresStaleJobs`
+checks retained and pending cancellations, stale and failed job cleanup,
+idempotent removal, and continued access to the durable job after removal.
+
 ## SourceKit with a real disposable Xcode app
 
 `scripts/test_code_intelligence.sh` generates a UIKit fixture with a local package, builds it for Simulator and checks real SourceKit completion/diagnostics with unsaved edits. It leaves the fixture source unchanged and never launches an app or contacts a phone.

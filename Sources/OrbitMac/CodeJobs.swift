@@ -109,9 +109,23 @@ public actor CodeJobs {
         }
         return job
     }
+    func catalogJobID(id: String?, requestID: String?) -> String? {
+        if let id, jobs[id] != nil { return id }
+        return requestID.flatMap { requests[$0] }
+    }
     public func cancel(_ id: String) async throws -> CodeJob {
         guard var job = jobs[id] else { throw CodeFailure("Unknown build job.") }
-        if job.state == .running { processes[id]?.cancel(); job.progress?.stoppedAt = Date(); job.state = .cancelled; jobs[id] = job; persist(job) }
+        if job.state == .running {
+            job.progress?.stoppedAt = Date()
+            job.state = .cancelled
+            try persistRequired(job)
+            jobs[id] = job
+            processes[id]?.cancel()
+            if let index = waiting.firstIndex(where: { $0.2.id == id }) {
+                waiting.remove(at: index)
+                processes[id] = nil
+            }
+        }
         await installGate.cancel(id)
         return try status(id)
     }
@@ -234,8 +248,9 @@ public actor CodeJobs {
         completed.installHandoff = jobs[job.id]?.installHandoff
         completed.progress = jobs[job.id]?.progress
         if completed.progress?.stoppedAt == nil { completed.progress?.stoppedAt = Date() }
-        jobs[job.id] = completed; processes[job.id] = nil; persist(completed)
+        jobs[job.id] = completed; persist(completed)
         await installGate.cancel(job.id)
+        processes[job.id] = nil
         while !waiting.isEmpty {
             let (next, project, job, process) = waiting.removeFirst()
             guard jobs[job.id]?.state == .running else { processes[job.id] = nil; continue }

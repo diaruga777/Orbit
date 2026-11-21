@@ -54,6 +54,8 @@ public actor OrbitHost {
     private var targets: [OrbitTarget]
     private var updatingIcons = false
     private var startingTargets: Set<String> = []
+    private var removingTargets: Set<String> = []
+    private var removalWaiters: [String: CheckedContinuation<Void, Never>] = [:]
     private var diagnosticStores: [String: OrbitDiagnostics] = [:]
     private var jobStates: [String: String] = [:]
     private var iconLookups: [String: Date] = [:]
@@ -207,6 +209,22 @@ public actor OrbitHost {
         case "projects_detect":
             let roots = configuration.allowedRoots.map { URL(fileURLWithPath: $0) } + [FileManager.default.homeDirectoryForCurrentUser]
             return await Task.detached { OrbitProjectDiscovery.scan(roots: roots) }.value
+        case "project_summaries":
+            guard let paths = p["paths"] as? [String], (1...24).contains(paths.count),
+                  paths.allSatisfy({ $0.hasPrefix("/") && ["xcodeproj", "xcworkspace"].contains(URL(fileURLWithPath: $0).pathExtension) }) else {
+                throw CodeFailure("Choose up to 24 Xcode projects or workspaces.")
+            }
+            let summaries = await Task.detached {
+                paths.map { path in
+                    let fallback = OrbitProjectSummary(path: path)
+                    let apps = CodeProjectPreview.apps(path: path)
+                    let app = apps.first { $0.name == fallback.name } ?? apps.first
+                    return OrbitProjectSummary(path: path, name: app?.name, iconPNG: app?.iconPNG.flatMap {
+                        $0.count <= 80_000 ? $0 : nil
+                    })
+                }
+            }.value
+            return try object(summaries)
         case "project_preview":
             let path = try required(p, "project")
             guard path.hasPrefix("/"), ["xcodeproj", "xcworkspace"].contains(URL(fileURLWithPath: path).pathExtension) else { throw CodeFailure("Choose an Xcode project or workspace.") }
@@ -313,11 +331,9 @@ public actor OrbitHost {
             let response = try JSONDecoder().decode(CodeResponse.self, from: result)
             if let error = response.error { throw CodeFailure(error) }
             return try object(response.devices ?? [])
-        case "target_add": return try await add(p)
+        case "target_add": return try await add(p, peer: peer)
         case "target_remove":
-            let id = try required(p, "id")
-            guard let target = targets.first(where: { $0.id == id }), target.jobID == nil else { throw CodeFailure("Wait for the target’s current build before removing it.") }
-            targets.removeAll { $0.id == id }; try saveTargets(); return ["removed": id]
+            return try await removeTarget(required(p, "id"))
         case "schedule":
             let index = try index(p)
             let hours = p["intervalHours"] as? Int ?? targets[index].intervalHours
@@ -339,7 +355,7 @@ public actor OrbitHost {
             }
             let retained = targets.contains { ($0.jobID == id || $0.lastJobID == id) && $0.jobKind == "retained" }
             var request = CodeRequest(retained ? .overnightCancel : .cancel); request.jobID = id
-            return try JSONSerialization.jsonObject(with: await service.handle(JSONEncoder().encode(request)))
+            return try object(await decoded(request))
         case "repo_search": return try await OrbitGitHub.search(try required(p, "query"))
         case "repo_inspect": return try await OrbitGitHub.inspect(try required(p, "repository"))
         case "repo_prepare": return try await prepareRepository(p)
@@ -427,11 +443,11 @@ public actor OrbitHost {
         let id = try required(p, "id")
         guard let i = targets.firstIndex(where: { $0.id == id }) else { throw CodeFailure("Target not found.") }; return i
     }
-    private func add(_ p: [String: Any]) async throws -> Any {
+    private func add(_ p: [String: Any], peer: String? = nil) async throws -> Any {
         guard p["trust"] as? Bool == true else { throw CodeFailure("Review this source, then add with trust=true. Xcode builds can execute repository scripts on your Mac.") }
         if p["platform"] as? String == "macOS" { return try await addMac(p) }
         guard p["platform"] == nil || p["platform"] as? String == "iOS" else { throw CodeFailure("Choose iOS or macOS.") }
-        let path = try required(p, "project"), scheme = try required(p, "scheme"), device = try required(p, "deviceID")
+        let path = try required(p, "project"), scheme = try required(p, "scheme")
         let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
         guard path.hasPrefix("/"), ["xcodeproj", "xcworkspace"].contains(url.pathExtension), FileManager.default.fileExists(atPath: url.path) else { throw CodeFailure("Choose an existing Xcode project or workspace.") }
         var project = CodeProject(path: url.path, scheme: scheme)
@@ -440,6 +456,12 @@ public actor OrbitHost {
         }
         if let team = p["teamID"] as? String, !team.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { project.developmentTeam = team }
         project = try CodeOrbitIdentity.resolve(project)
+        let device: String
+        if let peer, p["deviceID"] == nil {
+            device = try await service.defaultCatalogDevice(peer: peer, configured: configuredPhoneID)
+        } else {
+            device = try required(p, "deviceID")
+        }
         var request = CodeRequest(.apps, path: url.path); request.project = project
         let response = try JSONDecoder().decode(CodeResponse.self, from: await service.handle(JSONEncoder().encode(request)))
         if let error = response.error { throw CodeFailure(error) }
@@ -460,7 +482,16 @@ public actor OrbitHost {
             branch: p["branch"] as? String ?? "main", intervalHours: hours, enabled: p["enabled"] as? Bool ?? false)
         target.iconPNG = app.iconPNG
         target.repository = p["repository"] as? String
-        targets.append(target); try saveTargets(); return try object(target)
+        targets.append(target)
+        do { try saveTargets() }
+        catch { targets.removeLast(); throw error }
+        return try object(target)
+    }
+    private var configuredPhoneID: String? {
+        let setup = try? JSONDecoder().decode(OrbitSetupState.self, from: Data(contentsOf: root.appendingPathComponent("setup.json")))
+        if let id = setup?.deviceID, !id.isEmpty { return id }
+        let ids = Set(targets.filter { CodeOrbitIdentity.isOrbit($0.project) }.map(\.deviceID))
+        return ids.count == 1 ? ids.first : nil
     }
     private func addMac(_ p: [String: Any]) async throws -> Any {
         let deployment = try await macTargets.inspect(p)
@@ -519,17 +550,46 @@ public actor OrbitHost {
         let response = try JSONDecoder().decode(CodeResponse.self, from: await service.handle(JSONEncoder().encode(request)))
         if let error = response.error { throw CodeFailure(error) }; return response
     }
-    private func job(_ id: String) async throws -> Any {
-        if targets.contains(where: { ($0.jobID == id || $0.lastJobID == id) && $0.jobKind == "mac" }) {
-            return try await macTargets.job(id)
+    private func removeTarget(_ id: String) async throws -> [String: String] {
+        let result = ["removed": id]
+        guard let target = targets.first(where: { $0.id == id }) else { return result }
+        guard removingTargets.insert(id).inserted else { throw CodeFailure("This app is already being removed.") }
+        defer { removingTargets.remove(id) }
+        // A submission can suspend after persisting its intent but before its
+        // job ID is known. Let it publish that ID before cancelling it.
+        if startingTargets.contains(id), target.pendingRequest != nil || target.jobID != nil {
+            await withCheckedContinuation { removalWaiters[id] = $0 }
         }
-        if let target = targets.first(where: { $0.jobID == id || $0.lastJobID == id }), target.jobKind == "retained" {
-            let response = try await decoded(CodeRequest(.overnightStatus))
-            guard let job = response.overnightJobs?.first(where: { $0.id == id }) else { throw CodeFailure("Build job not found.") }
-            var value = try object(job) as? [String: Any] ?? [:]
-            if let compilation = job.compilationJobID {
-                var poll = CodeRequest(.job); poll.jobID = compilation
-                let compilation = try await decoded(poll).job
+        guard let current = targets.first(where: { $0.id == id }) else { return result }
+        if current.mac != nil, let jobID = current.jobID {
+            _ = try await macTargets.job(jobID, cancel: true)
+        } else if current.mac == nil {
+            if let jobID = current.jobID {
+                try await service.cancelCatalogBuild(id: jobID, request: nil, retained: current.jobKind == "retained")
+            }
+            if let request = current.pendingRequest {
+                try await service.cancelCatalogBuild(id: nil, request: request, retained: request.operation == .overnightSubmit)
+            }
+        }
+        if let index = targets.firstIndex(where: { $0.id == id }) {
+            let removed = targets.remove(at: index)
+            do { try saveTargets() }
+            catch { targets.insert(removed, at: index); throw error }
+        }
+        return result
+    }
+    private func job(_ id: String) async throws -> Any {
+        let target = targets.first { $0.jobID == id || $0.lastJobID == id }
+        if target?.jobKind == "mac" { return try await macTargets.job(id) }
+        // Keep job logs and installation evidence reachable by their durable
+        // IDs even after an app is removed from the catalog.
+        if target == nil, await macTargets.hasJournal(id) { return try await macTargets.job(id) }
+        if target?.jobKind == "retained" || target == nil,
+           let retained = try await service.retainedCatalogJob(id) {
+            var value = try object(retained) as? [String: Any] ?? [:]
+            if let compilationID = retained.compilationJobID {
+                var poll = CodeRequest(.job); poll.jobID = compilationID
+                let compilation = try? await decoded(poll).job
                 value["log"] = compilation?.log ?? ""
                 value["compilation"] = try object(compilation)
             }
@@ -540,9 +600,13 @@ public actor OrbitHost {
     }
     private func start(_ index: Int, launch: Bool? = nil, monitorBundleID: String? = nil) async throws -> Any {
         let target = targets[index], id = target.id
+        guard !removingTargets.contains(id) else { throw CodeFailure("This app is being removed.") }
         if let jobID = target.jobID { return try await job(jobID) }
         guard startingTargets.insert(id).inserted else { throw CodeFailure("This build is already starting. Check Apps in a moment.") }
-        defer { startingTargets.remove(id) }
+        defer {
+            startingTargets.remove(id)
+            removalWaiters.removeValue(forKey: id)?.resume()
+        }
         diagnostics.record("build", "starting", ["target": id, "launch": String(launch ?? (target.mac != nil))])
         if target.mac == nil, CodeOrbitIdentity.isOrbit(target.project) {
             if canonicalSource == nil {
@@ -561,6 +625,7 @@ public actor OrbitHost {
             _ = try await OrbitCommand.run("/usr/bin/git", ["fetch", "--no-tags", "origin", "refs/heads/" + branch + ":refs/remotes/origin/" + branch], directory: URL(fileURLWithPath: target.project.root))
             branch = "refs/remotes/origin/" + branch
         }
+        guard !removingTargets.contains(id) else { throw CodeFailure("This app is being removed.") }
         if target.mac != nil {
             guard let current = targets.firstIndex(where: { $0.id == id }) else { throw CodeFailure("Target was removed.") }
             targets[current].jobID = UUID().uuidString; targets[current].lastJobID = targets[current].jobID
@@ -598,7 +663,7 @@ public actor OrbitHost {
         targets[current].jobKind = request.operation == .overnightSubmit ? "retained" : "build"
         targets[current].failure = nil; try saveTargets()
         diagnostics.record("build", "accepted", ["target": id, "job": jobID])
-        if let retained = response.overnightJobs?.first, retained.state == .failed, retained.artifact != nil {
+        if !removingTargets.contains(id), let retained = response.overnightJobs?.first, retained.state == .failed, retained.artifact != nil {
             // Submission returns the previous durable artifact. A fresh build
             // request must resume installation instead of redisplaying its failure.
             var retry = CodeRequest(.overnightInstall); retry.jobID = jobID
@@ -612,7 +677,7 @@ public actor OrbitHost {
         if startingMacUpdate || active { return }
         await service.endMacUpdate()
         for id in targets.map(\.id) {
-            guard let i = targets.firstIndex(where: { $0.id == id }) else { continue }
+            guard !removingTargets.contains(id), let i = targets.firstIndex(where: { $0.id == id }) else { continue }
             if let jobID = targets[i].jobID {
                 do {
                     let retained = targets[i].jobKind == "retained"
@@ -622,7 +687,7 @@ public actor OrbitHost {
                         jobStates[jobID] = state
                         diagnostics.record("build", "state", ["job": jobID, "state": state])
                     }
-                    guard let j = targets.firstIndex(where: { $0.id == id }), targets[j].jobID == jobID else { continue }
+                    guard !removingTargets.contains(id), let j = targets.firstIndex(where: { $0.id == id }), targets[j].jobID == jobID else { continue }
                     if ["succeeded", "failed", "cancelled"].contains(state) {
                         targets[j].jobID = nil
                         if state == "succeeded" { targets[j].lastSuccess = date; targets[j].failure = nil }

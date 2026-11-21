@@ -89,6 +89,31 @@ public actor CodeService {
         return try await refreshExport.chunk(artifact: artifact, artifacts: root.appendingPathComponent("Jobs/Artifacts"),
             root: root.appendingPathComponent("RefreshExports"), offset: offset)
     }
+    public func defaultCatalogDevice(peer: String, configured: String?) async throws -> String {
+        if let endpoints {
+            let devices = Set(try await endpoints.status(peer: peer).map(\.deviceID))
+            if devices.count == 1, let device = devices.first { return device }
+        }
+        if let configured { return configured }
+        let devices = try await CodeDeviceSupport.devices(root: root)
+        if devices.count == 1, let device = devices.first { return device.id }
+        throw CodeFailure(devices.isEmpty ? "Connect your phone to Xcode on the Mac first." : "Choose a phone in Orbit Mac setup, then try again.")
+    }
+
+    public func cancelCatalogBuild(id: String?, request: CodeRequest?, retained: Bool) async throws {
+        if retained {
+            if let job = await overnight.catalogJob(id: id, request: request) {
+                _ = try await overnight.cancel(job.id)
+            }
+        } else if let jobID = await jobs.catalogJobID(id: id, requestID: request?.id) {
+            _ = try await jobs.cancel(jobID)
+        }
+    }
+
+    public func retainedCatalogJob(_ id: String) async throws -> CodeOvernightJob? {
+        try await overnight.status().first { $0.id == id }
+    }
+
     public func revokeEndpointAuthorizations() async throws { try await endpoints?.revokeAll(); await reverseFlows?.revoke() }
     public func handle(_ data: Data, authenticatedPeerID: String? = nil) async -> Data {
         var response = CodeResponse()

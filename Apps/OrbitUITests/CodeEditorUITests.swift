@@ -10,6 +10,60 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertFalse(app.cells["OrbitTarget:cached"].exists)
     }
 
+    func testLocalAppPickerKeepsCachedRowsAndWaitsForRegistration() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-local-add"]
+        app.launch()
+        let add = app.buttons["OrbitAddProject"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        add.tap()
+        let projects = app.navigationBars["Projects on Your Mac"]
+        XCTAssertTrue(projects.waitForExistence(timeout: 5))
+        let notes = app.staticTexts["Local Notes"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["/Users/fixture/Development/Notes/Notes.xcodeproj"].exists)
+        XCTAssertFalse(projects.descendants(matching: .any)["OrbitProjectScanProgress"].exists)
+        attach("Local projects with titles and paths", app)
+        projects.buttons["Apps"].tap()
+        add.tap()
+        XCTAssertTrue(notes.waitForExistence(timeout: 2))
+        XCTAssertTrue(projects.descendants(matching: .any)["OrbitProjectScanProgress"].exists)
+        XCTAssertTrue(app.staticTexts["New Timer"].waitForExistence(timeout: 10))
+        notes.tap()
+        XCTAssertTrue(app.navigationBars["Choose an iOS App"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.alerts["Read App Schemes?"].exists)
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        notes.tap()
+        XCTAssertTrue(app.staticTexts["Adding Local Notes…"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.navigationBars["Choose an iOS App"].exists)
+        XCTAssertFalse(app.alerts["Add App"].exists)
+        attach("Adding the selected scheme", app)
+        XCTAssertTrue(app.cells["OrbitTarget:local-notes"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["Apps"].exists)
+    }
+
+    func testRemovingAppDuringBuildReturnsToEmptyCatalog() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview"]
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        app.buttons["OrbitTargetPlay:fixture"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["CodeBuildProgress"].waitForExistence(timeout: 8))
+        app.buttons["Done"].tap()
+        row.tap()
+        XCTAssertTrue(app.buttons["Cancel Build"].exists)
+        app.buttons["Remove App Target"].tap()
+        let confirmation = app.alerts["Remove this app?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+        XCTAssertTrue(confirmation.staticTexts["Any active build will be cancelled."].exists)
+        confirmation.buttons["Remove"].tap()
+        XCTAssertTrue(app.staticTexts["OrbitTargetsMessage"].waitForExistence(timeout: 5))
+        XCTAssertFalse(row.exists)
+    }
+
     func testMacUpdateHasSeparateSectionAndReconnects() {
         let app = XCUIApplication(); app.launchArguments = ["--target-build-preview"]; app.launch()
         let rebuild = app.buttons["OrbitMacRebuild"]
