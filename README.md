@@ -144,7 +144,9 @@ Tap **+** to see projects from your Mac. Previously found projects appear
 while Orbit looks for new ones. Rows show the app name and icon when available,
 with the full project path underneath. Tap a project to read its schemes. Choose
 one you trust to add it using your configured phone and the six-day refresh
-schedule. Apps opens with the new card as soon as the Mac saves it. Use the card
+schedule. Older Orbit Mac versions can add the app when Xcode sees one available
+phone. If Xcode sees multiple phones, update Orbit Mac to use your configured
+phone. Apps opens with the new card as soon as the Mac saves it. Use the card
 to change the refresh schedule or remove the app. Removal cancels any active build.
 
 The iPhone Apps list loads independently of job-console reads, shows errors with

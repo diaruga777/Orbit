@@ -43,6 +43,41 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Apps"].exists)
     }
 
+    func testLocalAppPickerAddsWithAnOlderMacAndOnePhone() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-local-add", "--target-legacy-mac"]
+        app.launch()
+        selectLocalNotes(app)
+        XCTAssertTrue(app.cells["OrbitTarget:local-notes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Apps"].exists)
+    }
+
+    func testLocalAppPickerDoesNotChooseBetweenPhonesOnAnOlderMac() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview", "--target-local-add", "--target-legacy-mac", "--target-multiple-phones"]
+        app.launch()
+        selectLocalNotes(app)
+        let alert = app.alerts["Couldn’t Add App"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["Update Orbit Mac so it can use your configured phone, then try again."].exists)
+        alert.buttons["OK"].tap()
+        XCTAssertTrue(app.navigationBars["Choose an iOS App"].exists)
+    }
+
+    private func selectLocalNotes(_ app: XCUIApplication) {
+        let add = app.buttons["OrbitAddProject"]
+        XCTAssertTrue(add.waitForExistence(timeout: 10))
+        add.tap()
+        let notes = app.staticTexts["Local Notes"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        notes.tap()
+        XCTAssertTrue(app.navigationBars["Choose an iOS App"].waitForExistence(timeout: 5))
+        XCTAssertTrue(notes.waitForExistence(timeout: 5))
+        notes.tap()
+    }
+
     func testRemovingAppDuringBuildReturnsToEmptyCatalog() {
         continueAfterFailure = false
         let app = XCUIApplication()

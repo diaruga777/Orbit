@@ -469,10 +469,25 @@ import OrbitTransport
         navigationController?.pushViewController(list, animated: true)
     }
     private func registerLocalApp(_ app: CodeBuildApp, origin: String) async throws {
-        let params: [String: Any] = ["project": app.project.path, "scheme": app.project.scheme, "branch": app.branch,
+        var params: [String: Any] = ["project": app.project.path, "scheme": app.project.scheme, "branch": app.branch,
                                      "enabled": true, "intervalHours": 144, "trust": true]
-        guard let row = try await rpc("target_add", params) as? [String: Any],
-              let id = row["id"] as? String, row["name"] is String else {
+        let result: Any
+        do {
+            result = try await rpc("target_add", params)
+        } catch let error as CodeFailure where error.message == "Provide deviceID." {
+            // Older Macs reject this request before registration. A lost reply is never retried here.
+            guard origin == peerID() else { throw CancellationError() }
+            let value = try await rpc("devices", [:])
+            guard origin == peerID() else { throw CancellationError() }
+            guard let devices = value as? [[String: Any]] else { throw CodeFailure("Update Orbit Mac, then try again.") }
+            guard !devices.isEmpty else { throw CodeFailure("Connect your phone to Xcode on the Mac, then try again.") }
+            guard devices.count == 1, let id = devices[0]["id"] as? String, !id.isEmpty else {
+                throw CodeFailure("Update Orbit Mac so it can use your configured phone, then try again.")
+            }
+            params["deviceID"] = id
+            result = try await rpc("target_add", params)
+        }
+        guard let row = result as? [String: Any], let id = row["id"] as? String, row["name"] is String else {
             throw CodeFailure("Couldn’t confirm the app was added. Try again.")
         }
         guard origin == peerID() else { throw CancellationError() }

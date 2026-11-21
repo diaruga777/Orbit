@@ -399,7 +399,10 @@ action can request `project_apps`. The scheme picker explains that tapping a
 scheme trusts the source. Registration requires this trust and Xcode validation.
 For phone-originated registration with no explicit destination, Host prefers
 that peer’s authorized phone, then the Mac’s configured phone, then a single Xcode
-phone. The iPhone waits for the durable catalog row and merges it before popping
+phone. When an older Host rejects the missing device ID, iOS reads the available
+Xcode phones and retries once with an explicit ID if there is exactly one. An
+interrupted registration reply still directs the user to check Apps. The iPhone
+waits for the durable catalog row and merges it before popping
 back to Apps. Catalog revisions keep older polls from overwriting that merge. Automatic schemes must match their own target name,
 so an app dependency cannot turn a library scheme into an app choice.
 GitHub download (`repo_prepare`) is separate from app selection and registration;

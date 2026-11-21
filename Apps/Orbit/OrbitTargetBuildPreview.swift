@@ -13,6 +13,8 @@ import OrbitTransport
             let data = try JSONSerialization.data(withJSONObject: [["id": "cached", "name": "Cached App"]])
             OrbitPageCache(key: "Orbit.appsSnapshot", defaults: defaults).save(data, peer: "fixture-mac")
         }
+        let legacyMac = ProcessInfo.processInfo.arguments.contains("--target-legacy-mac")
+        let multiplePhones = ProcessInfo.processInfo.arguments.contains("--target-multiple-phones")
         let fixture = Fixture()
         let client = CodeClient { data in
             _ = try JSONDecoder().decode(CodeRequest.self, from: data)
@@ -64,11 +66,25 @@ import OrbitTransport
                 let app = CodeBuildApp(project: CodeProject(path: Self.localPath, scheme: "Notes"), name: "Local Notes",
                                        bundleID: "example.fixture.notes", branch: "develop")
                 return try JSONSerialization.jsonObject(with: JSONEncoder().encode([app]))
+            case "devices":
+                guard legacyMac, await fixture.legacyAddRejected else { throw CodeFailure("Unexpected phone discovery") }
+                let phone = ["id": "fixture-phone", "name": "Fixture Phone"]
+                return multiplePhones ? [phone, ["id": "other-phone", "name": "Other Phone"]] : [phone]
             case "target_add":
                 guard params["project"] as? String == Self.localPath, params["scheme"] as? String == "Notes",
                       params["branch"] as? String == "develop", params["intervalHours"] as? Int == 144,
-                      params["trust"] as? Bool == true, params["enabled"] as? Bool == true,
-                      params["deviceID"] == nil else { throw CodeFailure("Unexpected registration defaults") }
+                      params["trust"] as? Bool == true, params["enabled"] as? Bool == true else {
+                    throw CodeFailure("Unexpected registration defaults")
+                }
+                if legacyMac {
+                    if params["deviceID"] == nil {
+                        await fixture.rejectLegacyAdd()
+                        throw CodeFailure("Provide deviceID.")
+                    }
+                    guard !multiplePhones, params["deviceID"] as? String == "fixture-phone", await fixture.legacyAddRejected else {
+                        throw CodeFailure("Unexpected phone for registration")
+                    }
+                } else if params["deviceID"] != nil { throw CodeFailure("Unexpected phone override") }
                 try await Task.sleep(for: .seconds(4))
                 await fixture.addLocalApp()
                 return Self.localTarget
@@ -96,6 +112,7 @@ import OrbitTransport
     actor Fixture {
         private var scans = 0
         private var summarizedProjects: Set<String> = []
+        private(set) var legacyAddRejected = false
         private(set) var addedLocalApp = false
         func nextScan() -> Int { scans += 1; return scans }
         func claimNewProjects(_ paths: [String]) -> Bool {
@@ -104,6 +121,7 @@ import OrbitTransport
             return true
         }
         func addLocalApp() { addedLocalApp = true }
+        func rejectLegacyAdd() { legacyAddRejected = true }
         var scheduled = false
         var intervalHours = 144
         var removed = false

@@ -86,6 +86,8 @@ requests after leaving Orbit. These fixtures never install on a physical phone.
 The Simulator local app picker fixture checks project titles and full paths,
 cached rows during a delayed rescan, preview requests for new paths only,
 immediate scheme reading, and progress until the Mac returns the new app.
+Older Mac fixtures reject a missing device ID, verify retry with the only
+available phone, and check the update prompt when several phones are available.
 The Simulator removal fixture opens an active build’s app card and checks that
 confirming removal returns to the updated Apps catalog.
 `OrbitHostTests.testRemovalCancelsDurablePendingAndRetainedBuildsAndIgnoresStaleJobs`
