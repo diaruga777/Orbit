@@ -173,6 +173,9 @@ final class CodeBuildCatalogTests: XCTestCase {
         XCTAssertTrue(devices[0].needsSystemUpdate)
         XCTAssertNil(devices[1].systemVersion)
         XCTAssertFalse(devices[1].needsSystemUpdate)
+        let setupDevices = try CodeDeviceSupport.parseDevices(data, includeDeveloperModeBlocked: true)
+        XCTAssertEqual(Set(setupDevices.map(\.id)), ["usb", "wifi", "broken"])
+        XCTAssertEqual(setupDevices.first { $0.id == "broken" }?.developerModeBlocked, true)
     }
     func testDeviceDiscoveryDistinguishesEmptyListFromInvalidOutput() throws {
         XCTAssertEqual(try CodeDeviceSupport.parseDevices(Data("[]".utf8)), [])

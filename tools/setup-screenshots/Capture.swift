@@ -3,7 +3,6 @@ import SwiftUI
 
 // Screenshot-only models. Every action is inert, including bindings that would
 // normally persist settings. Values below are fictional, never user state.
-struct ScreenshotPhone { var id: String; var name: String }
 @MainActor enum ScreenshotEnvironment { static var fromDiskImage = false }
 @MainActor final class OrbitMacModel: ObservableObject {
     @Published var pairing = ""
@@ -14,17 +13,17 @@ struct ScreenshotPhone { var id: String; var name: String }
     @Published var tools = OrbitToolReadiness()
     let installer = OrbitToolInstaller()
     @Published var teams: [OrbitSigningTeam] = []
-    @Published var devices = [ScreenshotPhone(id: "screenshot-phone", name: "Demo iPhone")]
-    @Published var phoneReady = false
+    @Published var devices: [CodeDevice] = []
+    @Published var phoneReady: Bool?
+    @Published var installing = false
+    @Published var discoveryError = ""
     @Published var busy = false
     @Published var message = ""
     @Published var log = ""
-    @Published var paired = false
-    @Published var phoneRefreshReady = false
     @Published var loginItem = false
-    // CONTINUE_GATE
+    // MODEL_PROPERTIES
     func back() {}
-    func next() {}
+    func finish() {}
     func persist() {}
     func installMac() {}
     func checkTools() {}
@@ -32,10 +31,10 @@ struct ScreenshotPhone { var id: String; var name: String }
     func checkAccounts() {}
     func openXcode() {}
     func allowFolder(_ model: OrbitMacModel) {}
-    func chooseFolder() {}
+    func chooseFolder(_ model: OrbitMacModel) {}
     func changeLoginItem(_ enabled: Bool) {}
-    func listPhones(_ model: OrbitMacModel) {}
-    func checkPhone() {}
+    func listPhones() async {}
+    func checkSelectedDevice() async {}
     func install(_ model: OrbitMacModel) {}
     func cancelInstall(_ model: OrbitMacModel) {}
     func checkConnection(_ model: OrbitMacModel) {}
@@ -66,19 +65,19 @@ struct OrbitSigningTeam: Identifiable { var id: String; var name: String }
         window.backgroundColor = .windowBackgroundColor
         var captures: [[String: String]] = []
         let variants: [(String, OrbitSetupStep, String)] = [
-            ("00-install-on-mac", .welcome, "disk-image"),
-            ("01-welcome", .welcome, "default"),
-            ("02-mac-tools", .tools, "ready"),
-            ("03-mac-access", .access, "default"),
-            ("04-apple-account", .account, "default"),
-            ("05-your-iphone", .phone, "default"),
-            ("06-ready", .complete, "default"),
-            ("07-tools-missing", .tools, "missing"),
-            ("08-tools-first-launch", .tools, "first-launch"),
-            ("09-tools-sign-in", .tools, "sign-in"),
-            ("10-account-detected", .account, "detected"),
-            ("11-install-in-progress", .phone, "building"),
-            ("12-install-verified", .phone, "verified")
+            ("00-install-on-mac", .mac, "disk-image"),
+            ("01-missing-tools", .mac, "missing"),
+            ("02-private-installer", .mac, "sign-in"),
+            ("03-account", .mac, "account"),
+            ("04-choose-team", .mac, "teams"),
+            ("05-projects-folder", .mac, "folder"),
+            ("06-connect-device", .phone, "missing-device"),
+            ("07-choose-device", .phone, "multiple"),
+            ("08-iphone", .phone, "ready"),
+            ("09-ipad-developer-mode", .phone, "developer"),
+            ("10-system-update", .phone, "update"),
+            ("11-installing", .phone, "building"),
+            ("12-scan", .phone, "verified")
         ]
         for (name, step, variant) in variants {
             ScreenshotEnvironment.fromDiskImage = variant == "disk-image"
@@ -86,52 +85,40 @@ struct OrbitSigningTeam: Identifiable { var id: String; var name: String }
             let model = OrbitMacModel()
             setup.state.step = step
             setup.state.folder = "/Users/demo/Desktop/Orbit"
-            setup.state.folderApproved = step != .access
-            setup.state.teamID = "DEMO123456"
-            setup.state.bundlePrefix = "org.example.orbit.demo"
-            setup.state.deviceID = "screenshot-phone"
+            setup.state.teamID = ["teams", "account"].contains(variant) ? "" : "DEMO123456"
+            setup.teams = variant == "account" ? [] : [.init(id: "DEMO123456", name: "Personal Team")]
+            if variant == "teams" { setup.teams.append(.init(id: "DEMO789012", name: "Studio")) }
             setup.tools.xcode = true
             setup.tools.firstLaunch = true
             setup.tools.iOSSDK = true
             setup.tools.python = true
-            setup.tools.developerDirectory = "/Applications/Xcode.app/Contents/Developer"
-            setup.phoneReady = true
-            setup.paired = true
-            setup.phoneRefreshReady = true
-            setup.loginItem = true
-            if step == .tools {
-                if variant == "missing" {
-                    setup.tools = OrbitToolReadiness()
-                    setup.message = "Install the full Xcode app to build iPhone apps."
-                } else if variant == "first-launch" {
-                    setup.tools.firstLaunch = false
-                    setup.tools.iOSSDK = false
-                    setup.message = "Finish Xcode’s setup, then check again."
-                } else if variant == "sign-in" {
-                    setup.tools = OrbitToolReadiness()
-                    setup.installer.running = true
-                    setup.installer.output = "Installing Xcode with xcodes…\nApple ID: demo@example.invalid\nEnter the verification code sent to your device:"
-                }
+            setup.tools.developerDirectory = ProcessInfo.processInfo.environment["DEVELOPER_DIR"] ?? "/Applications/Xcode.app/Contents/Developer"
+            if ["missing", "sign-in"].contains(variant) { setup.tools = OrbitToolReadiness() }
+            if variant == "sign-in" {
+                setup.installer.running = true
+                setup.installer.output = "Enter the verification code sent to your device:"
             }
-            if step == .account && variant == "detected" { setup.teams = [.init(id: "DEMO123456", name: "Demo (Personal Team)")] }
-            if step == .phone && ["building", "verified"].contains(variant) {
-                setup.state.installJobID = "screenshot-job"
-                setup.log = "[Mock preview] Preparing committed source…\nBuilding Orbit for iPhone…\nSigning with the selected Personal Team…"
-                if variant == "building" {
-                    setup.busy = true
-                    setup.message = "Building Orbit for your iPhone…"
-                } else {
-                    setup.state.installed = true
-                    model.pairing = "ORBIT-DEMO-PAIRING-CODE (mock preview)"
-                }
-            }
+            let phone = CodeDevice(id: "phone", name: "Demo iPhone", modelCode: "iPhone17,1", modelName: "iPhone 16 Pro",
+                                   operatingSystemVersion: variant == "update" ? "18.6 (fixture)" : "26.2 (fixture)")
+            let pad = CodeDevice(id: "pad", name: "Demo iPad", modelCode: "iPad14,1", modelName: "iPad mini", operatingSystemVersion: "26.2")
+            setup.devices = variant == "multiple" ? [phone, pad] : variant == "developer" ? [pad] : variant == "missing-device" ? [] : [phone]
+            setup.state.deviceID = setup.devices.count == 1 ? setup.devices[0].id : ""
+            setup.phoneReady = variant != "developer"
+            setup.installing = variant == "building"
+            setup.busy = setup.installing
+            if setup.installing { setup.message = "Building Orbit…" }
+            setup.state.installed = variant == "verified"
+            if setup.state.installed { model.pairing = "orbit://pair?device=" + String(repeating: "A", count: 52) + "&address=tcp%3A%2F%2F192.0.2.1%3A22000" }
+            let compact = ["developer", "verified"].contains(variant)
+            let size = compact ? NSSize(width: 760, height: 540) : NSSize(width: 1000, height: 740)
+            window.appearance = NSAppearance(named: variant == "developer" ? .darkAqua : .aqua)
             let view = NSHostingView(rootView: OrbitSetupView(setup: setup, model: model)
-                .environment(\.colorScheme, .light)
+                .environment(\.colorScheme, variant == "developer" ? .dark : .light)
                 .environment(\.controlActiveState, .active)
                 .allowsHitTesting(false)
                 .background(Color(nsColor: .windowBackgroundColor)))
             window.contentView = view
-            window.setContentSize(NSSize(width: 1000, height: 740))
+            window.setContentSize(size)
             window.orderFront(nil)
             // Allow SwiftUI layout/materials to settle before bitmap capture.
             RunLoop.main.run(until: Date().addingTimeInterval(0.25))
@@ -146,10 +133,10 @@ struct OrbitSigningTeam: Identifiable { var id: String; var name: String }
             }
             do { try png.write(to: output.appendingPathComponent(name + ".png")) }
             catch { fatalError("Could not save screenshot: \(error)") }
-            captures.append(["file": name + ".png", "step": step.rawValue, "variant": variant])
+            captures.append(["file": name + ".png", "step": step.rawValue, "variant": variant, "width": String(Int(size.width)), "height": String(Int(size.height))])
         }
         let manifest: [String: Any] = ["mock": true, "view": "Sources/OrbitMacApp/OrbitSetupView.swift",
-                                      "contentSize": [1000, 740], "captures": captures]
+                                      "captures": captures]
         do {
             try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
                 .write(to: output.appendingPathComponent("manifest.json"))

@@ -76,10 +76,11 @@ The state, pairing identities and installation journals are never recreated.
 
 ## Mac setup and optional setup
 
-The active wizard has six steps: welcome, tools, folder access, Apple account,
-iPhone, ready. Legacy agent/install/connect/refresh step values migrate without
-changing existing source, signing identifiers or durable installation job IDs.
-The Mac wizard advances from folder selection after the Mac confirms access. Selecting a different path clears its approval until that check succeeds. On iPhone, manual navigation to phone-only refresh pushes the setup controller. Notification routing opens the same controller directly.
+Setup has two screens. The Mac screen handles DMG installation, unmet tool or signing requirements and project-folder approval. Existing setup journals map to Mac or device while retaining their identity, folder consent, job ID and installed state. Selecting a different folder checks access before advancing.
+
+The device screen reads physical model and OS metadata from Xcode. Setup discovery also accepts devices that Xcode reports as blocked by Developer Mode. Build destinations still require availability. The wizard resolves device artwork through macOS’s device-model type registry, falls back to a family symbol, and shows the Settings path for the selected OS and device family. An OS older than Orbit’s deployment target gets update instructions. Multiple devices require a choice. An interrupted job resumes by its saved ID.
+
+After successful install readback the Mac displays its pairing URL as a QR code. Camera opens the device’s native confirmation screen. Dismissing it preserves the saved peer. Confirmation uses the same pinned connection and explicit Mac approval as manual paste. Pairing can be deferred. On iPhone, manual navigation to phone-only refresh pushes the setup controller. Notification routing opens the same controller directly.
 
 Phone-only refresh is not required by the wizard. The iPhone's explicit More tab
 holds separate Phone-only refresh and Remote builds rows, plus Mac connection settings. Each setup row has its own badge;

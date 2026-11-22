@@ -70,7 +70,7 @@ struct OrbitSetupView: View {
                     if setup.state.installed { primary("Done", setup.finish) }
                     else if setup.installing { Button("Cancel Installation") { setup.cancelInstall(model) } }
                     else if setup.state.installJobID != nil { primary("Resume Installation") { setup.install(model) } }
-                    else if let device = setup.selectedDevice, !device.needsSystemUpdate {
+                    else if let device = setup.selectedDevice, !device.needsSystemUpdate, setup.phoneReady != false {
                         primary("Install Orbit") { setup.install(model) }
                     }
                 }
@@ -79,14 +79,11 @@ struct OrbitSetupView: View {
         .task(id: onMac ? nil : discoveryRevision) {
             guard !onMac else { return }
             repeat {
-                await setup.listPhones(model)
-                if setup.selectedDevice != nil || setup.state.installed || setup.state.installJobID != nil { return }
+                await setup.listPhones()
+                if setup.state.installed || setup.state.installJobID != nil { return }
+                if let device = setup.selectedDevice, device.developerModeBlocked != true, setup.phoneReady != false { return }
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
             } while !Task.isCancelled
-        }
-        .task(id: setup.state.deviceID) {
-            setup.phoneReady = nil
-            await setup.checkSelectedDevice()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if onMac && !setup.fromDiskImage && setup.tools.ready && !setup.installer.running { setup.checkAccounts() }
@@ -139,18 +136,19 @@ struct OrbitSetupView: View {
                             .padding(12).background(.white).accessibilityHidden(true)
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Connect with Camera", systemImage: "qrcode.viewfinder").font(.headline)
+                        Label("Scan with Camera", systemImage: "qrcode.viewfinder").font(.headline)
                         Text("Use the same Wi-Fi. Compare the device ID before approving on your Mac.")
-                        Button("Copy Code") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(model.pairing, forType: .string)
-                        }
+
                     }
                 }
             }
             if !model.pairing.isEmpty {
                 DisclosureGroup("Paste a code instead") {
                     guide("ellipsis.circle", "Orbit › More › Mac", destination: "Connect a Mac")
+                    Button("Copy Code") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(model.pairing, forType: .string)
+                    }
                 }
             }
             DisclosureGroup("Orbit won’t open?") {
@@ -159,17 +157,21 @@ struct OrbitSetupView: View {
             }
             Button(model.pairing.isEmpty ? "Connect to This Mac" : "Renew Code", action: model.pair)
         } else if setup.installing {
-            ProgressView("Keep your device connected.")
+            ProgressView("Keep your device connected.").progressViewStyle(.linear)
         } else {
-            if setup.devices.count > 1 || !setup.state.deviceID.isEmpty && setup.selectedDevice == nil {
-                Picker("Device", selection: $setup.state.deviceID) {
+            if setup.devices.count > 1 || (setup.selectedDevice == nil && (!setup.devices.isEmpty || !setup.state.deviceID.isEmpty)) {
+                Picker("Device", selection: Binding(get: { setup.state.deviceID }, set: { id in
+                    setup.state.deviceID = id
+                    setup.phoneReady = nil
+                    setup.persist()
+                    discoveryRevision += 1
+                })) {
                     Text("Choose a device").tag("")
                     ForEach(setup.devices, id: \.id) { Text($0.name).tag($0.id) }
                     if !setup.state.deviceID.isEmpty && setup.selectedDevice == nil {
                         Text("Saved device · offline").tag(setup.state.deviceID)
                     }
                 }.disabled(setup.busy || setup.state.installJobID != nil)
-                    .onChange(of: setup.state.deviceID) { setup.persist() }
             }
             if setup.state.installJobID != nil { guide("arrow.clockwise", "Pick up your installation.") }
             else if let device = setup.selectedDevice {
@@ -183,6 +185,7 @@ struct OrbitSetupView: View {
                 guide("hand.raised", "Tap Trust if asked.")
                 DisclosureGroup("Device missing?") { developerMode }
             }
+            if !setup.discoveryError.isEmpty { Text(setup.discoveryError).foregroundStyle(.secondary).textSelection(.enabled) }
             Button("Find Devices") { discoveryRevision += 1 }.disabled(setup.busy)
         }
         if !setup.log.isEmpty {
@@ -200,7 +203,7 @@ struct OrbitSetupView: View {
                 let app = URL(fileURLWithPath: setup.tools.developerDirectory).deletingLastPathComponent().deletingLastPathComponent()
                 let version = Bundle(url: app)?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
                 let modern = (Int(version?.split(separator: ".").first ?? "") ?? 0) >= 27
-                Text(modern ? "Missing the switch? In Xcode, open Developer Tool › Device Hub to pair first." : "Missing the switch? In Xcode, open Window › Devices and Simulators to pair first.")
+                Text(modern ? "Missing the switch? In the Xcode menu, choose Open Developer Tool › Device Hub to pair first." : "Missing the switch? In Xcode, open Window › Devices and Simulators to pair first.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -220,7 +223,7 @@ struct OrbitSetupView: View {
                 Text(item).fontWeight(.medium)
                 Spacer()
                 if toggle {
-                    Image(systemName: "switch.2").foregroundStyle(.green)
+                    Toggle("", isOn: .constant(true)).toggleStyle(.switch).labelsHidden().allowsHitTesting(false)
                 } else { Image(systemName: "chevron.right").foregroundStyle(.secondary) }
             }
         }.padding(14).background(.quaternary, in: RoundedRectangle(cornerRadius: 12))

@@ -12,6 +12,7 @@ import OrbitCore
     @Published var devices: [CodeDevice] = []
     @Published var phoneReady: Bool?
     @Published var installing = false
+    @Published var discoveryError = ""
     @Published var busy = false
     @Published var message = ""
     @Published var log = ""
@@ -22,9 +23,14 @@ import OrbitCore
     init() {
         Task {
             do { state = try await setup.load() } catch { OrbitDiagnostics.shared.error("setup", "failed", error); message = error.localizedDescription }
+            if state.finished || fromDiskImage { loaded = true }
             tools = await setup.checkTools()
             teams = await setup.signingTeams()
             selectDetectedTeam()
+            if !state.finished, state.step == .mac, !fromDiskImage, tools.ready, signingReady, state.folderApproved == true {
+                state.step = .phone
+                persist()
+            }
             loginItem = SMAppService.mainApp.status == .enabled
             loaded = true
         }
@@ -51,7 +57,14 @@ import OrbitCore
             do { try await action() } catch is CancellationError { message = "Cancelled. You can pick up here later." } catch { OrbitDiagnostics.shared.error("setup", "failed", error); message = error.localizedDescription }
         }
     }
-    func checkTools() { perform { self.tools = await self.setup.checkTools(); self.teams = await self.setup.signingTeams(); self.selectDetectedTeam(); self.message = self.tools.ready ? "" : self.tools.detail } }
+    func checkTools() {
+        perform {
+            self.tools = await self.setup.checkTools()
+            self.teams = await self.setup.signingTeams()
+            self.selectDetectedTeam()
+            self.message = self.tools.ready ? "" : self.tools.detail
+        }
+    }
     func installTools() {
         OrbitDiagnostics.shared.record("action", "setup_installTools")
         perform {
@@ -105,24 +118,26 @@ import OrbitCore
         do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; loginItem = enabled }
         catch { message = error.localizedDescription }
     }
-    func listPhones(_ model: OrbitMacModel) async {
+    func listPhones() async {
         guard !busy, !Task.isCancelled else { return }
         do {
-            let rows = try await model.rpc("devices")
+            let rows = try await setup.devices()
             try Task.checkCancellation()
             guard state.step.current == .phone, !installing else { return }
-            self.devices = try JSONDecoder().decode([CodeDevice].self, from: JSONSerialization.data(withJSONObject: rows))
+            discoveryError = ""
+            devices = rows
             if self.state.deviceID.isEmpty, self.devices.count == 1 {
                 self.state.deviceID = self.devices[0].id
                 self.persist()
             }
             await checkSelectedDevice()
         } catch {
-            if !Task.isCancelled { message = error.localizedDescription }
+            if !Task.isCancelled { discoveryError = error.localizedDescription }
         }
     }
-    func checkSelectedDevice() async {
+    private func checkSelectedDevice() async {
         guard let device = selectedDevice, !device.needsSystemUpdate, !state.installed, state.installJobID == nil else { return }
+        if device.developerModeBlocked == true { phoneReady = false; return }
         let ready = try? await setup.phoneReady(device.id)
         if !Task.isCancelled, state.deviceID == device.id { phoneReady = ready }
     }

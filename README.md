@@ -20,37 +20,14 @@ site prepared for GitHub Pages at `https://diaruga777.github.io/Orbit/`. See
 
 ## Install from a DMG
 
-Open **Orbit Mac** from the DMG to launch the resumable setup wizard. It installs
-itself, installs Xcode and missing dependencies, asks for a projects folder
-(default **~/Desktop/Orbit**), detects your Xcode signing account, and installs
-Orbit on your selected iPhone. Keep both devices on the same Wi-Fi for setup.
-There is no AI integrations step, Team ID field or bundle ID field.
+Open **Orbit Mac** from the DMG and choose **Install Orbit Mac**.
 
-The tools page uses [xcodes](https://github.com/XcodesOrg/xcodes), installed via
-Homebrew (which Orbit installs if needed). Orbit selects the newest stable Xcode
-compatible with your macOS from the same release feed used by xcodes. Apple sign-in, verification and Mac
-password prompts appear in a private interactive installer inside Orbit; replies
-and transcripts are never saved in setup/build logs. Xcodes owns its download
-credentials in Keychain. Add your signing account in Xcode’s own Accounts screen;
-Orbit detects its signing teams when you return, even before a development
-certificate exists. If more than one team is available, choose its
-name. Orbit generates and saves its phone app identifiers once, preserving them
-on resume and updates. Apple trust, Developer Mode, account and license prompts
-still need your attention.
+1. **On your Mac**, confirm your projects folder (default **~/Desktop/Orbit**). If anything is missing, Orbit offers to install the tools and shows where to sign in to Xcode. A single signing team is selected automatically.
+2. **On your iPhone or iPad**, unlock the device and connect it by cable. Orbit finds it and shows the settings for its model and OS. Choose **Install Orbit**. After installation, scan the code on the Mac with Camera, tap **Connect**, then compare the device ID and approve on the Mac. Keep both devices on the same Wi-Fi for pairing.
 
-Orbit uses the selected full Xcode for phone discovery and builds. If Command
-Line Tools or a removed Xcode is selected, it uses the open or installed Xcode
-without changing your Mac’s system selection.
+You can finish with **Done** and pair later. To paste a code, open **More → Mac → Connect a Mac** on the device. Phone-only refresh and remote builds are optional under **More**.
 
-Choosing **Use This Folder** checks access and advances setup. If you have multiple signing teams, choose one on the Apple Account page.
-
-Phone selection, Developer Mode guidance, build/install and connection code share
-one page. Installation is complete only after installed-revision readback;
-pairing can also be finished later. On iPhone, **More → Phone-only refresh**
-and **More → Remote builds** hold the optional setup. Each row is badged until its own setup is complete; More is
-badged while either needs setup. Remote setup uses the saved connection, so a
-disconnected Mac does not reset it. Orbit Mac keeps its **Take Orbit with you**
-banner. Local Wi-Fi is the default; enabling remote connections is an explicit later choice.
+Setup uses the selected full Xcode for discovery and builds. If Command Line Tools or a removed Xcode is selected, Orbit uses an open or installed Xcode. For missing tools, it uses Homebrew and [xcodes](https://github.com/XcodesOrg/xcodes) to install a compatible stable Xcode. Installer replies stay out of logs. Xcode handles signing and keeps its keys in Keychain. Setup saves your app identifiers and resumes interrupted installs.
 
 The DMG contains the committed phone project, native archives and local agent
 launcher. End users do not need to clone this repository or install Go/XcodeGen.

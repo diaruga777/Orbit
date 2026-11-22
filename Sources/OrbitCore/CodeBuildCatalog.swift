@@ -5,6 +5,7 @@ public struct CodeDevice: Codable, Equatable, Sendable {
     public var name: String
     public var modelCode: String?
     public var modelName: String?
+    public var developerModeBlocked: Bool?
     public var operatingSystemVersion: String?
 
     public init(id: String, name: String, modelCode: String? = nil, modelName: String? = nil, operatingSystemVersion: String? = nil) {

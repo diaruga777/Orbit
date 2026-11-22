@@ -121,14 +121,11 @@ without Apple sign-in, phone discovery, installation, networking or setup-state
 writes. It compiles the current `OrbitSetupView` and setup value types with inert
 fixture models into a separate accessory utility. The only view substitution is
 the disk-image path check, so the initial Install Orbit Mac screen can be shown
-without mounting a DMG. Continue enablement is extracted from the actual model.
+without mounting a DMG. It uses the production device metadata and setup gates.
 
-The 13 PNGs, browsable `index.html` and `manifest.json` go to `dist/setup-screenshots` (or the directory
-passed as the first argument). They cover the six steps, DMG installation, missing
-tools, first launch, private installer sign-in, detected accounts, and mock
-installation progress and success. All account/device/pairing values are fictional. Captures show the
-wizard content at 1000 × 740 points in light appearance, without window chrome.
-They are visual fixtures, not physical acceptance or proof of installation.
+The 13 PNGs, gallery and manifest go to `dist/setup-screenshots` or the supplied directory. They cover Mac installation, tools, signing and folder access, physical-device selection, iPhone and iPad artwork, older OS guidance, Developer Mode, installation progress and the QR handoff. The iPad and QR fixtures use the minimum 760 × 540 window. The iPad fixture uses dark appearance. All account and device data are fictional.
+
+The Simulator test `OrbitOptionalSetupUITests/testPairingLinkAsksBeforeSavingMac` opens a pairing link on cold and warm launch, cancels, and checks that the device still offers a new connection. Physical acceptance also requires scanning the displayed code with Camera, comparing the IDs and approving on the Mac.
 
 ## Physical acceptance
 

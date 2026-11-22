@@ -129,6 +129,10 @@ public actor OrbitSetup {
         }
         return version
     }
+    public func devices() async throws -> [CodeDevice] {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return try await CodeDeviceSupport.devicesForSetup(root: root)
+    }
     public func phoneReady(_ device: String) async throws -> Bool {
         guard !device.isEmpty, device.count <= 128 else { return false }
         let output = root.appendingPathComponent("device-check-" + UUID().uuidString + ".json")

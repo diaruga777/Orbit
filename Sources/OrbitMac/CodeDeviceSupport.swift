@@ -2,7 +2,7 @@ import Foundation
 import OrbitCore
 
 /// Xcode/CoreDevice commands only. No UI automation agent is installed on phones.
-enum CodeDeviceSupport {
+public enum CodeDeviceSupport {
     static func json(_ executable: String, _ arguments: [String], directory: String, root: URL,
                      process: CodeProcess = CodeProcess(), timeout: TimeInterval = 120, nonBuildableScheme: String? = nil,
                      diagnosticLog: URL? = nil) async throws -> Any {
@@ -127,7 +127,10 @@ enum CodeDeviceSupport {
         // collection (for example AllOrbitApps), not an individual app row.
         return delegate.appTargets.count > 1 ? nil : delegate.target
     }
-    static func devices(root: URL) async throws -> [CodeDevice] {
+    public static func devicesForSetup(root: URL) async throws -> [CodeDevice] {
+        try await devices(root: root, includeDeveloperModeBlocked: true)
+    }
+    static func devices(root: URL, includeDeveloperModeBlocked: Bool = false) async throws -> [CodeDevice] {
         let log = root.appendingPathComponent(UUID().uuidString + ".json")
         defer { try? FileManager.default.removeItem(at: log) }
         // CoreDevice's tunnel can be disconnected while Xcode still reports a
@@ -135,26 +138,32 @@ enum CodeDeviceSupport {
         // wireless build/install; requiring it here hides reachable phones.
         let status = try await CodeProcess().run("/usr/bin/xcrun", ["xcdevice", "list", "--timeout", "5"], directory: root.path, log: log, timeout: 30)
         try checkDeviceDiscoveryStatus(status, output: Data(contentsOf: log))
-        return try parseDevices(Data(contentsOf: log))
+        return try parseDevices(Data(contentsOf: log), includeDeveloperModeBlocked: includeDeveloperModeBlocked)
     }
     static func checkDeviceDiscoveryStatus(_ status: Int32, output: Data) throws {
         guard status == 0 else {
             throw CodeFailure("Xcode couldn’t look for iPhones. Open Xcode and finish any setup prompts, then try again.\n" + String(decoding: output.suffix(2000), as: UTF8.self))
         }
     }
-    static func parseDevices(_ data: Data) throws -> [CodeDevice] {
+    static func parseDevices(_ data: Data, includeDeveloperModeBlocked: Bool = false) throws -> [CodeDevice] {
         guard let devices = try parseJSONOutput(data) as? [[String: Any]] else {
             throw CodeFailure("Xcode returned no readable phone list. Check Xcode on the Mac, then try again.")
         }
         return devices.compactMap { device in
-            guard device["simulator"] as? Bool == false,
+            let error = device["error"] as? [String: Any]
+            let reason = [error?["description"], error?["recoverySuggestion"]].compactMap { $0 as? String }.joined(separator: " ")
+            let needsMode = reason.localizedCaseInsensitiveContains("developer mode")
+            let available = device["available"] as? Bool == true && device["error"] == nil
+            guard available || (includeDeveloperModeBlocked && needsMode),
+                  device["simulator"] as? Bool == false,
                   device["platform"] as? String == "com.apple.platform.iphoneos",
-                  device["available"] as? Bool == true, device["error"] == nil,
                   device["ignored"] as? Bool != true,
                   let id = device["identifier"] as? String, !id.isEmpty,
                   let name = device["name"] as? String, !name.isEmpty else { return nil }
-            return CodeDevice(id: id, name: name, modelCode: device["modelCode"] as? String,
+            var row = CodeDevice(id: id, name: name, modelCode: device["modelCode"] as? String,
                               modelName: device["modelName"] as? String, operatingSystemVersion: device["operatingSystemVersion"] as? String)
+            if needsMode { row.developerModeBlocked = true }
+            return row
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
     static func validateDestination(_ project: CodeProject, deviceID: String, root: URL, process: CodeProcess, diagnosticLog: URL) async throws {
