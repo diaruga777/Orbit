@@ -2,6 +2,20 @@ import XCTest
 import UIKit
 
 final class OrbitOptionalSetupUITests: XCTestCase {
+    func testPairingLinkAsksBeforeSavingMac() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--optional-setup-fixture", "none", "--reset-connection"]
+        let code = URL(string: "orbit://pair?device=" + String(repeating: "A", count: 52))!
+        app.open(code)
+        let confirmation = app.alerts["Connect to this Mac?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 10))
+        confirmation.buttons["Cancel"].tap()
+        XCTAssertTrue(app.cells.containing(.staticText, identifier: "Connect a Mac").firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Forget Mac"].exists)
+        app.open(code)
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 10))
+        confirmation.buttons["Cancel"].tap()
+    }
     func testDeliveredExpiryNotificationOpensSetupAfterTermination() {
         let app = XCUIApplication()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")

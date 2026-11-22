@@ -25,7 +25,7 @@ import UniformTypeIdentifiers
             }
             CommandGroup(after: .appSettings) {
                 Button("Show Client Logs") { NSWorkspace.shared.open(OrbitDiagnostics.defaultDirectory) }
-                Button("Setup…") { setup.state.finished = false; setup.state.step = .welcome; setup.persist() }
+                Button("Setup…") { setup.state.finished = false; setup.state.step = .mac; setup.persist() }.disabled(setup.busy || setup.installer.running)
             }
         }
         Settings {

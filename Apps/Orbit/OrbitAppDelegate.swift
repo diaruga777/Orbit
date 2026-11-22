@@ -172,7 +172,7 @@ import OrbitWire
             UserDefaults.standard.set(id, forKey: "Orbit.openApplet")
         }
         openAppletIfNeeded()
-        if let url = options.urlContexts.first?.url { openWidget(url) }
+        if let url = options.urlContexts.first?.url { open(url) }
         #if DEBUG && targetEnvironment(simulator)
         if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--script-inbox-fixture"), ProcessInfo.processInfo.arguments.count > index + 1 {
             let id = ProcessInfo.processInfo.arguments[index + 1]
@@ -182,9 +182,21 @@ import OrbitWire
         #endif
     }
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        if let url = URLContexts.first?.url { openWidget(url) }
+        if let url = URLContexts.first?.url { open(url) }
     }
-    private func openWidget(_ url: URL) {
+    private func open(_ url: URL) {
+        if url.scheme?.lowercased() == "orbit", url.host == "pair" {
+            guard url.absoluteString.utf8.count <= 8192, let code = try? OrbitPairingCode(string: url.absoluteString),
+                  let tabs = window?.rootViewController as? OrbitMainTabController,
+                  tabs.presentedViewController == nil,
+                  let more = tabs.destinations.last as? UINavigationController,
+                  let menu = more.viewControllers.first as? OrbitSettingsController else { return }
+            tabs.destinationIndex = 4
+            let controller = OrbitConnectionController(connection: connection)
+            controller.scannedCode = code
+            more.setViewControllers([menu, controller], animated: false)
+            return
+        }
         guard url.isFileURL else { return }
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -290,13 +302,14 @@ import OrbitWire
     }
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { connection.pairingCode.isEmpty ? 1 : 4 }
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        if connection.pairingCode.isEmpty { return "On your Mac, open Orbit → Apps → Connect a Phone to get a pairing code." }
+        if connection.pairingCode.isEmpty { return "Scan the code on your Mac with Camera, or paste it here." }
         return "Change the connection type in Orbit Mac → Settings."
             + (connection.localID.isEmpty ? "" : "\n\nThis phone: " + connection.localID)
     }
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.textLabel?.text = ["Connect a Mac", "Check Connection", "Authorize This Phone", "Forget Mac"][indexPath.row]
+        cell.imageView?.image = UIImage(systemName: ["link", "network", "checkmark.shield", "trash"][indexPath.row])
         if indexPath.row == 0, connection.peerID != "unpaired" {
             cell.detailTextLabel?.text = connection.connectionName ?? "Mac saved"
         }
@@ -313,13 +326,8 @@ import OrbitWire
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
             alert.addAction(UIAlertAction(title: "Connect", style: .default) { _ in
                 guard let text = alert.textFields?.first?.text else { return }
-                Task { do {
-                    _ = try OrbitPairingCode(string: text); self.connection.pairingCode = text
-                    try await self.connection.prepareIdentity(); self.tableView.reloadData()
-                    _ = try await self.connection.rpc("status")
-                    await self.connection.syncRoutes()
-                    self.tableView.reloadData(); self.message("Connected")
-                } catch { self.message(error.localizedDescription) } }
+                do { try self.connect(OrbitPairingCode(string: text)) }
+                catch { self.message(error.localizedDescription) }
             }); present(alert, animated: true)
         case 1: Task {
             do {
@@ -338,6 +346,29 @@ import OrbitWire
             })
             present(alert, animated: true)
         }
+    }
+    var scannedCode: OrbitPairingCode?
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard let code = scannedCode else { return }
+        scannedCode = nil
+        let replacing = connection.peerID != "unpaired" && connection.peerID != code.deviceID.description
+        let alert = UIAlertController(title: replacing ? "Replace your saved Mac?" : "Connect to this Mac?",
+                                      message: code.deviceID.description, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Connect", style: .default) { _ in self.connect(code) })
+        present(alert, animated: true)
+    }
+    private func connect(_ code: OrbitPairingCode) {
+        connection.pairingCode = code.text
+        Task { do {
+            try await connection.prepareIdentity()
+            tableView.reloadData()
+            _ = try await connection.rpc("status")
+            await connection.syncRoutes()
+            tableView.reloadData()
+            message("Connected")
+        } catch { message(error.localizedDescription) } }
     }
     func message(_ text: String) { let alert = UIAlertController(title: "Orbit", message: text, preferredStyle: .alert); alert.addAction(UIAlertAction(title: "OK", style: .default)); present(alert, animated: true) }
 }

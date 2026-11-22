@@ -27,6 +27,9 @@ targets:
       properties:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER).pair
+            CFBundleURLSchemes: [orbit]
         NSLocalNetworkUsageDescription: Orbit connects to your Mac to edit files and build apps.
         OrbitWidgetKeychainGroup: $(AppIdentifierPrefix)$(ORBIT_IOS_BUNDLE_IDENTIFIER)
         BGTaskSchedulerPermittedIdentifiers:

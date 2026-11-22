@@ -3,7 +3,27 @@ import Foundation
 public struct CodeDevice: Codable, Equatable, Sendable {
     public var id: String
     public var name: String
-    public init(id: String, name: String) { self.id = id; self.name = name }
+    public var modelCode: String?
+    public var modelName: String?
+    public var operatingSystemVersion: String?
+
+    public init(id: String, name: String, modelCode: String? = nil, modelName: String? = nil, operatingSystemVersion: String? = nil) {
+        self.id = id
+        self.name = name
+        self.modelCode = modelCode
+        self.modelName = modelName
+        self.operatingSystemVersion = operatingSystemVersion
+    }
+
+    public var isPad: Bool { (modelCode ?? modelName ?? "").hasPrefix("iPad") }
+    public var systemName: String { isPad ? "iPadOS" : "iOS" }
+    public var systemVersion: String? {
+        operatingSystemVersion?.split(separator: " ").first.map(String.init)
+    }
+    public var needsSystemUpdate: Bool {
+        guard let major = systemVersion?.split(separator: ".").first.flatMap({ Int($0) }) else { return false }
+        return major < 26
+    }
 }
 public struct CodeBuildApp: Codable, Equatable, Sendable {
     public var project: CodeProject

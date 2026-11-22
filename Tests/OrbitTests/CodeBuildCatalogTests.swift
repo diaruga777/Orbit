@@ -156,7 +156,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         Xcode device discovery warning [MT]
         [
           {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"wifi","name":"Wi-Fi Phone","interface":"network","available":true,"ignored":false},
-          {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"usb","name":"USB Phone","interface":"usb","available":true,"ignored":false},
+          {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"usb","name":"USB Phone","modelName":"iPad mini","modelCode":"iPad14,1","operatingSystemVersion":"18.4 (22E240)","interface":"usb","available":true,"ignored":false},
           {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"offline","name":"Old Phone","available":false,"error":{"description":"Phone is not connected"}},
           {"simulator":true,"platform":"com.apple.platform.iphonesimulator","identifier":"sim","name":"Simulator","available":true},
           {"simulator":false,"platform":"com.apple.platform.appletvos","identifier":"tv","name":"TV","available":true},
@@ -165,7 +165,14 @@ final class CodeBuildCatalogTests: XCTestCase {
           {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"unknown","name":"Unknown"}
         ]
         """.utf8)
-        XCTAssertEqual(try CodeDeviceSupport.parseDevices(data), [CodeDevice(id: "usb", name: "USB Phone"), CodeDevice(id: "wifi", name: "Wi-Fi Phone")])
+        let devices = try CodeDeviceSupport.parseDevices(data)
+        XCTAssertEqual(devices.map(\.id), ["usb", "wifi"])
+        XCTAssertEqual(devices[0].modelCode, "iPad14,1")
+        XCTAssertEqual(devices[0].systemName, "iPadOS")
+        XCTAssertEqual(devices[0].systemVersion, "18.4")
+        XCTAssertTrue(devices[0].needsSystemUpdate)
+        XCTAssertNil(devices[1].systemVersion)
+        XCTAssertFalse(devices[1].needsSystemUpdate)
     }
     func testDeviceDiscoveryDistinguishesEmptyListFromInvalidOutput() throws {
         XCTAssertEqual(try CodeDeviceSupport.parseDevices(Data("[]".utf8)), [])

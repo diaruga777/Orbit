@@ -5,46 +5,18 @@ import OrbitMac
 
 public enum OrbitSetupStep: String, CaseIterable, Codable, Sendable {
     // Old raw values remain decodable so interrupted setup can migrate.
-    public static let allCases: [Self] = [.welcome, .tools, .access, .account, .phone, .complete]
+    public static let allCases: [Self] = [.mac, .phone]
+    case mac, phone, welcome, tools, access, account, agents, install, connect, refresh, complete
+
     public var current: Self {
         switch self {
-        case .agents: return .access
-        case .install, .connect, .refresh: return .phone
-        default: return self
-        }
-    }
-    case welcome, tools, access, account, phone, agents, install, connect, refresh, complete
-    public var title: String {
-        switch self {
-        case .welcome: return "Welcome"
-        case .tools: return "Mac Tools"
-        case .access: return "Mac Access"
-        case .account: return "Apple Account"
-        case .phone: return "Your iPhone"
-        case .agents: return "AI Tools"
-        case .install: return "Install Orbit"
-        case .connect: return "Connect"
-        case .refresh: return "Phone Refresh"
-        case .complete: return "Ready"
-        }
-    }
-    public var symbol: String {
-        switch self {
-        case .welcome: return "sparkles"
-        case .tools: return "hammer"
-        case .access: return "folder.badge.gearshape"
-        case .account: return "person.crop.circle"
-        case .phone: return "iphone"
-        case .agents: return "terminal"
-        case .install: return "arrow.down.app"
-        case .connect: return "link"
-        case .refresh: return "arrow.clockwise"
-        case .complete: return "checkmark.circle"
+        case .welcome, .tools, .access, .account, .agents, .mac: return .mac
+        case .install, .connect, .refresh, .complete, .phone: return .phone
         }
     }
 }
 public struct OrbitSetupState: Codable, Sendable {
-    public var step: OrbitSetupStep = .welcome
+    public var step: OrbitSetupStep = .mac
     public var teamID = ""
     public var bundlePrefix = ""
     public var iosBundleID: String?

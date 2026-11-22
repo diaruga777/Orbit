@@ -18,19 +18,19 @@ final class OrbitSetupTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let setup = OrbitSetup(root: root)
-        for old in [OrbitSetupStep.agents, .install, .connect, .refresh] {
+        for old in [OrbitSetupStep.welcome, .tools, .access, .account, .agents, .install, .connect, .refresh, .complete] {
             var state = OrbitSetupState(); state.step = old
             state.bundlePrefix = "dev.orbit.keep"; state.installed = true
             state.installTargetID = "target"; state.installJobID = "job"
             try await setup.save(state)
             let restored = try await setup.load()
-            XCTAssertEqual(restored.step, old == .agents ? .access : .phone)
+            XCTAssertEqual(restored.step, [.welcome, .tools, .access, .account, .agents].contains(old) ? .mac : .phone)
             XCTAssertEqual(restored.bundlePrefix, "dev.orbit.keep")
             XCTAssertEqual(restored.installTargetID, "target")
             XCTAssertEqual(restored.installJobID, "job")
             XCTAssertTrue(restored.installed)
         }
-        XCTAssertEqual(OrbitSetupStep.allCases, [.welcome, .tools, .access, .account, .phone, .complete])
+        XCTAssertEqual(OrbitSetupStep.allCases, [.mac, .phone])
     }
     func testDefaultFolderAndGeneratedIdentityPersist() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

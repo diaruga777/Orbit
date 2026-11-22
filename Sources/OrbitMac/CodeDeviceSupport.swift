@@ -153,7 +153,8 @@ enum CodeDeviceSupport {
                   device["ignored"] as? Bool != true,
                   let id = device["identifier"] as? String, !id.isEmpty,
                   let name = device["name"] as? String, !name.isEmpty else { return nil }
-            return CodeDevice(id: id, name: name)
+            return CodeDevice(id: id, name: name, modelCode: device["modelCode"] as? String,
+                              modelName: device["modelName"] as? String, operatingSystemVersion: device["operatingSystemVersion"] as? String)
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
     static func validateDestination(_ project: CodeProject, deviceID: String, root: URL, process: CodeProcess, diagnosticLog: URL) async throws {
