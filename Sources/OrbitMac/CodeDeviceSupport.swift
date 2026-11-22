@@ -151,8 +151,8 @@ public enum CodeDeviceSupport {
         }
         return devices.compactMap { device in
             let error = device["error"] as? [String: Any]
-            let reason = [error?["description"], error?["recoverySuggestion"]].compactMap { $0 as? String }.joined(separator: " ")
-            let needsMode = reason.localizedCaseInsensitiveContains("developer mode")
+            let reason = (error?["description"] as? String)?.lowercased() ?? ""
+            let needsMode = ["developer mode disabled", "developer mode is disabled", "developer mode is turned off"].contains(where: reason.contains)
             let available = device["available"] as? Bool == true && device["error"] == nil
             guard available || (includeDeveloperModeBlocked && needsMode),
                   device["simulator"] as? Bool == false,

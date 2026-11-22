@@ -157,7 +157,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         [
           {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"wifi","name":"Wi-Fi Phone","interface":"network","available":true,"ignored":false},
           {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"usb","name":"USB Phone","modelName":"iPad mini","modelCode":"iPad14,1","operatingSystemVersion":"18.4 (22E240)","interface":"usb","available":true,"ignored":false},
-          {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"offline","name":"Old Phone","available":false,"error":{"description":"Phone is not connected"}},
+          {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"offline","name":"Old Phone","available":false,"error":{"description":"Phone is not connected","recoverySuggestion":"The device must be opted into Developer Mode to connect wirelessly."}},
           {"simulator":true,"platform":"com.apple.platform.iphonesimulator","identifier":"sim","name":"Simulator","available":true},
           {"simulator":false,"platform":"com.apple.platform.appletvos","identifier":"tv","name":"TV","available":true},
           {"simulator":false,"platform":"com.apple.platform.iphoneos","identifier":"broken","name":"Broken","available":true,"error":{"description":"Developer Mode disabled"}},

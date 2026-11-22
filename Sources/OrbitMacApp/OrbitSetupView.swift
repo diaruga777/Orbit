@@ -21,13 +21,16 @@ struct OrbitSetupView: View {
         if setup.state.installed { return "Orbit is installed" }
         return "Install Orbit"
     }
+    private var macArtwork: Image {
+        if let image = NSImage(named: NSImage.computerName) { return Image(nsImage: image) }
+        return Image(systemName: "desktopcomputer")
+    }
     private var hardware: Image {
-        if onMac, let image = NSImage(named: NSImage.computerName) { return Image(nsImage: image) }
+        if onMac { return macArtwork }
         if let modelCode = setup.selectedDevice?.modelCode,
            let type = UTType.types(tag: modelCode, tagClass: UTTagClass(rawValue: "com.apple.device-model-code"), conformingTo: nil).first(where: { $0.isDeclared }) {
             return Image(nsImage: NSWorkspace.shared.icon(for: type))
         }
-        if onMac { return Image(systemName: "desktopcomputer") }
         guard let device = setup.selectedDevice else { return Image(systemName: "ipad.and.iphone") }
         return Image(systemName: device.isPad ? "ipad" : "iphone")
     }
@@ -95,8 +98,14 @@ struct OrbitSetupView: View {
             guide("hammer", setup.tools.xcode ? "Finish installing the Mac build tools." : "Install Xcode to build Orbit.")
             OrbitToolInstallerView(installer: setup.installer, install: setup.installTools, check: setup.checkTools)
         } else if setup.teams.isEmpty && !setup.signingReady {
-            Text("Add your Apple Account in Xcode.").font(.headline)
-            guide("gearshape", "Settings", destination: "Accounts")
+            HStack(spacing: 12) {
+                let xcode = URL(fileURLWithPath: setup.tools.developerDirectory).deletingLastPathComponent().deletingLastPathComponent()
+                Image(nsImage: NSWorkspace.shared.icon(forFile: xcode.path)).resizable().frame(width: 48, height: 48).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Add your Apple Account in Xcode.").font(.headline)
+                    guide("gearshape", "Settings", destination: "Accounts")
+                }
+            }
             Button("Open Xcode", action: setup.openXcode).buttonStyle(.borderedProminent)
             Button("Check Again", action: setup.checkAccounts).disabled(setup.busy)
         } else {
@@ -138,7 +147,6 @@ struct OrbitSetupView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Scan with Camera", systemImage: "qrcode.viewfinder").font(.headline)
                         Text("Use the same Wi-Fi. Compare the device ID before approving on your Mac.")
-
                     }
                 }
             }
@@ -181,8 +189,13 @@ struct OrbitSetupView: View {
                 } else if setup.phoneReady == false { developerMode }
                 else { guide("lock.open", "Keep your \(deviceKind) unlocked.") }
             } else if setup.devices.isEmpty || !setup.state.deviceID.isEmpty {
-                guide("cable.connector", "Connect by cable and unlock your device.")
-                guide("hand.raised", "Tap Trust if asked.")
+                HStack(spacing: 16) {
+                    macArtwork.resizable().scaledToFit().frame(width: 66, height: 56)
+                    Image(systemName: "cable.connector.horizontal").font(.title).foregroundStyle(.secondary)
+                    Image(systemName: "ipad.and.iphone").font(.largeTitle)
+                }.accessibilityHidden(true)
+                Text("Connect by cable and unlock your device.").font(.headline)
+                guide("hand.raised", "Choose Trust on each device if asked.")
                 DisclosureGroup("Device missing?") { developerMode }
             }
             if !setup.discoveryError.isEmpty { Text(setup.discoveryError).foregroundStyle(.secondary).textSelection(.enabled) }
