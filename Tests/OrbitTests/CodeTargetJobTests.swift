@@ -31,10 +31,22 @@ final class CodeTargetJobTests: XCTestCase {
         XCTAssertEqual(try CodeJob.targetStatus(JSONEncoder().encode(job)), job)
         let target = CodeOvernightTarget(peerID: "mac", deviceID: "phone", project: CodeProject(path: "/tmp/App.xcodeproj", scheme: "App"), branch: "main", generation: "test")
         var retained = CodeOvernightJob(requestID: "r", invocationID: "i", target: target); retained.state = .building
+        job.commitHash = "081d85cd5369e6d36da6a574d6429621424dfdfc"
+        job.sourceBranch = "main"
+        job.includesLocalChanges = true
         var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(retained)) as! [String: Any]
         object["compilation"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(job)); object["log"] = job.log
         let decoded = try CodeJob.targetStatus(JSONSerialization.data(withJSONObject: object))
         XCTAssertEqual(decoded.id, retained.id); XCTAssertEqual(decoded.log, job.log)
         XCTAssertEqual(decoded.state, .running)
+        XCTAssertEqual(decoded.deviceBuildSourceSummary, "main · 081d85cd5369\nIncludes uncommitted changes from your Mac.")
+        XCTAssertNil(retained.monitoring().deviceBuildSourceSummary)
+        retained.state = .succeeded
+        retained.artifact = CodeBuildArtifact(id: "artifact", jobID: "direct", target: target, bundleID: "example.app",
+                                              version: "1", build: "2", commit: job.commitHash!, digest: "fixture",
+                                              signingAuthority: "fixture", byteCount: 1)
+        XCTAssertEqual(retained.monitoring().deviceBuildSourceSummary, "main · 081d85cd5369")
+        retained.artifact?.includesLocalChanges = true
+        XCTAssertEqual(retained.monitoring().deviceBuildSourceSummary, decoded.deviceBuildSourceSummary)
     }
 }

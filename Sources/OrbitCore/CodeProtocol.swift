@@ -84,6 +84,8 @@ public struct CodeJob: Codable, Equatable, Sendable {
     public var requestFingerprint: String?
     public var builtAt: Date?
     public var commitHash: String?
+    public var sourceBranch: String?
+    public var includesLocalChanges: Bool?
     public var artifact: CodeBuildArtifact?
     public var installation: CodeInstalledApp?
     public init(id: String, title: String, state: State = .running, log: String = "") {

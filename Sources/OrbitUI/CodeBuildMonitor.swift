@@ -284,7 +284,9 @@ import OrbitCore
         task.expirationHandler = nil
         let success = outcome != .failed && outcome != .cancelled
         switch outcome {
-        case .succeeded: task.updateTitle("Build completed", subtitle: "Open Orbit for details.")
+        case .succeeded:
+            let subtitle = job?.includesLocalChanges == true ? "Includes uncommitted changes." : "Open Orbit for details."
+            task.updateTitle("Build completed", subtitle: subtitle)
         case .failed: task.updateTitle("Build failed", subtitle: "Open Orbit for details.")
         case .cancelled: task.updateTitle("Build cancelled", subtitle: "Open Orbit for details.")
         case .handoff: task.updateTitle("Build complete", subtitle: "Updating Orbit…")

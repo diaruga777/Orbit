@@ -173,7 +173,7 @@ final class CodeEditorUITests: XCTestCase {
     func testAppsBuildShowsLiveProgressConsoleAndCompletion() {
         continueAfterFailure = false
         let app = XCUIApplication()
-        app.launchArguments = ["--target-build-preview"]
+        app.launchArguments = ["--target-build-preview", "--target-dirty-source"]
         app.launch()
         let row = app.cells["OrbitTarget:fixture"]
         XCTAssertTrue(row.waitForExistence(timeout: 15))
@@ -189,8 +189,11 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertEqual(heading.frame.midX, bar.frame.midX, accuracy: 3)
         XCTAssertLessThan(heading.frame.maxX, bar.buttons["Done"].frame.minX)
         XCTAssertTrue(app.staticTexts["Compile Feature.swift"].exists)
+        XCTAssertTrue(app.staticTexts["CodeBuildStatus"].label.contains("Includes uncommitted changes"))
         app.buttons["Show Console"].tap()
-        XCTAssertTrue(app.textViews["CodeBuildConsole"].value as? String == "Compile Feature.swift\nFixture build output\n")
+        let output = app.textViews["CodeBuildConsole"].value as? String ?? ""
+        XCTAssertTrue(output.contains("main · 081d85cd5369"))
+        XCTAssertTrue(output.contains("Compile Feature.swift\nFixture build output\n"))
         app.buttons["Hide Console"].tap()
         expectation(for: NSPredicate { _, _ in progress.value as? String != first }, evaluatedWith: nil)
         waitForExpectations(timeout: 6)
@@ -202,6 +205,8 @@ final class CodeEditorUITests: XCTestCase {
         row.tap()
         expectation(for: NSPredicate { _, _ in (app.textViews["OrbitTargetMessage"].value as? String ?? "").contains("Installed on your phone") }, evaluatedWith: nil)
         waitForExpectations(timeout: 20)
+        XCTAssertTrue((app.textViews["OrbitTargetMessage"].value as? String ?? "").contains("Includes uncommitted changes"))
+        XCTAssertEqual(app.buttons["OrbitTargetIssue:fixture"].label, "Uncommitted changes included for Fixture App")
         attach("Apps confirmed completion", app)
     }
     func testAppsBuildFailureIsVisibleAfterDismissingProgress() {

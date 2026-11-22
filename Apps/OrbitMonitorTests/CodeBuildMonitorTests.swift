@@ -46,8 +46,10 @@ import OrbitCore
         XCTAssertGreaterThan(task.progress.completedUnitCount, compiling)
         XCTAssertLessThan(task.progress.fractionCompleted, 1)
         job.state = .succeeded
+        job.includesLocalChanges = true
         monitor.accept(job)
         XCTAssertEqual(task.title, "Build completed")
+        XCTAssertEqual(task.subtitle, "Includes uncommitted changes.")
         XCTAssertEqual(task.progress.fractionCompleted, 1)
         XCTAssertEqual(scheduler.cancellations, 0)
     }

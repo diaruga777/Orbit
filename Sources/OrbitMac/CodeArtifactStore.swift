@@ -15,7 +15,8 @@ public struct CodeArtifactStore: Sendable {
         guard UUID(uuidString: id) != nil else { throw CodeFailure("Invalid artifact identifier.") }
         return root.appendingPathComponent(id).appendingPathComponent("Product.app")
     }
-    public func retain(app: URL, jobID: String, target: CodeOvernightTarget, commit: String, process: CodeProcess) async throws -> CodeBuildArtifact {
+    public func retain(app: URL, jobID: String, target: CodeOvernightTarget, commit: String,
+                       includesLocalChanges: Bool? = nil, process: CodeProcess) async throws -> CodeBuildArtifact {
         let plist = try Self.info(app)
         guard let bundle = plist["CFBundleIdentifier"] as? String, !bundle.lowercased().contains("webdriveragent"),
               let version = plist["CFBundleShortVersionString"] as? String, let build = plist["CFBundleVersion"] as? String else {
@@ -32,6 +33,7 @@ public struct CodeArtifactStore: Sendable {
             guard size <= quota, used <= quota - size else { throw CodeFailure("The retained build limit is full. Remove old builds on your Mac, then retry.") }
             var artifact = CodeBuildArtifact(id: id, jobID: jobID, target: target, bundleID: bundle, version: version,
                 build: build, commit: commit, digest: digest, signingAuthority: signing, byteCount: size)
+            artifact.includesLocalChanges = includesLocalChanges
             artifact.profileExpiresAt = try? await CodeProfileRefresh.expiration(app: product, root: root, process: process)
             let manifest = directory.appendingPathComponent("artifact.json")
             try JSONEncoder().encode(artifact).write(to: manifest, options: .atomic)

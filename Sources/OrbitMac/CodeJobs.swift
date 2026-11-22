@@ -86,6 +86,11 @@ public actor CodeJobs {
         job.artifact = artifact
         try persistRequired(job); jobs[id] = job
     }
+    func recordBuildSource(_ id: String, branch: String, revision: String, includesLocalChanges: Bool?) {
+        guard var job = jobs[id], job.state == .running else { return }
+        job.sourceBranch = branch; job.commitHash = revision; job.includesLocalChanges = includesLocalChanges
+        jobs[id] = job; persist(job)
+    }
     func recordCompilation(_ id: String, revision: String?) {
         guard var job = jobs[id] else { return }
         job.builtAt = Date(); job.commitHash = revision; jobs[id] = job; persist(job)
@@ -106,6 +111,9 @@ public actor CodeJobs {
                 let data = (try? handle.readToEnd()) ?? Data()
                 job.log = (length > 120_000 ? "Earlier output remains in the Mac job log.\n" : "") + String(decoding: data, as: UTF8.self) + job.log
             }
+        }
+        if let source = job.deviceBuildSourceSummary {
+            job.log = source + "\n\n" + job.log
         }
         return job
     }
@@ -245,6 +253,8 @@ public actor CodeJobs {
         completed.artifact = jobs[job.id]?.artifact
         completed.builtAt = jobs[job.id]?.builtAt
         completed.commitHash = jobs[job.id]?.commitHash
+        completed.sourceBranch = jobs[job.id]?.sourceBranch
+        completed.includesLocalChanges = jobs[job.id]?.includesLocalChanges
         completed.installHandoff = jobs[job.id]?.installHandoff
         completed.progress = jobs[job.id]?.progress
         if completed.progress?.stoppedAt == nil { completed.progress?.stoppedAt = Date() }

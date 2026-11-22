@@ -315,21 +315,25 @@ import OrbitTransport
         else if starting == id { status = "Starting on your Mac…" }
         else if let failure, !failure.isEmpty, !busy { status = failure }
         else if let job {
-            status = job.state == .running
+            let result = job.state == .running
                 ? job.progressStage + (job.progressDetail.map { "\n" + $0 } ?? "") + "\n" + (monitor?.backgroundMessage ?? "")
                 : job.state == .succeeded ? (row["mac"] == nil ? "Installed on your phone" : "Installed on your Mac") : job.failureMessage ?? "Build " + job.state.rawValue
+            status = job.deviceBuildSourceSummary.map { result + "\n\n" + $0 } ?? result
         } else { status = activeJob ? "Checking build status…" : nil }
         cell.accessibilityHint = schedule + ". Tap for app options."
         cell.accessibilityValue = busy ? status : nil
-        cell.issue.isHidden = busy || !(job?.state == .failed || failure?.isEmpty == false)
+        let failed = job?.state == .failed || failure?.isEmpty == false
+        let includesLocalChanges = job?.state == .succeeded && job?.includesLocalChanges == true
+        cell.issue.isHidden = busy || !(failed || includesLocalChanges)
+        cell.issue.tintColor = failed ? .systemRed : .systemOrange
         cell.issue.accessibilityIdentifier = "OrbitTargetIssue:" + id
-        cell.issue.accessibilityLabel = "Build issue for " + (row["name"] as? String ?? "app")
+        cell.issue.accessibilityLabel = (failed ? "Build issue for " : "Uncommitted changes included for ") + (row["name"] as? String ?? "app")
         cell.issue.removeAction(identifiedBy: UIAction.Identifier("issue"), for: .touchUpInside)
         cell.issue.addAction(UIAction(identifier: UIAction.Identifier("issue")) { [weak self] _ in self?.openTarget(id) }, for: .touchUpInside)
         if expandedTarget?.targetID == id {
             let text = status.flatMap { $0.isEmpty ? nil : $0 } ?? "No build issues."
             if expandedTarget?.message.text != text { expandedTarget?.message.text = text }
-            expandedTarget?.message.textColor = cell.issue.isHidden ? .secondaryLabel : .systemRed
+            expandedTarget?.message.textColor = failed && !busy ? .systemRed : .secondaryLabel
             expandedTarget?.setSchedule(schedule)
             expandedTarget?.logs.isEnabled = (row["jobID"] ?? row["lastJobID"]) is String
             expandedTarget?.cache.isEnabled = cachingTarget != id && row["mac"] == nil && (row["lastJobID"] ?? row["jobID"]) is String

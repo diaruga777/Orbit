@@ -66,10 +66,14 @@ Swift tests cover document version/conflict handling, SourceKit jobs, detached c
 
 `CodeBuildCatalogTests` checks that a local iOS workspace without Git uses its
 original path, preserves local files on cleanup, and records no commit. It also
-checks that a malformed Git worktree marker fails and that a dirty editor branch
-still builds the selected commit in a detached worktree. A generated-package
+checks that a malformed Git worktree marker fails and that local working files
+are applied to the selected commit in a detached worktree. Coverage includes
+staged and unstaged content, untracked files, binary edits, deletions, ignored
+local settings and unchanged index bytes. `CodeTargetJobTests` checks the retained
+job and artifact payloads preserve the base commit and local-edit notice. A generated-package
 fixture prepares an ignored nested Swift package before Xcode would run,
-verifies the committed recipe wins over editor changes, and checks cleanup and
+verifies the working recipe is used for a local build and the committed recipe
+is used for a fetched ref, and checks cleanup and
 console output on hook failure. A replay of Xcode's missing-package diagnostic
 checks the short summary and the full path in the job console.
 

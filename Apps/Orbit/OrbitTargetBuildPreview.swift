@@ -160,6 +160,11 @@ import OrbitTransport
         func status() -> CodeJob {
             var job = CodeJob(id: "fixture-job", title: "Build & Install · Fixture App")
             job.startedAt = start
+            if ProcessInfo.processInfo.arguments.contains("--target-dirty-source") {
+                job.sourceBranch = "main"
+                job.commitHash = "081d85cd5369e6d36da6a574d6429621424dfdfc"
+                job.includesLocalChanges = true
+            }
             let elapsed = max(0, Date().timeIntervalSince(start))
             let fraction = min(0.79, 0.25 + elapsed * 0.025)
             job.progress = CodeJobProgress(stage: "Compile Feature.swift", start: fraction, end: fraction, estimatedSeconds: 1, reportedFraction: fraction)

@@ -206,6 +206,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         XCTAssertEqual(checkout.directory.path, folder.path)
         XCTAssertEqual(checkout.project, project)
         XCTAssertNil(checkout.revision)
+        XCTAssertNil(checkout.includesLocalChanges)
         await checkout.remove(root: state)
         XCTAssertEqual(try String(contentsOf: localFile, encoding: .utf8), "local settings")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: state.path), [])
@@ -221,7 +222,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         }
     }
 
-    func testMainCheckoutPreservesDirtyEditorBranchAndCleansUp() async throws {
+    func testLocalCheckoutIncludesWorkingFilesAndPreservesEditorBranchAndIndex() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -240,20 +241,68 @@ final class CodeBuildCatalogTests: XCTestCase {
         try Data("main project".utf8).write(to: projectPath.appendingPathComponent("project.pbxproj"))
         let source = repository.appendingPathComponent("Source.swift")
         try Data("main source".utf8).write(to: source)
+        let binary = repository.appendingPathComponent("Binary")
+        try Data([0, 1, 2]).write(to: binary)
+        let deleted = repository.appendingPathComponent("Deleted.swift")
+        try Data("delete this".utf8).write(to: deleted)
+        try Data("Local.xcconfig\n".utf8).write(to: repository.appendingPathComponent(".gitignore"))
         _ = try await git(["add", "."]); _ = try await git(["commit", "-m", "main"])
+        let revision = try await git(["rev-parse", "HEAD"])
         _ = try await git(["checkout", "-b", "editor"])
-        try Data("unsaved Mac edits".utf8).write(to: source)
-        let originalStatus = try await git(["status", "--porcelain"])
-        let checkout = try await CodeDeviceCheckout.create(project: CodeProject(path: projectPath.path, scheme: "App"), branch: "main", root: state, name: UUID().uuidString)
-        XCTAssertEqual(try String(contentsOf: checkout.directory.appendingPathComponent("Source.swift"), encoding: .utf8), "main source")
+        try Data("editor-only commit".utf8).write(to: repository.appendingPathComponent("Editor.swift"))
+        _ = try await git(["add", "Editor.swift"])
+        _ = try await git(["commit", "-m", "Add file on editor branch"])
+        let editorRevision = try await git(["rev-parse", "HEAD"])
+        try Data("ignored settings".utf8).write(to: repository.appendingPathComponent("Local.xcconfig"))
+        let project = CodeProject(path: projectPath.path, scheme: "App")
+        let clean = try await CodeDeviceCheckout.create(project: project, branch: "main", root: state, name: "clean")
+        XCTAssertEqual(clean.includesLocalChanges, false)
+        await clean.remove(root: state)
+
+        try Data("new source".utf8).write(to: repository.appendingPathComponent("Extra source.swift"))
+
+        try Data("staged Mac edits".utf8).write(to: source)
+        _ = try await git(["add", "Source.swift"])
+        try Data("unstaged Mac edits".utf8).write(to: source)
+        try Data([0, 8, 9]).write(to: binary)
+        try FileManager.default.removeItem(at: deleted)
+        let originalStatus = try await git(["--no-optional-locks", "status", "--porcelain"])
+        let index = repository.appendingPathComponent(".git/index")
+        let originalIndex = try Data(contentsOf: index)
+        let checkout = try await CodeDeviceCheckout.create(project: project, branch: "main", root: state, name: UUID().uuidString)
+        XCTAssertEqual(checkout.revision, revision)
+        XCTAssertEqual(checkout.includesLocalChanges, true)
+        XCTAssertEqual(try Data(contentsOf: index), originalIndex)
+        XCTAssertEqual(try String(contentsOf: checkout.directory.appendingPathComponent("Source.swift"), encoding: .utf8), "unstaged Mac edits")
+        XCTAssertEqual(try String(contentsOf: checkout.directory.appendingPathComponent("Extra source.swift"), encoding: .utf8), "new source")
+        XCTAssertEqual(try Data(contentsOf: checkout.directory.appendingPathComponent("Binary")), Data([0, 8, 9]))
+        for name in ["Local.xcconfig", "Editor.swift", "Deleted.swift"] {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: checkout.directory.appendingPathComponent(name).path))
+        }
         XCTAssertTrue(FileManager.default.fileExists(atPath: checkout.project.path))
         let branch = try await git(["branch", "--show-current"])
         XCTAssertEqual(branch, "editor")
-        XCTAssertEqual(try String(contentsOf: source, encoding: .utf8), "unsaved Mac edits")
-        let status = try await git(["status", "--porcelain"])
+        XCTAssertEqual(try String(contentsOf: source, encoding: .utf8), "unstaged Mac edits")
+        let head = try await git(["rev-parse", "HEAD"])
+        XCTAssertEqual(head, editorRevision)
+        let status = try await git(["--no-optional-locks", "status", "--porcelain"])
         XCTAssertEqual(status, originalStatus)
         await checkout.remove(root: state)
         XCTAssertFalse(FileManager.default.fileExists(atPath: checkout.directory.path))
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: state.path).contains { $0.hasPrefix("LocalSource-") })
+
+        _ = try await git(["worktree", "add", "-b", "conflicting", state.appendingPathComponent("ConflictSource").path, revision])
+        let conflictSource = state.appendingPathComponent("ConflictSource")
+        try Data("branch changed this too".utf8).write(to: conflictSource.appendingPathComponent("Source.swift"))
+        _ = try await CodeDeviceSupport.git(["commit", "-am", "Conflicting source"], directory: conflictSource.path, root: state)
+        do {
+            _ = try await CodeDeviceCheckout.create(project: project, branch: "conflicting", root: state, name: "conflict")
+            XCTFail("Conflicting local changes must stop the build")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("Local changes don’t apply"))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: state.appendingPathComponent("Checkout-conflict").path))
+        XCTAssertEqual(try Data(contentsOf: index), originalIndex)
         do {
             _ = try await CodeDeviceCheckout.create(project: CodeProject(path: projectPath.path, scheme: "App"), branch: "--help", root: state, name: UUID().uuidString)
             XCTFail("Option-shaped refs must not become git options")
@@ -292,6 +341,7 @@ final class CodeBuildCatalogTests: XCTestCase {
         try files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
         _ = try await git(["add", "."])
         _ = try await git(["commit", "-m", "Prepare a generated package"])
+        _ = try await git(["update-ref", "refs/remotes/origin/main", "HEAD"])
         _ = try await git(["checkout", "-b", "editor"])
         try Data("dirty recipe".utf8).write(to: recipe)
         try Data("#!/bin/sh\necho 'Hook diagnostic' >&2\nexit 1\n".utf8).write(to: hook)
@@ -301,10 +351,16 @@ final class CodeBuildCatalogTests: XCTestCase {
         let source = CodeProject(path: project.path, scheme: "App")
         let checkout = try await CodeDeviceCheckout.create(project: source, branch: "main", root: state, name: "prepared")
         let relativePath = "Modules/Vendor/Local/Package.swift"
-        XCTAssertEqual(try String(contentsOf: checkout.directory.appendingPathComponent(relativePath), encoding: .utf8), "committed recipe")
+        XCTAssertEqual(try String(contentsOf: checkout.directory.appendingPathComponent(relativePath), encoding: .utf8), "dirty recipe")
+        XCTAssertEqual(checkout.includesLocalChanges, true)
         XCTAssertFalse(files.fileExists(atPath: repo.appendingPathComponent(relativePath).path))
         XCTAssertTrue(try String(contentsOf: state.appendingPathComponent("prepared.log"), encoding: .utf8).contains("Prepared the local package"))
         await checkout.remove(root: state)
+
+        let fetched = try await CodeDeviceCheckout.create(project: source, branch: "refs/remotes/origin/main", root: state, name: "remote")
+        XCTAssertEqual(try String(contentsOf: fetched.directory.appendingPathComponent(relativePath), encoding: .utf8), "committed recipe")
+        XCTAssertEqual(fetched.includesLocalChanges, false)
+        await fetched.remove(root: state)
 
         do {
             _ = try await CodeDeviceCheckout.create(project: source, branch: "editor", root: state, name: "failed")

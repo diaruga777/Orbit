@@ -375,7 +375,13 @@ Keep your app's bundle identifiers unique and configure its entitlements for you
 
 If a build reports **No Accounts**, check the selected team for the app and its extensions in Xcode. This error does not prove you’re signed out. **Missing Xcode-Token** means the build tools couldn’t load a saved signing session; check Xcode → Settings → Accounts on your Mac. Capability errors need a matching profile for the failing app or extension. For **App Groups**, use that target’s explicit App ID with its shared group enabled, then refresh automatic signing. A wildcard profile cannot supply App Groups. If the profile is missing **Siri**, refresh automatic signing for the app’s target in Xcode → Signing & Capabilities. Orbit names these capabilities on the phone and keeps the full Mac job log.
 
-Local iOS projects without Git build from the files saved in their folder on the Mac. For Git projects, commit the source you want to install. Orbit builds the selected branch in a detached worktree. Targets cloned by Orbit fetch the chosen GitHub branch before each fresh build without changing the checkout’s active branch.
+Local iOS projects without Git build from the files saved in their folder on the
+Mac. For local Git projects, Orbit applies saved uncommitted changes to a detached
+copy of the selected branch. The build sheet and Apps card show the base commit
+and warn when local changes were included. Git-ignored files stay out of the copy.
+If the edits conflict with the selected branch, choose the checkout’s branch or
+resolve the changes on the Mac before retrying. Orbit itself builds from committed
+source. Targets cloned by Orbit fetch and build the chosen GitHub branch.
 
 If your app needs generated files for Xcode to resolve packages, commit an
 executable `.orbit/prepare-build` script at the repository root. Orbit runs it

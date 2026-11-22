@@ -12,6 +12,10 @@ extension CodeJobs {
         let checkout = try await CodeDeviceCheckout.create(project: project, branch: options.branch, root: root,
             name: job.id, process: process, log: log)
         do {
+            if let revision = checkout.revision {
+                recordBuildSource(job.id, branch: options.branch, revision: revision,
+                                  includesLocalChanges: checkout.includesLocalChanges)
+            }
             stage(job.id, "Checking destination and signing…", from: 0.15, to: 0.25, seconds: 45)
             let buildProject = checkout.project
             if options.installOnly != true {
@@ -59,7 +63,8 @@ extension CodeJobs {
             if let target = options.artifactTarget {
                 guard plist?["CFBundleVersion"] as? String == artifactBuildNumber else { throw CodeFailure("The app’s Info.plist must use CURRENT_PROJECT_VERSION so overnight updates can be verified.") }
                 let store = try CodeArtifactStore(root: root.appendingPathComponent("Artifacts"))
-                let artifact = try await store.retain(app: appURL, jobID: job.id, target: target, commit: checkout.revision ?? "", process: process)
+                let artifact = try await store.retain(app: appURL, jobID: job.id, target: target,
+                    commit: checkout.revision ?? "", includesLocalChanges: checkout.includesLocalChanges, process: process)
                 try recordArtifact(job.id, artifact: artifact)
             } else {
             if options.requiresInstallHandoff(for: bundle) {
@@ -125,12 +130,13 @@ enum CodeDeviceSigning {
 struct CodeDeviceCheckout {
     let directory: URL
     let revision: String?
+    let includesLocalChanges: Bool?
     private let repository: String?
     let project: CodeProject
 
     static func usesProjectFolder(project: CodeProject, branch: String) -> Bool {
         // Orbit self-builds and fetched GitHub refs always require committed source.
-        guard !branch.hasPrefix("refs/remotes/"), !CodeOrbitIdentity.isOrbit(project),
+        guard CodeDeviceLocalChanges.supports(project: project, branch: branch),
               FileManager.default.fileExists(atPath: project.path) else { return false }
         var folder = URL(fileURLWithPath: project.path).resolvingSymlinksInPath().deletingLastPathComponent()
         while true {
@@ -146,7 +152,7 @@ struct CodeDeviceCheckout {
 
     static func create(project: CodeProject, branch: String, root: URL, name: String, process: CodeProcess = CodeProcess(), log: URL? = nil) async throws -> Self {
         if usesProjectFolder(project: project, branch: branch) {
-            return Self(directory: URL(fileURLWithPath: project.root), revision: nil, repository: nil, project: project)
+            return Self(directory: URL(fileURLWithPath: project.root), revision: nil, includesLocalChanges: nil, repository: nil, project: project)
         }
         let repository = try await CodeDeviceSupport.git(["rev-parse", "--show-toplevel"], directory: project.root, root: root, process: process)
         let source = URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path
@@ -162,7 +168,13 @@ struct CodeDeviceCheckout {
             throw error
         }
         selected.path = directory.appendingPathComponent(String(source.dropFirst(repo.count + 1))).path
+        var includesLocalChanges = false
         do {
+            let buildLog = log ?? root.appendingPathComponent(name + ".log")
+            if CodeDeviceLocalChanges.supports(project: project, branch: branch) {
+                includesLocalChanges = try await CodeDeviceLocalChanges.apply(from: repo, to: directory, root: root,
+                                                                             process: process, log: buildLog)
+            }
             if let prefix = selected.bundlePrefix, let team = selected.developmentTeam, let bundle = selected.iosBundleID,
                FileManager.default.fileExists(atPath: directory.appendingPathComponent("Config/Orbit.xcconfig").path) {
                 let local = directory.appendingPathComponent("Config/Local.xcconfig")
@@ -179,12 +191,13 @@ struct CodeDeviceCheckout {
                     }
                 }
             }
-            try await prepare(directory: directory, process: process, log: log ?? root.appendingPathComponent(name + ".log"))
+            try await prepare(directory: directory, process: process, log: buildLog)
         } catch {
             _ = try? await CodeDeviceSupport.git(["worktree", "remove", "--force", directory.path], directory: repo, root: root)
             throw error
         }
-        return Self(directory: directory, revision: revision, repository: repo, project: selected)
+        return Self(directory: directory, revision: revision, includesLocalChanges: includesLocalChanges,
+                    repository: repo, project: selected)
     }
     private static func prepare(directory: URL, process: CodeProcess, log: URL) async throws {
         let hook = directory.appendingPathComponent(".orbit/prepare-build")

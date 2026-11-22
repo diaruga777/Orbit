@@ -758,7 +758,9 @@ import OrbitCore
         }
         appTitle.text = title; actionTitle.isHidden = actionTitle.text == nil
         text.isHidden = !showConsole; summaryScroll.isHidden = showConsole
-        let output = value.log.isEmpty ? "Starting on your Mac…" : value.log
+        let log = value.log.isEmpty ? "Starting on your Mac…" : value.log
+        let source = value.deviceBuildSourceSummary
+        let output = source.map { log.hasPrefix($0) ? log : $0 + "\n\n" + log } ?? log
         if text.text != output { text.text = output }
         console.setTitle(showConsole ? "Hide Console" : "Show Console", for: .normal)
         progress.update(value)
@@ -766,7 +768,6 @@ import OrbitCore
         percent.text = value.state == .succeeded ? "100%" : (value.state == .running && value.progressDetail == nil ? "Waiting for build updates…" : nil)
         percent.isHidden = percent.text == nil
         progress.isHidden = value.state == .failed || value.state == .cancelled
-        detail.isHidden = value.state == .succeeded || value.state == .cancelled
         switch value.state {
         case .running:
             status.text = value.installHandoff == nil ? value.progressStage : "Build Complete — Updating Orbit"
@@ -777,6 +778,8 @@ import OrbitCore
             detail.text = value.failureMessage ?? "Your Mac couldn’t complete this job. Open the console for details."
         case .cancelled: status.text = "Build Cancelled"; detail.text = nil
         }
+        detail.text = [source, detail.text].compactMap { $0 }.joined(separator: "\n\n")
+        detail.isHidden = detail.text?.isEmpty != false
     }
 }
 #endif

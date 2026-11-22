@@ -1,6 +1,15 @@
 import Foundation
 
 extension CodeJob {
+    public var deviceBuildSourceSummary: String? {
+        guard let sourceBranch, let commitHash, !commitHash.isEmpty else { return nil }
+        let source = "\(sourceBranch) · \(commitHash.prefix(12))"
+        if includesLocalChanges == true {
+            return source + "\nIncludes uncommitted changes from your Mac."
+        }
+        return source
+    }
+
     /// The Host catalog has durable install jobs as well as direct build jobs.
     /// Keep compilation progress, but never call a compiled artifact installed.
     public static func targetStatus(_ data: Data) throws -> CodeJob {
@@ -25,6 +34,11 @@ extension CodeOvernightJob {
         job.installHandoff = installHandoff
         job.startedAt = acceptedAt; job.builtAt = builtAt; job.log = log
         job.failureMessage = error?.recovery
+        if let commit = artifact?.commit ?? compilation?.commitHash, !commit.isEmpty {
+            job.commitHash = commit
+            job.sourceBranch = compilation?.sourceBranch ?? target.branch
+            job.includesLocalChanges = artifact?.includesLocalChanges ?? compilation?.includesLocalChanges
+        }
         switch state {
         case .succeeded: job.state = .succeeded
         case .failed: job.state = .failed

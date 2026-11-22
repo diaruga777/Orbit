@@ -184,10 +184,12 @@ enum CodeDeviceSupport {
         }
         return false
     }
-    static func git(_ arguments: [String], directory: String, root: URL, process: CodeProcess = CodeProcess()) async throws -> String {
+    static func git(_ arguments: [String], directory: String, root: URL, process: CodeProcess = CodeProcess(),
+                    environment: [String: String] = [:]) async throws -> String {
         let log = root.appendingPathComponent(UUID().uuidString + ".log")
         defer { try? FileManager.default.removeItem(at: log) }
-        let status = try await process.run("/usr/bin/git", arguments, directory: directory, log: log, timeout: 60)
+        let status = try await process.run("/usr/bin/git", arguments, directory: directory, log: log, timeout: 60,
+                                           environmentOverrides: environment)
         let output = String(decoding: try Data(contentsOf: log), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard status == 0 else { throw CodeFailure("Git: " + output) }
         return output
