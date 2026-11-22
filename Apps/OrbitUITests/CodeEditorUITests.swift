@@ -344,14 +344,18 @@ final class CodeEditorUITests: XCTestCase {
         let textFrame = message.frame
         message.swipeUp()
         XCTAssertEqual(message.frame, textFrame)
-        for label in ["Refresh settings", "Cache build", "Remove App Target", "View Build Log", "Close app details"] {
+        for label in ["Settings", "Cache build", "Remove App Target", "View Build Log", "Close app details"] {
             XCTAssertTrue(app.buttons[label].exists)
             XCTAssertGreaterThanOrEqual(app.buttons[label].frame.minY, panel.frame.minY)
             XCTAssertLessThanOrEqual(app.buttons[label].frame.maxY, panel.frame.maxY)
         }
-        app.buttons["Refresh settings"].tap()
-        app.buttons["Every six days"].tap()
-        expectation(for: NSPredicate(format: "value CONTAINS '144'"), evaluatedWith: app.buttons["Refresh settings"])
+        app.buttons["Settings"].tap()
+        app.staticTexts["Every six days"].tap()
+        let selected = app.cells.containing(.staticText, identifier: "Every six days").firstMatch
+        expectation(for: NSPredicate(format: "selected == true"), evaluatedWith: selected)
+        waitForExpectations(timeout: 5)
+        app.navigationBars["Fixture App"].buttons["Done"].tap()
+        expectation(for: NSPredicate(format: "value CONTAINS '144'"), evaluatedWith: app.buttons["Settings"])
         waitForExpectations(timeout: 5)
         attach("Expanded card with long error and fixed controls", app)
         app.buttons["Close app details"].tap()
@@ -363,6 +367,29 @@ final class CodeEditorUITests: XCTestCase {
         XCTAssertTrue(panel.exists)
         app.buttons["Close app details"].tap()
         XCTAssertEqual(row.frame, original)
+    }
+
+    func testTargetSettingsFromLongPressRefreshesIcon() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--target-build-preview"]
+        app.launch()
+        let row = app.cells["OrbitTarget:fixture"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.press(forDuration: 1)
+        let settings = app.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let refresh = app.staticTexts["Refresh Icon"]
+        XCTAssertTrue(refresh.waitForExistence(timeout: 5))
+        refresh.tap()
+        XCTAssertTrue(app.staticTexts["Icon refreshed"].waitForExistence(timeout: 5))
+        attach("Per-app icon and build schedule settings", app)
+        app.navigationBars["Fixture App"].buttons["Done"].tap()
+        row.tap()
+        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 5))
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(refresh.waitForExistence(timeout: 5))
     }
 
     func testExpandedTargetKeepsControlsInLandscapeWithLargestText() {
@@ -388,7 +415,7 @@ final class CodeEditorUITests: XCTestCase {
         let message = app.textViews["OrbitTargetMessage"]
         XCTAssertGreaterThan(message.frame.height, 44)
         XCTAssertEqual(panel.images["OrbitTargetIcon"].frame.width, 60, accuracy: 1)
-        for label in ["Refresh settings", "Cache build", "Remove App Target", "View Build Log", "Close app details"] {
+        for label in ["Settings", "Cache build", "Remove App Target", "View Build Log", "Close app details"] {
             let control = app.buttons[label]
             XCTAssertTrue(control.exists)
             XCTAssertGreaterThanOrEqual(control.frame.minX, panel.frame.minX)
@@ -396,7 +423,7 @@ final class CodeEditorUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(control.frame.minY, panel.frame.minY)
             XCTAssertLessThanOrEqual(control.frame.maxY, panel.frame.maxY)
         }
-        XCTAssertLessThanOrEqual(message.frame.maxY, app.buttons["Refresh settings"].frame.minY)
+        XCTAssertLessThanOrEqual(message.frame.maxY, app.buttons["Settings"].frame.minY)
         Thread.sleep(forTimeInterval: 1)
         attach("Landscape expanded card at largest text size", app)
         app.buttons["Close app details"].tap()

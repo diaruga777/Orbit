@@ -240,10 +240,7 @@ public actor OrbitHost {
             if !updatingIcons {
                 updatingIcons = true
                 Task {
-                    await populateMissingTargetIcons { project in
-                        var request = CodeRequest(.apps, path: project.path); request.project = project
-                        return try await self.decoded(request).apps ?? []
-                    }
+                    await populateMissingTargetIcons(discover: self.discoverTargetApps)
                     updatingIcons = false
                 }
             }
@@ -332,6 +329,7 @@ public actor OrbitHost {
             if let error = response.error { throw CodeFailure(error) }
             return try object(response.devices ?? [])
         case "target_add": return try await add(p, peer: peer)
+        case "target_icon_refresh": return try await refreshTargetIcon(required(p, "id"))
         case "target_remove":
             return try await removeTarget(required(p, "id"))
         case "schedule":
@@ -467,7 +465,7 @@ public actor OrbitHost {
         if let error = response.error { throw CodeFailure(error) }
         guard let app = response.apps?.first(where: { $0.project.scheme == scheme }) else { throw CodeFailure("This scheme has no runnable iOS application. Choose a shared app scheme.") }
         if let index = targets.firstIndex(where: { $0.project.path == url.path && $0.project.scheme == scheme && $0.deviceID == device }) {
-            if let icon = app.iconPNG { targets[index].iconPNG = icon; try saveTargets() }
+            if let icon = app.iconPNG { applyTargetIcon(CodeBuildIcon(png: icon), at: index); try saveTargets() }
             return try object(targets[index])
         }
         let hours = p["intervalHours"] as? Int ?? 144
@@ -502,7 +500,7 @@ public actor OrbitHost {
             let existing = targets[index]
             guard existing.project.path == path, existing.project.scheme == scheme else { throw CodeFailure("Another target already owns this installation path.") }
             if let icon = OrbitMacAppIcon.png(path: deployment.installPath, bundleID: deployment.bundleID) {
-                targets[index].iconPNG = icon; try saveTargets()
+                applyTargetIcon(CodeBuildIcon(png: icon), at: index); try saveTargets()
             }
             return try object(targets[index])
         }
@@ -517,30 +515,60 @@ public actor OrbitHost {
         targets.append(target); try saveTargets()
         return try object(target)
     }
-    /// Backfill catalogs from before icons were retained. Failed/missing icons
-    /// never hide targets or invoke a build, and polling does not hammer Xcode.
+    private func discoverTargetApps(_ project: CodeProject) async throws -> [CodeBuildApp] {
+        var request = CodeRequest(.apps, path: project.path); request.project = project
+        return try await decoded(request).apps ?? []
+    }
+    private func refreshTargetIcon(_ id: String) async throws -> Any {
+        guard let target = targets.first(where: { $0.id == id }), !removingTargets.contains(id) else {
+            throw CodeFailure("App not found.")
+        }
+        let startedAt = Date()
+        let png: Data?
+        if let mac = target.mac {
+            png = OrbitMacAppIcon.png(path: mac.installPath, bundleID: mac.bundleID)
+        } else {
+            let apps = try await discoverTargetApps(target.project)
+            png = apps.first(where: { $0.project.path == target.project.path && $0.project.scheme == target.project.scheme })?.iconPNG
+        }
+        guard let png else { throw CodeFailure("Couldn’t find an icon for this app.") }
+        guard let index = targets.firstIndex(where: { $0.id == id }), !removingTargets.contains(id) else {
+            throw CodeFailure("App not found.")
+        }
+        let previous = targets[index]
+        if applyTargetIcon(CodeBuildIcon(png: png, updatedAt: startedAt), at: index) {
+            do { try saveTargets() }
+            catch { targets[index] = previous; throw error }
+        }
+        return try object(targets[index])
+    }
+    @discardableResult
+    private func applyTargetIcon(_ icon: CodeBuildIcon, at index: Int) -> Bool {
+        guard icon.updatedAt > (targets[index].iconUpdatedAt ?? .distantPast) else { return false }
+        targets[index].iconPNG = icon.png
+        targets[index].iconUpdatedAt = icon.updatedAt
+        return true
+    }
+    /// Fill in missing thumbnails on older catalogs without revisiting saved icons.
     func populateMissingTargetIcons(discover: (CodeProject) async throws -> [CodeBuildApp]) async {
         var changed = false
-        // Recheck installed Mac icons after updates, including older catalogs.
-        // Never invoke iOS project discovery for a Mac target.
-        for index in targets.indices {
-            guard let mac = targets[index].mac else { continue }
-            let key = "mac\u{0}" + mac.installPath
+        for target in targets where target.iconPNG == nil {
+            let key = target.mac.map { "mac\u{0}" + $0.installPath } ?? (target.project.path + "\u{0}" + target.project.scheme)
             guard Date().timeIntervalSince(iconLookups[key] ?? .distantPast) >= 300 else { continue }
             iconLookups[key] = Date()
-            if let icon = OrbitMacAppIcon.png(path: mac.installPath, bundleID: mac.bundleID), targets[index].iconPNG != icon {
-                targets[index].iconPNG = icon; changed = true
+            let png: Data?
+            if let mac = target.mac {
+                png = OrbitMacAppIcon.png(path: mac.installPath, bundleID: mac.bundleID)
+            } else {
+                let apps = try? await discover(target.project)
+                png = apps?.first(where: { $0.project.path == target.project.path && $0.project.scheme == target.project.scheme })?.iconPNG
             }
-        }
-        for target in targets where target.iconPNG == nil && target.mac == nil {
-            let key = target.project.path + "\u{0}" + target.project.scheme
-            guard Date().timeIntervalSince(iconLookups[key] ?? .distantPast) >= 300 else { continue }
-            iconLookups[key] = Date()
-            guard let apps = try? await discover(target.project),
-                  let icon = apps.first(where: { $0.project.path == target.project.path && $0.project.scheme == target.project.scheme })?.iconPNG else { continue }
-            // Discovery suspends this actor; a target may have been removed meanwhile.
-            for index in targets.indices where targets[index].project.path == target.project.path && targets[index].project.scheme == target.project.scheme {
-                targets[index].iconPNG = icon
+            guard let png else { continue }
+            // Discovery suspends this actor. Preserve newer manual/build results.
+            for index in targets.indices where targets[index].iconPNG == nil &&
+                (targets[index].id == target.id || (target.mac == nil && targets[index].mac == nil &&
+                    targets[index].project.path == target.project.path && targets[index].project.scheme == target.project.scheme)) {
+                targets[index].iconPNG = png
                 changed = true
             }
         }
@@ -687,8 +715,20 @@ public actor OrbitHost {
                         jobStates[jobID] = state
                         diagnostics.record("build", "state", ["job": jobID, "state": state])
                     }
+                    let compilationID = retained ? value["compilationJobID"] as? String : jobID
+                    let terminal = ["succeeded", "failed", "cancelled"].contains(state)
+                    let icon: CodeBuildIcon?
+                    if value["platform"] as? String == "macOS" {
+                        if terminal, let mac = targets.first(where: { $0.id == id })?.mac,
+                           let png = OrbitMacAppIcon.png(path: mac.installPath, bundleID: mac.bundleID) {
+                            icon = CodeBuildIcon(png: png)
+                        } else { icon = nil }
+                    } else if let compilationID {
+                        icon = await service.catalogBuildIcon(compilationID)
+                    } else { icon = nil }
                     guard !removingTargets.contains(id), let j = targets.firstIndex(where: { $0.id == id }), targets[j].jobID == jobID else { continue }
-                    if ["succeeded", "failed", "cancelled"].contains(state) {
+                    if let icon { applyTargetIcon(icon, at: j) }
+                    if terminal {
                         targets[j].jobID = nil
                         if state == "succeeded" { targets[j].lastSuccess = date; targets[j].failure = nil }
                         else { targets[j].failure = value["failureMessage"] as? String ?? (value["error"] as? [String: Any])?["recovery"] as? String ?? "The build did not finish. Check its job log." }

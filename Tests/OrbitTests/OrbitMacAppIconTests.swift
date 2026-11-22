@@ -5,7 +5,7 @@ import CoreGraphics
 import OrbitCore
 
 final class OrbitMacAppIconTests: XCTestCase {
-    func testInstalledIconBackfillsMacCatalogAndRefreshesAfterUpdate() async throws {
+    func testInstalledIconBackfillsMacCatalogAndRefreshesOnRequest() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let app = root.appendingPathComponent("Installed.app")
@@ -41,10 +41,18 @@ final class OrbitMacAppIconTests: XCTestCase {
         await restarted.populateMissingTargetIcons { _ in XCTFail("Mac icons must not query iOS schemes"); return [] }
         let response = await restarted.handle(Data(#"{"method":"targets"}"#.utf8))
         let result = try XCTUnwrap((JSONSerialization.jsonObject(with: response) as? [String: Any])?["result"] as? [[String: Any]])
-        let refreshed = try XCTUnwrap(result.first?["iconPNG"] as? String)
+        XCTAssertEqual(result.first?["iconPNG"] as? String, first.base64EncodedString())
+        let request = try JSONSerialization.data(withJSONObject: ["method": "target_icon_refresh", "params": ["id": target.id]])
+        let refreshedResponse = await restarted.handle(request)
+        let updated = try XCTUnwrap((JSONSerialization.jsonObject(with: refreshedResponse) as? [String: Any])?["result"] as? [String: Any])
+        let refreshed = try XCTUnwrap(updated["iconPNG"] as? String)
         XCTAssertNotEqual(refreshed, first.base64EncodedString())
         XCTAssertEqual(refreshed, OrbitMacAppIcon.png(path: app.path, bundleID: "test.installed.mac")?.base64EncodedString())
         try FileManager.default.removeItem(at: resources.appendingPathComponent("Vault.png"))
         XCTAssertNil(OrbitMacAppIcon.png(path: app.path, bundleID: "test.installed.mac"))
+        let missingResponse = await restarted.handle(request)
+        XCTAssertNotNil((try JSONSerialization.jsonObject(with: missingResponse) as? [String: Any])?["error"])
+        let persisted = try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: root.appendingPathComponent("targets.json")))
+        XCTAssertEqual(persisted.first?.iconPNG?.base64EncodedString(), refreshed)
     }
 }

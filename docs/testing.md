@@ -1054,6 +1054,15 @@ separate Simulator after another test run interrupted the shared device.
 No physical phone access, Apple sign-in, actual installation/renewal, public
 notarization or marketplace acceptance was performed.
 
+## Per-app icons and settings
+
+`CodeAppIconTests` covers two runnable targets that both name their icon
+`AppIcon`, target resource membership, and primary icon files in the built
+bundle. The Host tests cover persisted icon updates for direct and retained
+builds and preservation of newer manual updates. The Simulator Apps tests
+open Settings from the card and the long-press menu, refresh the icon, and
+change the build schedule using a synthetic Mac reply.
+
 ## Apps tile grid
 
 `testTargetListDisplaysIconsAndMissingImageFallbacks` checks equal-width columns,
@@ -1153,8 +1162,8 @@ phone-initiated self-build remain manual acceptance; Apple sign-in, provisioning
 renewal, public notarization and marketplace acceptance were not exercised.
 
 `OrbitMacAppIconTests` checks installed Mac icon thumbnails, bundle-ID matching,
-legacy catalog backfill, changed icons after restart, wire encoding and missing
-artwork. Mac catalog lookups never invoke iOS scheme discovery.
+legacy catalog backfill, manual icon refresh after restart, wire encoding and
+retention of the last thumbnail when artwork is missing. Mac catalog lookups never invoke iOS scheme discovery.
 
 
 ## Fixed Apps cards and expansion (2026-11-03)

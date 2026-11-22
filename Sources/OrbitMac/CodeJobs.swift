@@ -91,6 +91,12 @@ public actor CodeJobs {
         job.sourceBranch = branch; job.commitHash = revision; job.includesLocalChanges = includesLocalChanges
         jobs[id] = job; persist(job)
     }
+    func recordAppIcon(_ id: String, png: Data?) {
+        guard let png, var job = jobs[id], job.state == .running else { return }
+        job.appIcon = CodeBuildIcon(png: png)
+        jobs[id] = job; persist(job)
+    }
+    func appIcon(_ id: String) -> CodeBuildIcon? { jobs[id]?.appIcon }
     func recordCompilation(_ id: String, revision: String?) {
         guard var job = jobs[id] else { return }
         job.builtAt = Date(); job.commitHash = revision; jobs[id] = job; persist(job)
@@ -252,6 +258,7 @@ public actor CodeJobs {
         completed.installation = jobs[job.id]?.installation
         completed.artifact = jobs[job.id]?.artifact
         completed.builtAt = jobs[job.id]?.builtAt
+        completed.appIcon = jobs[job.id]?.appIcon
         completed.commitHash = jobs[job.id]?.commitHash
         completed.sourceBranch = jobs[job.id]?.sourceBranch
         completed.includesLocalChanges = jobs[job.id]?.includesLocalChanges

@@ -44,7 +44,7 @@ import OrbitTransport
                     if !added { try await Task.sleep(for: .seconds(7)) }
                     return added ? [Self.localTarget] : []
                 }
-                var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": await fixture.scheduled, "intervalHours": await fixture.intervalHours]
+                var row = await fixture.target()
                 if await fixture.started { row["jobID"] = "fixture-job" }
                 if ProcessInfo.processInfo.arguments.contains("--target-no-wifi") { row["failure"] = "Build requests: \(await fixture.buildRequests)" }
                 if ProcessInfo.processInfo.arguments.contains("--target-long-error"), !(await fixture.started) { row["failure"] = Self.longError }
@@ -90,7 +90,10 @@ import OrbitTransport
                 return Self.localTarget
             case "schedule":
                 await fixture.schedule(enabled: params["enabled"] as? Bool == true, hours: params["intervalHours"] as? Int ?? 144)
-                return ["ok": true]
+                return await fixture.target()
+            case "target_icon_refresh":
+                guard params["id"] as? String == "fixture" else { throw CodeFailure("Unexpected target") }
+                return await fixture.refreshIcon()
             case "target_remove": await fixture.remove(); return ["ok": true]
             case "build":
                 if ProcessInfo.processInfo.arguments.contains("--target-build-request-failure") { throw CodeFailure("Fixture build request failed. Try again when your Mac is ready.") }
@@ -122,8 +125,18 @@ import OrbitTransport
         }
         func addLocalApp() { addedLocalApp = true }
         func rejectLegacyAdd() { legacyAddRejected = true }
-        var scheduled = false
-        var intervalHours = 144
+        private var scheduled = false
+        private var intervalHours = 144
+        private var icon: String?
+        func target() -> [String: Any] {
+            var row: [String: Any] = ["id": "fixture", "name": "Fixture App", "enabled": scheduled, "intervalHours": intervalHours]
+            row["iconPNG"] = icon
+            return row
+        }
+        func refreshIcon() -> [String: Any] {
+            icon = UIImage(systemName: "star.fill")?.pngData()?.base64EncodedString()
+            return target()
+        }
         var removed = false
         func schedule(enabled: Bool, hours: Int) { scheduled = enabled; intervalHours = hours }
         private var stopped = false

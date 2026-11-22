@@ -23,9 +23,7 @@ public enum CodeProjectPreview {
     }
 
     private static func preview(project: URL, container: URL) -> [CodeBuildApp] {
-        guard let data = boundedData(project.appendingPathComponent("project.pbxproj")),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let objects = plist["objects"] as? [String: [String: Any]] else { return [] }
+        guard let objects = projectObjects(project) else { return [] }
         func settings(_ object: [String: Any]) -> [String: String] {
             guard let list = object["buildConfigurationList"] as? String,
                   let ids = objects[list]?["buildConfigurations"] as? [String] else { return [:] }
@@ -53,37 +51,17 @@ public enum CodeProjectPreview {
                 guard runnable == name || (runnable == nil && scheme == name) else { continue }
                 let projectValue = CodeProject(path: container.path, scheme: scheme)
                 var row = CodeBuildApp(project: projectValue, name: name, bundleID: config["PRODUCT_BUNDLE_IDENTIFIER"] ?? "")
-                row.iconPNG = icon(target: target, objects: objects, settings: config, project: projectValue)
+                row.iconPNG = CodeAppIcon.png(target: target, objects: objects, settings: config, root: project.deletingLastPathComponent())
                 row.branch = branch(at: project.deletingLastPathComponent())
                 rows.append(row)
             }
         }
         return rows
     }
-    private static func icon(target: [String: Any], objects: [String: [String: Any]], settings: [String: String], project: CodeProject) -> Data? {
-        guard let name = settings["ASSETCATALOG_COMPILER_APPICON_NAME"] else { return nil }
-        let root = URL(fileURLWithPath: settings["SRCROOT"] ?? project.root)
-        func location(_ id: String, visited: Set<String> = []) -> URL? {
-            guard !visited.contains(id), let object = objects[id] else { return nil }
-            let path = object["path"] as? String ?? ""
-            if object["sourceTree"] as? String == "SOURCE_ROOT" { return root.appendingPathComponent(path) }
-            if object["sourceTree"] as? String == "<absolute>" { return URL(fileURLWithPath: path) }
-            let parent = objects.first { ($0.value["children"] as? [String])?.contains(id) == true }?.key
-            return (parent.flatMap { location($0, visited: visited.union([id])) } ?? root).appendingPathComponent(path)
-        }
-        let phases = (target["buildPhases"] as? [String] ?? []).compactMap { objects[$0] }.filter { $0["isa"] as? String == "PBXResourcesBuildPhase" }
-        let resources = phases.flatMap { $0["files"] as? [String] ?? [] }.compactMap { objects[$0]?["fileRef"] as? String }
-        for id in resources {
-            if let url = location(id), url.pathExtension == "xcassets",
-               let png = CodeAppIcon.png(iconSet: url.appendingPathComponent(name + ".appiconset")) { return png }
-        }
-        for id in target["fileSystemSynchronizedGroups"] as? [String] ?? [] {
-            if let url = location(id) {
-                var scoped = settings; scoped["SRCROOT"] = url.path
-                if let png = CodeAppIcon.png(settings: scoped, project: project) { return png }
-            }
-        }
-        return CodeAppIcon.png(settings: settings, project: project)
+    static func projectObjects(_ project: URL) -> [String: [String: Any]]? {
+        guard let data = boundedData(project.appendingPathComponent("project.pbxproj")),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else { return nil }
+        return plist["objects"] as? [String: [String: Any]]
     }
     private static func schemeNames(_ container: URL) -> [String] {
         var folders = [container.appendingPathComponent("xcshareddata/xcschemes")]

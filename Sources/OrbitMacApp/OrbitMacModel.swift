@@ -120,6 +120,16 @@ import UniformTypeIdentifiers
         catch { macUpdate["failure"] = error.localizedDescription }
         await refreshScripts()
     }
+    func updateTargetSettings(id: String, method: String, params: [String: Any]) async throws {
+        let result = try await rpc(method, params)
+        guard let row = result as? [String: Any], row["id"] as? String == id,
+              let index = targets.firstIndex(where: { $0["id"] as? String == id }) else {
+            throw NSError(domain: "Orbit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Couldn’t confirm the change. Try again."])
+        }
+        targetRevision += 1
+        let keys = method == "target_icon_refresh" ? ["iconPNG"] : ["enabled", "intervalHours"]
+        for key in keys { targets[index][key] = row[key] }
+    }
     func rebuildMac() {
         guard !startingMacUpdate else { return }
         startingMacUpdate = true

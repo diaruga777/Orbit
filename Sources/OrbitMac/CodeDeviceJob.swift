@@ -32,6 +32,7 @@ extension CodeJobs {
             }
             try CodeOrbitIdentity.verify(bundleID: bundle, project: buildProject,
                 phoneBundleID: phoneBundleID, monitorBundleID: options.monitorBundleID)
+            recordAppIcon(job.id, png: CodeAppIcon.png(settings: app, project: buildProject))
             var localApp: [String: String]?
             if checkout.revision != nil, CodeDeviceSigning.team(app) == nil {
                 // Git worktrees omit ignored local signing configuration. Resolve
@@ -58,10 +59,11 @@ extension CodeJobs {
             let appURL = products.appendingPathComponent(product)
             // Read the actual built product so scheme dependencies cannot change the install target.
             let plist = try PropertyListSerialization.propertyList(from: Data(contentsOf: appURL.appendingPathComponent("Info.plist")), format: nil) as? [String: Any]
-            guard plist?["CFBundleIdentifier"] as? String == bundle else { throw CodeFailure("The built app does not match the selected scheme.") }
+            guard let plist, plist["CFBundleIdentifier"] as? String == bundle else { throw CodeFailure("The built app does not match the selected scheme.") }
+            recordAppIcon(job.id, png: CodeAppIcon.png(builtApp: appURL, info: plist))
             try await CodeProfileRefresh.verify(app: appURL, minimumHours: project.minimumProfileHours, root: root, process: process)
             if let target = options.artifactTarget {
-                guard plist?["CFBundleVersion"] as? String == artifactBuildNumber else { throw CodeFailure("The app’s Info.plist must use CURRENT_PROJECT_VERSION so overnight updates can be verified.") }
+                guard plist["CFBundleVersion"] as? String == artifactBuildNumber else { throw CodeFailure("The app’s Info.plist must use CURRENT_PROJECT_VERSION so overnight updates can be verified.") }
                 let store = try CodeArtifactStore(root: root.appendingPathComponent("Artifacts"))
                 let artifact = try await store.retain(app: appURL, jobID: job.id, target: target,
                     commit: checkout.revision ?? "", includesLocalChanges: checkout.includesLocalChanges, process: process)
@@ -80,12 +82,12 @@ extension CodeJobs {
                 throw CodeFailure("The app built, but installation failed. Unlock your phone, check its connection to Xcode, then try again. See the Mac job log for details.")
             }
             let installer = CodeNativeInstaller(logs: root)
-            guard let version = plist?["CFBundleShortVersionString"] as? String, let build = plist?["CFBundleVersion"] as? String,
+            guard let version = plist["CFBundleShortVersionString"] as? String, let build = plist["CFBundleVersion"] as? String,
                   try await installer.confirm(bundleID: bundle, version: version, build: build, deviceID: options.deviceID, process: process) else {
                 throw CodeFailure("The installation hasn’t been confirmed on your phone. Check its connection before trying again.")
             }
             let installed = CodeInstalledApp(deviceID: options.deviceID, bundleID: bundle,
-                name: plist?["CFBundleDisplayName"] as? String ?? plist?["CFBundleName"] as? String ?? project.scheme,
+                name: plist["CFBundleDisplayName"] as? String ?? plist["CFBundleName"] as? String ?? project.scheme,
                 version: version, build: build, installedAt: Date(),
                 profileExpiresAt: try? await CodeProfileRefresh.expiration(app: appURL, root: root, process: process))
             try recordInstallation(job.id, app: installed)

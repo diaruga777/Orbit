@@ -40,6 +40,40 @@ final class OrbitHostTests: XCTestCase {
         XCTAssertEqual(result[1]["iconPNG"] as? String, icon.base64EncodedString())
         XCTAssertNil(result[2]["iconPNG"])
     }
+    func testBuildIconsUpdateCatalogEvenWhenInstallFailsAndSkipOlderResults() async throws {
+        let root = temporary(); defer { try? FileManager.default.removeItem(at: root) }
+        let jobs = root.appendingPathComponent("Builds/Jobs")
+        try FileManager.default.createDirectory(at: jobs, withIntermediateDirectories: true)
+        let store = try CodeOvernightStore(root: root.appendingPathComponent("Builds/Overnight"))
+        let project = CodeProject(path: "/repo/App.xcodeproj", scheme: "App")
+        var rows: [OrbitTarget] = []
+        for (name, retained) in [("direct", false), ("retained", true), ("newer-manual", false)] {
+            var target = OrbitTarget(name: name, project: project, deviceID: "phone")
+            target.iconPNG = Data([1])
+            if name == "newer-manual" { target.iconUpdatedAt = Date() }
+            var compilation = CodeJob(id: UUID().uuidString, title: name, state: .failed)
+            compilation.appIcon = CodeBuildIcon(png: Data([2]), updatedAt: Date(timeIntervalSinceNow: -5))
+            try JSONEncoder().encode(compilation).write(to: jobs.appendingPathComponent(compilation.id + ".json"))
+            if retained {
+                let identity = CodeOvernightTarget(peerID: "orbit-mac", deviceID: "phone", project: project, branch: "main", generation: target.id)
+                var job = CodeOvernightJob(requestID: "retained", invocationID: "retained", target: identity)
+                job.compilationJobID = compilation.id; job.state = .failed
+                try store.save(job)
+                target.jobID = job.id
+            } else {
+                target.jobID = compilation.id
+            }
+            target.jobKind = retained ? "retained" : "build"
+            rows.append(target)
+        }
+        let catalog = root.appendingPathComponent("targets.json")
+        try JSONEncoder().encode(rows).write(to: catalog)
+        let host = try OrbitHost(root: root)
+        await host.tick()
+        let saved = try JSONDecoder().decode([OrbitTarget].self, from: Data(contentsOf: catalog))
+        XCTAssertEqual(saved.map(\.iconPNG), [Data([2]), Data([2]), Data([1])])
+        XCTAssertTrue(saved.allSatisfy { $0.jobID == nil && $0.lastSuccess == nil && $0.failure != nil })
+    }
     func testSixDayCadenceDependsOnConfirmedInstallation() {
         let now = Date(timeIntervalSince1970: 2000000)
         var target = OrbitTarget(name: "App", project: CodeProject(path: "/repo/App.xcodeproj", scheme: "App"), deviceID: "phone", enabled: true)

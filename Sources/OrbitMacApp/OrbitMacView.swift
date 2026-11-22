@@ -8,6 +8,7 @@ struct OrbitMacView: View {
     @AppStorage("Orbit.dismissedExtraSetup") private var dismissedExtraSetup = false
     @State private var showExtraSetup = false
     @State private var buildLog: BuildLog?
+    @State private var appSettings: AppSettings?
     var body: some View {
         VStack(spacing: 0) {
             if !dismissedExtraSetup {
@@ -67,7 +68,9 @@ struct OrbitMacView: View {
                             }
                             HStack {
                                 Button(app["mac"] != nil ? "Build and Open" : "Build and Install") { Task { do { _ = try await model.rpc("build", ["id": app["id"] ?? ""]); await model.refresh() } catch { model.status = error.localizedDescription } } }
-                                Button(app["enabled"] as? Bool == true ? "Pause" : "Enable Refreshes") { Task { do { _ = try await model.rpc("schedule", ["id": app["id"] ?? "", "enabled": !(app["enabled"] as? Bool ?? false)]); await model.refresh() } catch { model.status = error.localizedDescription } } }
+                                if let id = app["id"] as? String {
+                                    Button("Settings") { appSettings = AppSettings(id: id) }
+                                }
                                 if let job = (app["jobID"] ?? app["lastJobID"]) as? String {
                                     Button("Show Log") { Task { do {
                                         let result = try await model.rpc("job", ["id": job]) as? [String: Any] ?? [:]
@@ -76,6 +79,11 @@ struct OrbitMacView: View {
                                 }
                             }
                         }.padding().frame(maxWidth: .infinity, alignment: .leading).background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                        .contextMenu {
+                            if let id = app["id"] as? String {
+                                Button("Settings", systemImage: "gearshape") { appSettings = AppSettings(id: id) }
+                            }
+                        }
                     }
                 }.padding().frame(maxWidth: .infinity, alignment: .leading)
             }.tabItem { Label("Apps", systemImage: "apps.iphone") }.tag("apps")
@@ -84,6 +92,9 @@ struct OrbitMacView: View {
         }
         .toolbar { Button("Phone & Remote Setup") { showExtraSetup = true } }
         .sheet(isPresented: $showExtraSetup) { OrbitExtraSetupView(setup: setup, model: model) }
+        .sheet(item: $appSettings) { settings in
+            OrbitMacTargetSettings(model: model, id: settings.id)
+        }
         .sheet(item: $buildLog) { log in
             VStack(alignment: .leading, spacing: 16) {
                 Text("\(log.name) build log").font(.title2.bold())
@@ -99,6 +110,7 @@ struct OrbitMacView: View {
             }.padding(24).frame(width: 580, height: 400)
         }
     }
+    private struct AppSettings: Identifiable { let id: String }
     private struct BuildLog: Identifiable {
         let id: String
         let name: String
@@ -115,5 +127,58 @@ struct OrbitMacView: View {
         .frame(width: 44, height: 44)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityHidden(true)
+    }
+}
+
+private struct OrbitMacTargetSettings: View {
+    @ObservedObject var model: OrbitMacModel
+    @Environment(\.dismiss) private var dismiss
+    let id: String
+    @State private var saving = false
+    @State private var iconStatus: String?
+    @State private var failure: String?
+
+    var body: some View {
+        if let app = model.targets.first(where: { $0["id"] as? String == id }) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(app["name"] as? String ?? "App Settings").font(.title2.bold())
+                Toggle("Scheduled builds", isOn: Binding(get: { app["enabled"] as? Bool == true }, set: { enabled in
+                    update("schedule", params: ["id": id, "enabled": enabled])
+                }))
+                .disabled(saving)
+                if app["enabled"] as? Bool == true {
+                    Text("Every \(app["intervalHours"] ?? 144) hours").foregroundStyle(.secondary)
+                }
+                Divider()
+                HStack {
+                    Button("Refresh Icon", systemImage: "arrow.clockwise") { update("target_icon_refresh", params: ["id": id]) }
+                        .disabled(saving)
+                    if let iconStatus { Text(iconStatus).foregroundStyle(.secondary) }
+                }
+                if let failure { Text(failure).foregroundStyle(.red) }
+                HStack {
+                    Spacer()
+                    Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                }
+            }.padding(24).frame(minWidth: 360)
+        } else {
+            Button("Done") { dismiss() }.padding(24)
+        }
+    }
+
+    private func update(_ method: String, params: [String: Any]) {
+        saving = true; failure = nil
+        let refreshingIcon = method == "target_icon_refresh"
+        if refreshingIcon { iconStatus = "Refreshing…" }
+        Task {
+            defer { saving = false }
+            do {
+                try await model.updateTargetSettings(id: id, method: method, params: params)
+                if refreshingIcon { iconStatus = "Icon refreshed" }
+            } catch {
+                if refreshingIcon { iconStatus = nil }
+                failure = error.localizedDescription
+            }
+        }
     }
 }

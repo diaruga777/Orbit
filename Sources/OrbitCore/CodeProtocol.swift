@@ -69,6 +69,15 @@ public struct CodeCompletion: Codable, Equatable, Sendable {
         self.label = label; self.detail = detail; self.text = text; self.start = start; self.end = end
     }
 }
+public struct CodeBuildIcon: Codable, Equatable, Sendable {
+    public let png: Data
+    public let updatedAt: Date
+
+    public init(png: Data, updatedAt: Date = Date()) {
+        self.png = png; self.updatedAt = updatedAt
+    }
+}
+
 public struct CodeJob: Codable, Equatable, Sendable {
     public enum State: String, Codable, Sendable { case running, succeeded, failed, cancelled }
     public var id: String
@@ -83,6 +92,7 @@ public struct CodeJob: Codable, Equatable, Sendable {
     public var requestID: String?
     public var requestFingerprint: String?
     public var builtAt: Date?
+    public var appIcon: CodeBuildIcon?
     public var commitHash: String?
     public var sourceBranch: String?
     public var includesLocalChanges: Bool?

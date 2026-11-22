@@ -76,11 +76,11 @@ import OrbitUI
 }
 
 @MainActor final class OrbitTargetDetailController: UIViewController, UIViewControllerTransitioningDelegate {
-    enum Action { case schedule, cache, logs, remove, cancel }
+    enum Action { case settings, cache, logs, remove, cancel }
     let targetID: String
     let card = OrbitTargetCard()
     let message = UITextView()
-    let schedule = UIButton(type: .system)
+    let settingsButton = UIButton(type: .system)
     let cache = UIButton(type: .system)
     let logs = UIButton(type: .system)
     let cancel = UIButton(type: .system)
@@ -109,7 +109,7 @@ import OrbitUI
         message.layer.cornerRadius = 12; message.textContainerInset = UIEdgeInsets(top: 12, left: 8, bottom: 12, right: 8)
         message.font = .preferredFont(forTextStyle: .body); message.adjustsFontForContentSizeCategory = true
         message.accessibilityIdentifier = "OrbitTargetMessage"
-        configure(schedule, title: "Refresh settings", symbol: "clock.arrow.circlepath", action: .schedule)
+        configure(settingsButton, title: "Settings", symbol: "gearshape", action: .settings)
         configure(cache, title: "Cache build", symbol: "arrow.down.circle", action: .cache)
         configure(logs, title: "View Build Log", symbol: "doc.text.magnifyingglass", action: .logs, iconOnly: true)
         configure(remove, title: "Remove App Target", symbol: "trash", action: .remove, iconOnly: true)
@@ -118,7 +118,7 @@ import OrbitUI
         close.configuration = .plain(); close.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
         close.tintColor = .secondaryLabel; close.accessibilityLabel = "Close app details"
         close.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .touchUpInside)
-        settings.addArrangedSubview(schedule); settings.addArrangedSubview(cache)
+        settings.addArrangedSubview(settingsButton); settings.addArrangedSubview(cache)
         settings.distribution = .fillEqually; settings.spacing = 8
         for child in [remove, UIView(), cancel, logs] { actions.addArrangedSubview(child) }
         actions.spacing = 8
@@ -141,8 +141,8 @@ import OrbitUI
         button.addAction(UIAction { [weak self] _ in self?.onAction?(action) }, for: .touchUpInside)
     }
     func setSchedule(_ text: String) {
-        schedule.accessibilityValue = text
-        schedule.configuration?.subtitle = text.replacingOccurrences(of: "Refreshes every ", with: "Every ")
+        settingsButton.accessibilityValue = text
+        settingsButton.configuration?.subtitle = text.replacingOccurrences(of: "Refreshes every ", with: "Every ")
             .replacingOccurrences(of: " hours", with: "hr").replacingOccurrences(of: "Manual builds", with: "Manual")
     }
     override func viewDidLayoutSubviews() {
@@ -231,6 +231,98 @@ import OrbitUI
             let completed = !context.transitionWasCancelled
             if !self.presenting && completed { card.removeFromSuperview() }
             context.completeTransition(completed)
+        }
+    }
+}
+
+
+@MainActor final class OrbitTargetSettingsController: UITableViewController {
+    typealias Update = (_ method: String, _ params: [String: Any]) async throws -> [String: Any]
+
+    let targetID: String
+    private var target: [String: Any]
+    private let update: Update
+    private var saving = false
+    private var iconStatus: String?
+    private let schedules = [("Manual builds", false, 144), ("Every day", true, 24),
+                             ("Every three days", true, 72), ("Every six days", true, 144)]
+
+    init(targetID: String, target: [String: Any], update: @escaping Update) {
+        self.targetID = targetID; self.target = target; self.update = update
+        super.init(style: .insetGrouped)
+        title = target["name"] as? String ?? "App Settings"
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        tableView.accessibilityIdentifier = "OrbitTargetSettings"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: UIAction { [weak self] _ in
+            self?.dismiss(animated: true)
+        })
+    }
+
+    override func numberOfSections(in tableView: UITableView) -> Int { 2 }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        section == 0 ? 1 : schedules.count
+    }
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        section == 0 ? "App Icon" : "Build Schedule"
+    }
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = UITableViewCell()
+        cell.accessibilityTraits.insert(.button)
+        var content = UIListContentConfiguration.subtitleCell()
+        if indexPath.section == 0 {
+            content.text = "Refresh Icon"
+            content.secondaryText = iconStatus
+            content.image = (target["iconPNG"] as? String).flatMap { Data(base64Encoded: $0) }
+                .flatMap { UIImage(data: $0) } ?? UIImage(systemName: "app.dashed")
+            content.imageProperties.maximumSize = CGSize(width: 32, height: 32)
+            content.imageProperties.cornerRadius = 7
+        } else {
+            let (title, enabled, hours) = schedules[indexPath.row]
+            content.text = title
+            let selected = enabled == (target["enabled"] as? Bool == true) &&
+                (!enabled || target["intervalHours"] as? Int == hours)
+            cell.accessoryType = selected ? .checkmark : .none
+            if selected { cell.accessibilityTraits.insert(.selected) }
+        }
+        content.secondaryTextProperties.numberOfLines = 0
+        cell.contentConfiguration = content
+        return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard !saving else { return }
+        let refreshingIcon = indexPath.section == 0
+        let method = refreshingIcon ? "target_icon_refresh" : "schedule"
+        var params: [String: Any] = ["id": targetID]
+        if refreshingIcon {
+            iconStatus = "Refreshing…"
+        } else {
+            let (_, enabled, hours) = schedules[indexPath.row]
+            params["enabled"] = enabled
+            params["intervalHours"] = hours
+        }
+        saving = true
+        tableView.reloadData()
+        Task {
+            defer { saving = false; tableView.reloadData() }
+            do {
+                target = try await update(method, params)
+                if refreshingIcon { iconStatus = "Icon refreshed" }
+            } catch is CancellationError {
+                return
+            } catch {
+                if refreshingIcon { iconStatus = error.localizedDescription }
+                else {
+                    let alert = UIAlertController(title: "Couldn’t update schedule", message: error.localizedDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    present(alert, animated: true)
+                }
+            }
         }
     }
 }

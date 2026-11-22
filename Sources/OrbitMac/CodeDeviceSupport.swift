@@ -87,7 +87,7 @@ public enum CodeDeviceSupport {
             // Skip before invoking Xcode; automatic package schemes are filtered
             // by the no-Build-action result in settings().
             if try runnableTarget(path: path, scheme: scheme) == "" { continue }
-            let settings = try await settings(project, root: root)
+            let settings = try await settings(project, root: root, destination: "generic/platform=iOS")
             // An explicit scheme's Run action identifies its app even when
             // build settings put a dependency first. Automatic schemes use
             // Xcode's primary (first) target and never search dependencies.
@@ -102,10 +102,8 @@ public enum CodeDeviceSupport {
     }
     static func runnableTarget(path: String, scheme: String) throws -> String? {
         let container = URL(fileURLWithPath: path)
-        var containers = [container]
-        if container.pathExtension == "xcworkspace" {
-            containers += CodeProjectPreview.projectContainers(path: path)
-        }
+        let projects = CodeProjectPreview.projectContainers(path: path)
+        let containers = container.pathExtension == "xcworkspace" ? [container] + projects : projects
         for container in containers {
             let shared = container.appendingPathComponent("xcshareddata/xcschemes/" + scheme + ".xcscheme")
             var candidates = [shared]
@@ -114,13 +112,26 @@ public enum CodeDeviceSupport {
                 candidates.append(user.appendingPathComponent("xcschemes/" + scheme + ".xcscheme"))
             }
             for file in candidates where FileManager.default.fileExists(atPath: file.path) {
-                return try parseRunnableTarget(Data(contentsOf: file)) ?? ""
+                // Newer shared schemes can omit BlueprintName for the app target.
+                // Resolve its actual project ID even when the scheme is an alias.
+                var targetNames: [String: String]?
+                return try parseRunnableTarget(Data(contentsOf: file)) { id in
+                    if targetNames == nil {
+                        targetNames = [:]
+                        for project in projects {
+                            for (key, object) in CodeProjectPreview.projectObjects(project) ?? [:] {
+                                if let name = object["name"] as? String { targetNames?[key] = name }
+                            }
+                        }
+                    }
+                    return targetNames?[id]
+                } ?? ""
             }
         }
         return nil
     }
-    static func parseRunnableTarget(_ data: Data) throws -> String? {
-        let delegate = SchemeRunnable()
+    static func parseRunnableTarget(_ data: Data, nameForID: @escaping (String) -> String? = { _ in nil }) throws -> String? {
+        let delegate = SchemeRunnable(nameForID: nameForID)
         let parser = XMLParser(data: data); parser.delegate = delegate
         guard parser.parse() else { throw CodeFailure("Could not read this Xcode scheme. Open it on your Mac and check its Run action.") }
         // A scheme that runs one dependency but builds several apps is a
@@ -213,18 +224,20 @@ public enum CodeDeviceSupport {
 private final class SchemeRunnable: NSObject, XMLParserDelegate {
     var target: String?
     var appTargets: Set<String> = []
+    private let nameForID: (String) -> String?
+    init(nameForID: @escaping (String) -> String?) { self.nameForID = nameForID }
     private var buildsForRunning = false
     private var elements: [String] = []
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes: [String: String]) {
         elements.append(elementName)
         if elementName == "BuildActionEntry" { buildsForRunning = attributes["buildForRunning"] == "YES" }
-        if elementName == "BuildableReference", elements.contains("BuildAction"), buildsForRunning,
-           attributes["BuildableName"]?.hasSuffix(".app") == true, let name = attributes["BlueprintName"] {
-            appTargets.insert(name)
-        }
-        if elementName == "BuildableReference", elements.contains("LaunchAction"), elements.contains("BuildableProductRunnable") {
-            target = attributes["BlueprintName"]
-        }
+        guard elementName == "BuildableReference" else { return }
+        let buildsApp = elements.contains("BuildAction") && buildsForRunning && attributes["BuildableName"]?.hasSuffix(".app") == true
+        let runsProduct = elements.contains("LaunchAction") && elements.contains("BuildableProductRunnable")
+        guard buildsApp || runsProduct else { return }
+        let name = attributes["BlueprintName"] ?? attributes["BlueprintIdentifier"].flatMap(nameForID)
+        if buildsApp, let name { appTargets.insert(name) }
+        if runsProduct { target = name }
     }
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) { elements.removeLast() }
 }

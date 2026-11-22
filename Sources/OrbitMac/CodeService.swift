@@ -110,6 +110,10 @@ public actor CodeService {
         }
     }
 
+    public func catalogBuildIcon(_ compilationID: String) async -> CodeBuildIcon? {
+        await jobs.appIcon(compilationID)
+    }
+
     public func retainedCatalogJob(_ id: String) async throws -> CodeOvernightJob? {
         try await overnight.status().first { $0.id == id }
     }

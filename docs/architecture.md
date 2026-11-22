@@ -230,7 +230,14 @@ trusted source. Discovery, registration and plain local folders use their
 existing project files. A failed step removes the worktree. Package-resolution
 failures have their own summary, with failed Xcode query output in the job log.
 
-App targets retain the configured Xcode app-icon thumbnail discovered at registration and send it to both clients' Apps lists. Older catalogs fill missing icons on listing without building or installing an app. Unavailable projects and missing icons keep their entries with a placeholder; failed icon lookups retry after five minutes rather than on every poll.
+App targets retain the icon thumbnail for the runnable target of the selected
+Xcode scheme. Discovery and **Refresh Icon** use the target’s resolved build
+settings and its own asset catalogs. Device builds read those settings in the
+build checkout and prefer the built app’s primary icon when it is available.
+The Host applies these updates independently of installation success, and both
+clients display the persisted thumbnail. Listing only backfills missing icons,
+with a five-minute delay between attempts for unavailable artwork. Existing
+thumbnails remain visible when a lookup fails.
 
 The iOS Builds tab stores `launchAfterInstall` per paired Mac, project path and
 scheme; missing preferences default to false. Discovery preserves it alongside
@@ -663,7 +670,9 @@ row. A stale job reference can be removed directly. Job journals stay available
 by ID after removal, including native installations awaiting readback. A Mac
 app replacement already in its installation or launch phase stays protected.
 
-Registered Mac apps use the installed bundle’s `CFBundleIconFile` for 132px catalog thumbnails. Registration and background catalog polling populate missing icons and refresh changed artwork at most once every five minutes. The same persisted PNG travels to Orbit Mac and iOS; missing or unreadable icons leave the target available.
+Registered Mac apps use their installed bundle’s `CFBundleIconFile` for 132px
+catalog thumbnails. Registration, manual refresh, and the result of a Mac build
+can update that thumbnail. Catalog polling fills missing artwork.
 
 
 ## Recovering native installations

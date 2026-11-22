@@ -16,6 +16,7 @@ import OrbitTransport
     private var jobs: [String: CodeJob] = [:]
     private var requestFailures: [String: String] = [:]
     private weak var expandedTarget: OrbitTargetDetailController?
+    private weak var targetSettings: OrbitTargetSettingsController?
     private var cachingTarget: String?
     private var starting: String?
     private var poll: Timer?
@@ -72,6 +73,7 @@ import OrbitTransport
     private func restoreCachedState() {
         let origin = peerID()
         guard peer != origin else { return }
+        targetSettings?.dismiss(animated: false); targetSettings = nil
         expandedTarget?.dismiss(animated: false); expandedTarget = nil
         peer = origin; jobs = [:]; requestFailures = [:]; apps = []; macUpdate = [:]; removingTargets.removeAll()
         catalogRevision += 1
@@ -367,6 +369,17 @@ import OrbitTransport
             openTarget(apps[indexPath.row]["id"] as? String ?? "")
         }
     }
+    override func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemAt indexPath: IndexPath,
+                                 point: CGPoint) -> UIContextMenuConfiguration? {
+        guard !searching, indexPath.section == 1, apps.indices.contains(indexPath.item),
+              let id = apps[indexPath.item]["id"] as? String else { return nil }
+        return UIContextMenuConfiguration(identifier: id as NSString, previewProvider: nil) { [weak self] _ in
+            UIMenu(children: [UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { [weak self] _ in
+                guard let self else { return }
+                self.openTargetSettings(id, from: self)
+            }])
+        }
+    }
     private func openTarget(_ id: String) {
         guard expandedTarget == nil, let row = apps.first(where: { $0["id"] as? String == id }) else { return }
         let detail = OrbitTargetDetailController(targetID: id)
@@ -384,7 +397,7 @@ import OrbitTransport
         detail.onAction = { [weak self, weak detail] action in
             guard let self, let detail, let row = self.apps.first(where: { $0["id"] as? String == id }) else { return }
             switch action {
-            case .schedule: self.configureSchedule(row, from: detail)
+            case .settings: self.openTargetSettings(id, from: detail)
             case .remove:
                 guard !self.removingTargets.contains(id) else { return }
                 let alert = UIAlertController(title: "Remove this app?", message: "Any active build will be cancelled.", preferredStyle: .alert)
@@ -448,22 +461,31 @@ import OrbitTransport
         }
         configure(detail.card, row: row)
     }
-    private func configureSchedule(_ row: [String: Any], from detail: OrbitTargetDetailController) {
-        guard let id = row["id"] as? String else { return }
-        let alert = UIAlertController(title: "Refresh settings", message: "Your Mac builds and installs on this schedule.", preferredStyle: .actionSheet)
-        let enabled = row["enabled"] as? Bool == true
-        let options: [(String, Bool, Int)] = [("Manual builds", false, 144), ("Every day", true, 24), ("Every three days", true, 72), ("Every six days", true, 144)]
-        for (title, active, hours) in options {
-            let selected = active == enabled && (!active || row["intervalHours"] as? Int == hours)
-            alert.addAction(UIAlertAction(title: title + (selected ? " ✓" : ""), style: .default) { _ in Task {
-                do { _ = try await self.rpc("schedule", ["id": id, "enabled": active, "intervalHours": hours]); await self.refreshTargets(showError: true) }
-                catch { self.show(error.localizedDescription) }
-            } })
+    private func openTargetSettings(_ id: String, from presenter: UIViewController) {
+        guard let row = apps.first(where: { $0["id"] as? String == id }) else { return }
+        let origin = peerID()
+        let settings = OrbitTargetSettingsController(targetID: id, target: row) { [weak self] method, params in
+            guard let self, self.peerID() == origin else { throw CancellationError() }
+            let result: Any
+            do { result = try await self.rpc(method, params) }
+            catch let error as CodeFailure where error.message == "Unknown Orbit method: target_icon_refresh" {
+                throw CodeFailure("Update Orbit Mac to refresh icons.")
+            }
+            guard self.peerID() == origin,
+                  let index = self.apps.firstIndex(where: { $0["id"] as? String == id }) else { throw CancellationError() }
+            guard let updated = result as? [String: Any], updated["id"] as? String == id else {
+                throw CodeFailure("Couldn’t confirm the change. Try again.")
+            }
+            let keys = method == "target_icon_refresh" ? ["iconPNG"] : ["enabled", "intervalHours"]
+            var rows = self.apps
+            for key in keys { rows[index][key] = updated[key] }
+            self.catalogRevision += 1
+            self.updateCatalog(rows, origin: origin)
+            self.updateExpandedTarget()
+            return rows[index]
         }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-        alert.popoverPresentationController?.sourceView = detail.schedule
-        alert.popoverPresentationController?.sourceRect = detail.schedule.bounds
-        detail.present(alert, animated: true)
+        targetSettings = settings
+        presenter.present(UINavigationController(rootViewController: settings), animated: true)
     }
     private func detectProjects() {
         let list = OrbitDetectedProjectsController(rpc: rpc, peerID: peerID, cache: projectsCache) { [weak self] origin, app in
