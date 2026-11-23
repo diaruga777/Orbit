@@ -12,6 +12,16 @@ You need a Mac, an iPhone, and either a coding agent subscription/credits or eno
 
 > Free Apple accounts are supported. Apple limits Personal Teams to three installed development apps per device, three registered devices and ten App IDs; profiles expire after seven days. Orbit itself uses one app slot. Orbit defaults to **every six days**, leaving a day for recovery. This works for compatible apps within Apple's limits—not every app or entitlement. A new build needs an awake, logged-in Mac and a reachable, trusted phone. Once cached on iPhone, the same installed build can be renewed without the Mac through **More → Phone-only refresh**. [Apple account limits](https://developer.apple.com/help/account/basics/about-your-developer-account)
 
+## Install with an agent
+
+Give your local coding agent this prompt on your Apple silicon Mac.
+
+> Install github.com/diaruga777/Orbit
+
+The agent clones Orbit and runs `./scripts/install.sh`. You can run the same command from your checkout. It installs the missing tools and builds Orbit Mac with your signing identity. For a first install, Orbit creates a unique bundle prefix and uses your Apple Development certificate. If several certificates qualify, you choose one.
+
+Keep the installer running. It opens Apple’s screens when you need to sign in, review a license or approve access. Orbit skips the Mac steps it has verified, then waits for your phone. Connect and unlock it, approve Trust and enable Developer Mode if asked. When the selected device is ready, Orbit installs the phone app and shows a pairing code. You can return to **Mac setup** to change the projects folder.
+
 ## Website
 
 The landing page lives in [`website/`](website/). It is a dependency-free static
@@ -143,14 +153,6 @@ The Live Activity shows **Build completed** once your Mac confirms success. If
 iOS ends monitoring, Orbit briefly checks the job for a final result. If only
 compilation is confirmed, it shows **App built**. Otherwise, open Orbit to check the latest status. The progress sheet centers the app
 name and shows the build action separately above it.
-
-## Quick path with an agent
-
-Clone this repository and ask your agent:
-
-> Read Orbit's README and AGENTS.md. Help me install Xcode and Orbit, sign in to my own Apple Personal Team, connect my phone, choose a pipe, then add my app and refresh it every six days. Keep account credentials in Xcode. Ask me to perform Apple sign-in and trust prompts myself.
-
-Install the bundled plugin or [MCP](#connect-your-agent) once the Mac app is running. An agent can discover phones, inspect repositories, register an app it just created, start a build, read its log, and change its schedule.
 
 ## 1. Prepare your Mac and Apple account
 

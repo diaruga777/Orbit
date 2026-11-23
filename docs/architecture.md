@@ -74,6 +74,12 @@ before success; a lost reopen readback stays uncertain. Failures and dead worker
 are retained for retry. Xcode's install-only action waits for Run to reopen the app.
 The state, pairing identities and installation journals are never recreated.
 
+## Agent-assisted setup
+
+The source installer uses the canonical detached Mac build with `--agent-setup`. Its setup dialogs can run before Xcode or Orbit Mac exists. It reuses the checkout’s ignored identity, and creates one only for a fresh installation with an available development certificate. Generated phone libraries come from the detached build. The Mac updater pins the installed certificate and records the durable checkout for the agent launcher.
+
+Before opening a window, the installer invokes the installed executable with `--prepare-setup`. This local command holds the normal host state lock. It checks folder access, applies the wizard’s folder migration for a new root, preserves existing allowed roots, checks the tools and signs off the Mac step only when the signing fields and folder are ready. It writes public progress to the usual `setup.json`. A denied folder stays in the wizard. The GUI checks readiness again, resumes existing install jobs, and starts a new one on an identified, ready device only during agent-assisted setup. **Mac setup** switches back to manual control. Installation and pairing use their normal confirmation paths.
+
 ## Mac setup and optional setup
 
 Setup has two screens. The Mac screen handles DMG installation, unmet tool or signing requirements and project-folder approval. Existing setup journals map to Mac or device while retaining their identity, folder consent, job ID and installed state. Selecting a different folder checks access before advancing.

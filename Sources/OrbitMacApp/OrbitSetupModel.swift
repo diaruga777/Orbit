@@ -20,6 +20,7 @@ import OrbitCore
     @Published var loaded = false
     private let setup = OrbitSetup(root: OrbitPaths.root)
     private var work: Task<Void, Never>?
+    private var attemptedAutomaticInstall = false
     init() {
         Task {
             do { state = try await setup.load() } catch { OrbitDiagnostics.shared.error("setup", "failed", error); message = error.localizedDescription }
@@ -27,6 +28,12 @@ import OrbitCore
             tools = await setup.checkTools()
             teams = await setup.signingTeams()
             selectDetectedTeam()
+            if state.agentAssisted == true, !state.finished, !state.installed, state.installJobID == nil {
+                if let folder = state.folder, (try? FileManager.default.contentsOfDirectory(atPath: folder)) == nil {
+                    state.folderApproved = false
+                }
+                if !tools.ready || !signingReady || state.folderApproved != true { state.step = .mac }
+            }
             if !state.finished, state.step == .mac, !fromDiskImage, tools.ready, signingReady, state.folderApproved == true {
                 state.step = .phone
                 persist()
@@ -41,11 +48,13 @@ import OrbitCore
     func persist() { let state = state; Task { do { try await setup.save(state) } catch { OrbitDiagnostics.shared.error("setup", "failed", error); message = error.localizedDescription } } }
     func finish() {
         guard state.installed, !busy else { return }
+        state.agentAssisted = nil
         state.finished = true
         persist()
     }
     func back() {
         guard !busy else { return }
+        state.agentAssisted = nil
         state.step = .mac
         message = ""
         persist()
@@ -140,6 +149,18 @@ import OrbitCore
         if device.developerModeBlocked == true { phoneReady = false; return }
         let ready = try? await setup.phoneReady(device.id)
         if !Task.isCancelled, state.deviceID == device.id { phoneReady = ready }
+    }
+    func advancePreparedMac() {
+        guard state.agentAssisted == true, state.step == .mac, !fromDiskImage,
+              tools.ready, signingReady, state.folderApproved == true else { return }
+        state.step = .phone
+        persist()
+    }
+    func installIfPrepared(_ model: OrbitMacModel) {
+        guard state.agentAssisted == true, !attemptedAutomaticInstall, !busy, !state.installed,
+              state.installJobID != nil || (selectedDevice != nil && phoneReady == true) else { return }
+        attemptedAutomaticInstall = true
+        install(model)
     }
     func install(_ model: OrbitMacModel) {
         OrbitDiagnostics.shared.record("action", "setup_install")

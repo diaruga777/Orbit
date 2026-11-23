@@ -81,13 +81,21 @@ struct OrbitSetupView: View {
         }.frame(minWidth: 760, minHeight: 540)
         .task(id: onMac ? nil : discoveryRevision) {
             guard !onMac else { return }
+            if setup.state.installJobID != nil, setup.state.agentAssisted == true, !setup.state.installed {
+                setup.installIfPrepared(model)
+                return
+            }
             repeat {
                 await setup.listPhones()
+                guard !Task.isCancelled else { return }
+                setup.installIfPrepared(model)
                 if setup.state.installed || setup.state.installJobID != nil { return }
-                if let device = setup.selectedDevice, device.developerModeBlocked != true, setup.phoneReady != false { return }
+                if let device = setup.selectedDevice, device.developerModeBlocked != true,
+                   setup.state.agentAssisted == true ? setup.phoneReady == true : setup.phoneReady != false { return }
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
             } while !Task.isCancelled
         }
+        .onChange(of: setup.tools.ready && setup.signingReady) { setup.advancePreparedMac() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if onMac && !setup.fromDiskImage && setup.tools.ready && !setup.installer.running { setup.checkAccounts() }
         }

@@ -1,5 +1,11 @@
 # Testing
 
+## Agent installer
+
+`python3 -m unittest discover -s Tests/Python` covers first-install signing, repeat runs, conflicting installations and certificate selection with synthetic identities. `swift test --filter OrbitSetupTests` covers pre-launch folder configuration, denied access and preservation of resumable progress.
+
+To exercise the packaged entry point, run a **review** bundle’s `Contents/MacOS/OrbitMacApp --prepare-setup` with an isolated absolute `ORBIT_HOME` and a temporary projects folder in its setup fixture. Inspect `setup.json` and `config.json`. A canonical installed app uses its embedded state root. For physical acceptance on a fresh Mac, run `./scripts/install.sh`, complete native account or permission prompts, connect the intended device and verify the installed revision before pairing.
+
 ## Reproducible local checks
 
 Run `scripts/bootstrap.sh` first. It generates `Vendor/OrbitNet.xcframework` from this checkout (Mac arm64/x86_64, iOS arm64, Simulator arm64/x86_64). The XCFramework is ignored by Git. CGo compilation flags distinguish each Apple platform in Go's build cache.

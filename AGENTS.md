@@ -2,6 +2,16 @@
 
 Orbit is a standalone iOS editor and Mac build/deployment companion. Start with README.md, docs/architecture.md and docs/testing.md. Keep these current when behavior changes.
 
+## When asked to install Orbit
+
+Treat “install github.com/diaruga777/Orbit” as an install request on the user’s Mac. Run the setup through to the next human action.
+
+1. Use the existing primary checkout if present. For an installed source build, use `sourceRoot` from `~/.orbit/mac-installation.json`. Otherwise clone the requested repository to a durable, unused directory such as `~/Developer/Orbit`. Keep an unrelated directory intact. If macOS prompts for Command Line Tools before Git works, let the user approve the system installer and resume the clone.
+2. From that checkout run **`./scripts/install.sh`** as the logged-in user. Let it finish downloads and builds. It installs missing dependencies, prepares ignored local signing configuration for a new install, installs the signed Mac app and records verified wizard progress. Existing installations need their original identity. On a recoverable error, fix the reported cause and rerun the command in the same checkout.
+3. Give the user control for the native setup prompts that appear, including Apple sign-in, license review, admin or Keychain approval, ambiguous certificate or phone choices, device unlock/trust, Developer Mode and pairing. Keep passwords and verification codes in Apple’s UI. Continue after the user acts. Orbit starts or resumes the phone install when ready. Report the actual remaining prompt or confirmed installation. Extra apps, schedules, remote access and phone-only refresh are opt-in.
+
+## Development
+
 - Never install, launch or use WebDriverAgent/WebDriverAgentRunner on a physical phone. Use native Xcode/CoreDevice deployment; test UI on Simulator.
 - Never embed a developer's team, bundle prefix, Apple account, pairing record, certificates or tokens. Use ignored Config/Local.xcconfig and user-owned state. Defaults must support free Personal Teams without App Group or iCloud entitlements.
 - For builds of Orbit itself, use the bundle prefix and development team from ignored Config/Local.xcconfig for both Xcode and agent-triggered builds. Do not override them or fall back to sample identifiers; if the local config is missing or still has sample values, stop rather than build under a different identity.

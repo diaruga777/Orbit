@@ -26,6 +26,7 @@ public struct OrbitSetupState: Codable, Sendable {
     public var installTargetID: String?
     public var installJobID: String?
     public var installed = false
+    public var agentAssisted: Bool?
     public var folderApproved: Bool?
     public var finished = false
     public init() {
@@ -81,6 +82,41 @@ public actor OrbitSetup {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try JSONEncoder().encode(state).write(to: root.appendingPathComponent("setup.json"), options: .atomic)
     }
+    /// Runs in the installed executable before its first window opens. The host
+    /// holds the same single-writer lock and uses the same folder migration as the GUI.
+    public func prepareForAgent(host: OrbitHost) async throws {
+        var state = try load()
+        guard !state.finished else { return }
+        state.agentAssisted = true
+        if !state.installed && state.installJobID == nil {
+            let roots = await host.configuration.allowedRoots
+            let folder = roots.first ?? state.folder ?? OrbitSetupState.defaultFolder.path
+            state.folder = folder
+            state.folderApproved = false
+            state.step = .mac
+            do {
+                let url = URL(fileURLWithPath: folder, isDirectory: true)
+                if roots.isEmpty { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
+                _ = try FileManager.default.contentsOfDirectory(atPath: url.path)
+                if roots.isEmpty { _ = try await host.configureProjectsFolder(folder) }
+                state.folderApproved = true
+            } catch {
+                // The wizard can request folder permission or choose another folder.
+                try save(state)
+                return
+            }
+            if state.teamID.isEmpty {
+                let teams = signingTeams()
+                if teams.count == 1 { state.teamID = teams[0].id }
+            }
+            let tools = await checkTools()
+            if tools.ready && OrbitSetupState.validTeam(state.teamID) && OrbitSetupState.validPrefix(state.bundlePrefix) {
+                state.step = .phone
+            }
+        }
+        try save(state)
+    }
+
     public nonisolated static var pythonExecutable: String {
         ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"].first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/python3"
     }

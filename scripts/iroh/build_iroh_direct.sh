@@ -10,6 +10,7 @@ if [[ "${IROH_DIRECT_TEST:-0}" != 1 && -f "$OUT/Iroh.xcframework/Info.plist" &&
       -f "$OUT/.version" && "$(cat "$OUT/.version")" == "$STAMP" ]]; then
   exit 0
 fi
+[[ "${2:-}" != --check ]] || exit 1
 command -v cargo >/dev/null || { echo 'Install Rust with rustup to build the Iroh transport.' >&2; exit 1; }
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT

@@ -290,18 +290,7 @@ public actor OrbitHost {
         case "setup_folder":
             guard peer == nil else { throw CodeFailure("Choose folders on the Mac.") }
             let path = try required(p, "path")
-            guard path.hasPrefix("/") else { throw CodeFailure("Choose an absolute folder path.") }
-            let folder = URL(fileURLWithPath: path).resolvingSymlinksInPath()
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw CodeFailure("Choose an existing folder.") }
-            let old = scriptFolders
-            var new = old
-            if configuration.appletFolder == nil { new[.applet] = folder.appendingPathComponent("Applets") }
-            if configuration.widgetFolder == nil { new[.widget] = folder.appendingPathComponent("Widgets") }
-            try scripts.migrate(from: old, to: new)
-            configuration.allowedRoots = [folder.path]; try saveConfiguration()
-            try Data().write(to: root.appendingPathComponent("script-folders-migrated"), options: .atomic)
-            return ["folder": folder.path]
+            return ["folder": try configureProjectsFolder(path)]
         case "setup_phone":
             guard peer == nil, targets.allSatisfy({ $0.jobID == nil && $0.pendingRequest == nil }) else { throw CodeFailure("Finish active builds before changing phone setup.") }
             let prefix = try required(p, "bundlePrefix")
@@ -427,6 +416,21 @@ public actor OrbitHost {
         _ = try OrbitAppletDefinition.parse(source)
         return source
     }
+    func configureProjectsFolder(_ path: String) throws -> String {
+        guard path.hasPrefix("/") else { throw CodeFailure("Choose an absolute folder path.") }
+        let folder = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory), isDirectory.boolValue else { throw CodeFailure("Choose an existing folder.") }
+        let old = scriptFolders
+        var new = old
+        if configuration.appletFolder == nil { new[.applet] = folder.appendingPathComponent("Applets") }
+        if configuration.widgetFolder == nil { new[.widget] = folder.appendingPathComponent("Widgets") }
+        try scripts.migrate(from: old, to: new)
+        configuration.allowedRoots = [folder.path]; try saveConfiguration()
+        try Data().write(to: root.appendingPathComponent("script-folders-migrated"), options: .atomic)
+        return folder.path
+    }
+
     private var scriptFolders: [OrbitJavaScriptFile.Kind: URL] {
         let base = configuration.allowedRoots.first.map { URL(fileURLWithPath: $0) } ?? root
         return [.applet: configuration.appletFolder.map { URL(fileURLWithPath: $0) } ?? base.appendingPathComponent("Applets"),

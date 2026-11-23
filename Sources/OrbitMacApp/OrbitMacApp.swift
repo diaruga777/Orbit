@@ -1,9 +1,26 @@
 import SwiftUI
 import AppKit
 import OrbitCore
+import OrbitHost
 import UniformTypeIdentifiers
 
-@main struct OrbitMacApplication: App {
+@main enum OrbitMacEntryPoint {
+    @MainActor static func main() async {
+        if CommandLine.arguments.dropFirst().first == "--prepare-setup" {
+            do {
+                let host = try OrbitHost()
+                try await OrbitSetup(root: OrbitPaths.root).prepareForAgent(host: host)
+            } catch {
+                FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8))
+                exit(1)
+            }
+            return
+        }
+        OrbitMacApplication.main()
+    }
+}
+
+struct OrbitMacApplication: App {
     @NSApplicationDelegateAdaptor(OrbitMacDelegate.self) private var delegate
     @StateObject private var model = OrbitMacModel()
     @StateObject private var setup = OrbitSetupModel()

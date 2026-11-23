@@ -250,12 +250,34 @@ def install(staged, installation):
     write(REGISTRY, installation)
 
 
+NATIVE_PACKAGES = ('Vendor/OrbitNet.xcframework', 'Vendor/DeviceGateway/IDevice.xcframework', 'Vendor/IrohDirect')
+
+
+def publish_native_packages(folder, source):
+    # Phone self-builds copy these ignored archives from the canonical checkout.
+    for relative in NATIVE_PACKAGES:
+        target = source / relative
+        if target.is_symlink():
+            raise ValueError(f'Expected a generated directory at {target}.')
+        if target.exists() and subprocess.run(['/usr/bin/diff', '-qr', folder / relative, target],
+                                              stdout=subprocess.DEVNULL).returncode == 0:
+            continue
+        with tempfile.TemporaryDirectory(dir=target.parent) as scratch:
+            staged, old = Path(scratch) / 'new', Path(scratch) / 'old'
+            shutil.copytree(folder / relative, staged, symlinks=True)
+            if target.exists(): target.rename(old)
+            try: staged.rename(target)
+            except BaseException:
+                if old.exists(): old.rename(target)
+                raise
+
+
 def checkout(source, revision, folder):
     run(['/usr/bin/git', 'worktree', 'add', '--detach', folder, revision], cwd=source)
     # User-owned configuration and generated native binaries stay out of Git.
     (folder / 'Config').mkdir(exist_ok=True)
     shutil.copy2(source / 'Config/Local.xcconfig', folder / 'Config/Local.xcconfig')
-    for relative in ['Vendor/OrbitNet.xcframework', 'Vendor/DeviceGateway/IDevice.xcframework', 'Vendor/IrohDirect']:
+    for relative in NATIVE_PACKAGES:
         native = source / relative
         if native.exists():
             shutil.copytree(native, folder / relative, symlinks=True)
@@ -329,6 +351,8 @@ def build(source, mode, installation=None, job=None):
         saved = read(state, {}).get('object', {})
         if any(not Path(artifact.get('path', '')).exists() for artifact in saved.get('artifacts', [])):
             state.unlink(missing_ok=True)
+        if mode == '--agent-setup':
+            stream_package([sys.executable, folder / 'scripts/bootstrap_refresh.py'], folder, env)
         stream_package(['/bin/bash', folder / 'scripts/package_mac_app.sh', '--build-only'], folder, env, read(job, {}).get('logPath') if job else None)
         staged = folder / 'dist/Orbit Mac.app'
         if mode == '--build-only':
@@ -338,6 +362,8 @@ def build(source, mode, installation=None, job=None):
             run(['/usr/bin/ditto', staged, destination])
             print(destination)
             return
+        if mode == '--agent-setup':
+            publish_native_packages(folder, source)
         update_job(job, state='installing', stage='Installing Orbit Mac…')
         install(staged, installation)
         update_job(job, state='installed', stage='Waiting for Orbit Mac to reopen…')
@@ -345,6 +371,10 @@ def build(source, mode, installation=None, job=None):
             print(f'Installed Orbit Mac at {installation["path"]}', flush=True)
             return
         update_job(job, state='restarting', stage='Reconnecting to Orbit Mac…')
+        if mode == '--agent-setup':
+            executable = Path(installation['path']) / 'Contents/MacOS/OrbitMacApp'
+            run([executable, '--prepare-setup'], capture=False)
+            write(Path(installation['stateRoot']) / 'installation.json', {'checkout': installation['sourceRoot']})
         run(['/usr/bin/open', installation['path']])
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
@@ -367,6 +397,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', nargs='?', default='run', choices=['run'])
     parser.add_argument('--build-only', action='store_true')
+    parser.add_argument('--agent-setup', action='store_true')
     parser.add_argument('--install-only', action='store_true')
     parser.add_argument('--verify', action='store_true')
     parser.add_argument('--debug', action='store_true')
@@ -401,7 +432,8 @@ def main():
                 value = update_job(job, pid=child.pid)
                 print(json.dumps(value))
                 return
-        build(source, '--install-only' if args.install_only or args.debug else 'run', installation, job)
+        mode = '--install-only' if args.install_only or args.debug else 'run'
+        build(source, '--agent-setup' if args.agent_setup else mode, installation, job)
         if args.debug:
             os.execv('/usr/bin/xcrun', ['xcrun', 'lldb', '--', str(CANONICAL / 'Contents/MacOS/OrbitMacApp')])
         if args.logs:

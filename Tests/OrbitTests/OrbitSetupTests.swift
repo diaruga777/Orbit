@@ -3,6 +3,58 @@ import OrbitCore
 @testable import OrbitHost
 
 final class OrbitSetupTests: XCTestCase {
+    func testAgentPreparesFolderBeforeLaunchAndPreservesJobOnRetry() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let setup = OrbitSetup(root: root)
+        let host = try OrbitHost(root: root)
+        var state = OrbitSetupState()
+        let folder = root.appendingPathComponent("My Projects")
+        state.folder = folder.path
+        state.teamID = "ABCDEFGHIJ"
+        try await setup.save(state)
+        try await setup.prepareForAgent(host: host)
+        state = try await setup.load()
+        XCTAssertEqual(state.agentAssisted, true)
+        XCTAssertEqual(state.folderApproved, true)
+        let roots = await host.configuration.allowedRoots
+        XCTAssertEqual(roots, [folder.resolvingSymlinksInPath().path])
+        XCTAssertFalse(state.installed)
+        XCTAssertFalse(state.finished)
+        XCTAssertNil(state.installJobID)
+        state.step = .phone
+        state.deviceID = "chosen"
+        state.installJobID = "in-flight"
+        try await setup.save(state)
+        try await setup.prepareForAgent(host: host)
+        let resumed = try await setup.load()
+        XCTAssertEqual(resumed.installJobID, "in-flight")
+        XCTAssertEqual(resumed.deviceID, "chosen")
+        XCTAssertEqual(resumed.step, .phone)
+        XCTAssertFalse(resumed.installed)
+    }
+
+    func testAgentLeavesInaccessibleFolderForWizard() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let setup = OrbitSetup(root: root)
+        let host = try OrbitHost(root: root)
+        let file = root.appendingPathComponent("file")
+        try Data().write(to: file)
+        var state = OrbitSetupState()
+        state.folder = file.path
+        state.folderApproved = true
+        state.step = .phone
+        try await setup.save(state)
+        try await setup.prepareForAgent(host: host)
+        let restored = try await setup.load()
+        XCTAssertEqual(restored.folderApproved, false)
+        XCTAssertEqual(restored.step, .mac)
+        XCTAssertEqual(restored.bundlePrefix, state.bundlePrefix)
+        let roots = await host.configuration.allowedRoots
+        XCTAssertTrue(roots.isEmpty)
+    }
+
     func testSetupResumesWithoutSecrets() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
