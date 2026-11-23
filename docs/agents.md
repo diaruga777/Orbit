@@ -2,6 +2,8 @@
 
 Orbit's MCP runs on the Mac doing the builds. A cloud agent needs a supported connection back to that Mac; a cloud runner cannot deploy to a private phone just by installing the plugin. Orbit does not run a hosted MCP service or expose its local control socket publicly.
 
+Install Orbit itself with the one-line agent prompt or run the source installer locally. [Install with an agent](../README.md#install-with-an-agent)
+
 ## Codex
 
 The most dependable local configuration is an absolute-path stdio server:

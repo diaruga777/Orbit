@@ -11,7 +11,8 @@ if [[ "${IROH_DIRECT_TEST:-0}" != 1 && -f "$OUT/Iroh.xcframework/Info.plist" &&
   exit 0
 fi
 [[ "${2:-}" != --check ]] || exit 1
-command -v cargo >/dev/null || { echo 'Install Rust with rustup to build the Iroh transport.' >&2; exit 1; }
+CARGO="${ORBIT_CARGO:-cargo}"
+command -v "$CARGO" >/dev/null || { echo 'Install Rust with rustup to build the Iroh transport.' >&2; exit 1; }
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
 curl -fsSL "https://codeload.github.com/n0-computer/iroh-ffi/tar.gz/$REVISION" | tar -xz -C "$SCRATCH"
@@ -36,7 +37,7 @@ PY
 export IPHONEOS_DEPLOYMENT_TARGET=17.5 MACOSX_DEPLOYMENT_TARGET=15.0
 export CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_STRIP=debuginfo
 BUILD="${IROH_DIRECT_CARGO_TARGET_DIR:-$HOME/Library/Caches/orbit-luna/iroh-direct}"
-cargo build --locked --manifest-path "$FFI/Cargo.toml" --release --lib --target-dir "$BUILD" \
+"$CARGO" build --locked --manifest-path "$FFI/Cargo.toml" --release --lib --target-dir "$BUILD" \
   --target aarch64-apple-darwin --target aarch64-apple-ios --target aarch64-apple-ios-sim --target x86_64-apple-ios
 if [[ "${IROH_DIRECT_TEST:-0}" == 1 ]]; then
   mkdir -p "$FFI/tests"
@@ -50,7 +51,7 @@ p.write_text(manifest.replace('[dev-dependencies]', '''[dev-dependencies]
 iroh = { version = "=1.0.2", features = ["test-utils"] }
 iroh-relay = { version = "=1.0.2", features = ["test-utils"] }'''))
 PYTEST
-  cargo test --manifest-path "$FFI/Cargo.toml" --target-dir "$BUILD/verification" --release \
+  "$CARGO" test --manifest-path "$FFI/Cargo.toml" --target-dir "$BUILD/verification" --release \
     --target aarch64-apple-darwin --test relay_policy
 fi
 # The pin supplies the generated Swift and C ABI for the unchanged FFI interface.

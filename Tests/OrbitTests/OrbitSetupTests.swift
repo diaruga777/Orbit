@@ -22,7 +22,7 @@ final class OrbitSetupTests: XCTestCase {
         XCTAssertFalse(state.installed)
         XCTAssertFalse(state.finished)
         XCTAssertNil(state.installJobID)
-        state.step = .phone
+        state.step = .mac
         state.deviceID = "chosen"
         state.installJobID = "in-flight"
         try await setup.save(state)

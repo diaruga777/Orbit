@@ -88,7 +88,9 @@ public actor OrbitSetup {
         var state = try load()
         guard !state.finished else { return }
         state.agentAssisted = true
-        if !state.installed && state.installJobID == nil {
+        if state.installed || state.installJobID != nil {
+            state.step = .phone
+        } else {
             let roots = await host.configuration.allowedRoots
             let folder = roots.first ?? state.folder ?? OrbitSetupState.defaultFolder.path
             state.folder = folder

@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import uuid
 
 import mac_build as mac
@@ -53,9 +54,11 @@ def prepare(source):
     sha, _, team = choose(rows)
     if not existing:
         prefix = 'dev.orbit.u' + uuid.uuid4().hex
-        # Exclusive creation prevents a retry or a second installer replacing an identity.
-        with os.fdopen(os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as output:
+        # Link a complete private file exclusively, including on concurrent first runs.
+        with tempfile.NamedTemporaryFile(mode='w', dir=config.parent) as output:
             output.write(f'ORBIT_BUNDLE_PREFIX = {prefix}\nDEVELOPMENT_TEAM = {team}\n')
+            output.flush()
+            os.link(output.name, config)
     mac.read_identity(source)
     return sha
 

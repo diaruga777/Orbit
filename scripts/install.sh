@@ -6,6 +6,9 @@ export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 [[ "$(uname -s)/$(uname -m)" == Darwin/arm64 ]] || { echo 'Orbit’s source installer needs an Apple silicon Mac.' >&2; exit 1; }
 [[ "$(id -u)" != 0 ]] || { echo 'Run Orbit Setup as the logged-in Mac user.' >&2; exit 1; }
 
+# A linked worktree cannot own the persistent checkout recorded in the installed app.
+[[ "$(git rev-parse --path-format=absolute --git-common-dir)" == "$(pwd -P)/.git" ]] || { echo 'Run scripts/install.sh from the primary Orbit checkout.' >&2; exit 1; }
+
 # LaunchServices and standard scripting additions work before full Xcode is installed.
 check_again() {
   /usr/bin/osascript -e 'on run argv
@@ -33,7 +36,8 @@ ensure_brew() {
 }
 find_xcode() {
   local dev version
-  for dev in "${DEVELOPER_DIR:-}" "$(xcode-select -p 2>/dev/null || true)" /Applications/Xcode*.app/Contents/Developer; do
+  for dev in "${DEVELOPER_DIR:-}" "$(xcode-select -p 2>/dev/null || true)" /Applications/Xcode*.app/Contents/Developer "$HOME"/Applications/Xcode*.app/Contents/Developer; do
+    if [[ "$dev" == *.app ]]; then dev="$dev/Contents/Developer"; fi
     [[ -d "$dev/Platforms/iPhoneOS.platform" ]] || continue
     version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$dev/../Info.plist")"
     if [[ "$version" =~ ^([0-9]+)\.([0-9]+) ]] && (( BASH_REMATCH[1] > 26 || (BASH_REMATCH[1] == 26 && BASH_REMATCH[2] >= 2) )); then
@@ -48,10 +52,11 @@ trap 'rm -rf "$scratch"' EXIT
 if ! find_xcode; then
   ensure_brew
   command -v mas >/dev/null || brew install mas
-  if ! admin "$(command -v mas)" get 497799835 || ! find_xcode; then
+  while ! admin "$(command -v mas)" get 497799835 || ! find_xcode; do
     open 'macappstore://itunes.apple.com/app/id497799835'
-    until find_xcode; do check_again 'Sign in to the App Store and install Xcode 26.2 or later. Then check again.'; done
-  fi
+    check_again 'Sign in to the App Store for Xcode. If your Mac needs an older release, install a compatible Xcode 26.2 or later and check again.'
+    if find_xcode; then break; fi
+  done
 fi
 if ! /usr/bin/xcodebuild -license check >/dev/null 2>&1; then
   open "${DEVELOPER_DIR%/Contents/Developer}"
@@ -72,14 +77,15 @@ if ! scripts/iroh/build_iroh_direct.sh "$PWD/Vendor/IrohDirect" --check; then
   if ! command -v rustup >/dev/null; then
     ensure_brew
     brew install rustup
-    export PATH="$(brew --prefix rustup)/bin:$PATH"
   fi
   export RUSTUP_TOOLCHAIN=stable
   rustup toolchain install stable --profile minimal
   rustup target add aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+  # Homebrew may expose rustup without its cargo/rustc proxies.
+  ORBIT_CARGO="$(rustup which cargo)"
+  RUSTC="$(rustup which rustc)"
+  export ORBIT_CARGO RUSTC
 fi
-# A linked worktree cannot own the persistent checkout recorded in the installed app.
-[[ "$(git rev-parse --path-format=absolute --git-common-dir)" == "$(pwd -P)/.git" ]] || { echo 'Run scripts/install.sh from the primary Orbit checkout.' >&2; exit 1; }
 ORBIT_MAC_SIGNING_IDENTITY="$(python3 scripts/agent_identity.py)"
 export ORBIT_MAC_SIGNING_IDENTITY
 scripts/build_and_run.sh --agent-setup

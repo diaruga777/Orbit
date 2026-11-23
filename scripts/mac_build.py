@@ -371,11 +371,13 @@ def build(source, mode, installation=None, job=None):
             print(f'Installed Orbit Mac at {installation["path"]}', flush=True)
             return
         update_job(job, state='restarting', stage='Reconnecting to Orbit Mac…')
+        launch = ['/usr/bin/open', installation['path']]
         if mode == '--agent-setup':
+            launch += ['--env', 'DEVELOPER_DIR=' + env['DEVELOPER_DIR']]
             executable = Path(installation['path']) / 'Contents/MacOS/OrbitMacApp'
             run([executable, '--prepare-setup'], capture=False)
             write(Path(installation['stateRoot']) / 'installation.json', {'checkout': installation['sourceRoot']})
-        run(['/usr/bin/open', installation['path']])
+        run(launch)
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
             try:
